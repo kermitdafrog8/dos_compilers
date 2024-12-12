@@ -3,7 +3,7 @@ MS-DOS compilers, assemblers, and interpreters
 
 The license for this repo applies to code I wrote for this repo including versions of the sieve, e, ttt, and tm benchmarks and the build scripts to invoke the tools. The various DOS tools and documentation each have their own respective license terms. In a few cases I used the sieve benchmark that shipped with the tools, so obviously those copies fall under the license of the respective tool.
 
-I do not own copyright for any of these tools. This repo is simply an aggregation of the tools to ease testing of my NTVDM DOS 3.3 emulator.
+I do not own the copyright for any of these tools. This repo is simply an aggregation of the tools to ease testing of my NTVDM DOS 3.3 emulator.
 
 In some cases where required I've copied an assembler or linker that did not ship with a given compiler into folders so binaries can be produced. These tools belong to their respective owners.
 
