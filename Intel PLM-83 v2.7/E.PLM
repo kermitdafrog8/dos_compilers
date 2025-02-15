@@ -1,0 +1,81 @@
+e: do;
+
+$include(doslibs.inc)
+
+declare CR literally '13';
+declare LF literally '10';
+
+print_line: procedure;
+    call dos_direct_out( CR );
+    call dos_direct_out( LF );
+end print_line;
+
+print_word: procedure( n, digits, base, leading_zeros ) reentrant;
+    declare n word, digits integer, base word, leading_zeros byte;
+    declare ch byte;
+
+    if ( n < base ) then
+        do;
+            if leading_zeros then
+                ch = '0';
+            else
+                ch = ' ';
+            do while digits > 1;
+                call dos_std_out( ch );
+                digits = digits - 1;
+            end;
+            if n > 10 then
+                ch = 'A' + ( n - 10 );
+            else
+                ch = '0' + n;
+            call dos_std_out( ch );
+        end;
+    else
+        do;
+            call print_word( n / base, digits - 1, base, leading_zeros );
+            call print_word( n mod base, 1, base, leading_zeros );
+        end;
+end print_word;
+
+declare digits literally '200';
+declare array( digits ) word;
+
+finde: procedure;
+    declare ( high, n, x ) word;
+
+    high = digits;
+    x = 0;
+    do n = 2 TO digits - 1;
+        array( n ) = 1;
+    end;
+
+    array( 0 ) = 0;
+    array( 1 ) = 2;
+
+    do while high > 9;
+        high = high - 1;
+        n = high;
+        do while n <> 0;
+            array( n ) = x mod n;
+            x = 10 * array( n - 1 ) + x / n;
+            n = n - 1;
+        end;
+
+        if x >= 10 then
+            call print_word( x, 2, 10, 0 );
+        else
+            call print_word( x, 1, 10, 0 );
+    end;
+
+    call dos_std_string_out( @( CR, LF, 'done', CR, LF, 24h ) );
+end finde;
+
+do;
+
+call finde;
+call dos_exit( 0 );
+
+end;
+
+end;
+

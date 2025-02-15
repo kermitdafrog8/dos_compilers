@@ -1,0 +1,77 @@
+sieve: do;
+
+$include(doslibs.inc)
+
+declare CR literally '13';
+declare LF literally '10';
+
+print_line: procedure;
+    call dos_direct_out( CR );
+    call dos_direct_out( LF );
+end print_line;
+
+print_word: procedure( n, digits, base, leading_zeros ) reentrant;
+    declare n word, digits integer, base word, leading_zeros byte;
+    declare ch byte;
+
+    if ( n < base ) then
+        do;
+            if leading_zeros then
+                ch = '0';
+            else
+                ch = ' ';
+            do while digits > 1;
+                call dos_std_out( ch );
+                digits = digits - 1;
+            end;
+            if n > 10 then
+                ch = 'A' + ( n - 10 );
+            else
+                ch = '0' + n;
+            call dos_std_out( ch );
+        end;
+    else
+        do;
+            call print_word( n / base, digits - 1, base, leading_zeros );
+            call print_word( n mod base, 1, base, leading_zeros );
+        end;
+end print_word;
+
+declare prime_max literally '8190';
+declare prime( 8191 ) byte;
+
+run_sieve: procedure( size );
+    declare ( size, p, k, i, l, count ) word;
+
+    call dos_std_string_out( @( 'sieve 10 iterations', CR, LF, 24h ) );
+    do l = 1 to 10;
+        count = 0;
+        do i = 0 to size;
+            prime( i ) = 1;
+        end;
+        
+        do i = 0 to size - 1;
+            if prime( i ) then do;
+                p = i + i + 3;
+                do k = i + p to size - 1 by p;
+                    prime( k ) = 0;
+                end;
+                count = count + 1;
+            end;
+        end;
+    end;
+
+    call dos_std_string_out( @( 'count: ', 24h ) );
+    call print_word( count, 4, 10, 0 );
+    call print_line;
+end run_sieve;
+
+do;
+
+call run_sieve( prime_max );
+call dos_exit( 0 );
+
+end;
+
+end;
+
