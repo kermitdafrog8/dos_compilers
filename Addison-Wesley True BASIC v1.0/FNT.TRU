@@ -1,0 +1,2 @@
+LIBRARY "fntlib.trc"         ! Trigonometric functions (radians)
+DECLARE DEF cot, sec, csc, asin, acos, acot, asec, acsc

@@ -1,0 +1,24 @@
+True BASIC           CHANGE
+
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ CHANGE old,new    ³              ³ to change all occurrences of the word
+                   ³              ³ `old' to the word `new'. This form is
+                   ³              ³ not case sensitive -- it will change
+                   ³              ³ occurrences of `OLD', `Old', etc.
+                   ³              ³
+ CHANGE "old",new  ³              ³ to change all occurrences of `old' to 
+                   ³              ³ `new', even if `old' is just part of
+                   ³              ³ a word.  This form of the command will
+                   ³              ³ change the word `sold' to the word 
+                   ³              ³ `snew'. This form is case-sensitive --
+                   ³              ³ it will not change occurrences of `OLD'
+                   ³              ³ or `Old'.
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+See also: HELP FIND   finding the next occurrence of a word or number in the
+                      current file
+          HELP TRY    like CHANGE, but highlights each occurrence and 
+                      gives you the chance to decide whether or not to make 
+                      the change

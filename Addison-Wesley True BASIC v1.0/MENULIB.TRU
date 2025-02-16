@@ -1,0 +1,194 @@
+!  Menu routines
+!
+!  a True BASIC(tm), Inc. product
+!
+!  ABSTRACT
+!     Library of general purpose menu routines
+!     for use in user programs.
+!
+!  Copyright (c) 1985 by True BASIC, Inc.
+
+EXTERNAL
+
+sub menu_set(where$,c$,maxent,maxlen,menu$,#9)   ! Parameters, window
+
+! Where$: top, bottom, left, or right
+! C$ : color choice
+! maxent: maximum items in menu 
+! Maxlen: maximum length of menu item
+! Menu$: for internal use
+! #9 window
+
+! Compute parameters
+
+ask mode x$
+if x$="GRAPHICS" or x$="HIRES" then let graph = 1    ! Graphic mode
+if x$="40" or x$="80" then let inverse = 1           ! Inverse video
+if x$="40" or x$="BW40" or x$="GRAPHICS" then let large=1  ! Large chars
+let w$ = lcase$(where$)                              ! Screen position
+if w$="left" or w$="right" then let vert = 1         ! Vertical window
+let m = min(maxent,10)              ! Max entries
+let ml = min(maxlen,10)             ! Max length
+let fill = 5 - large - 2*vert       ! Digit, spaces
+let zone = ml + fill                ! Zonewidth
+let chars = 80 - 40*large           ! Chars per line
+
+if vert = 0 then                    ! Horizontal window
+   let perline = int(chars/zone)    ! Items per line
+   if perline<3 then
+      let zone = zone - 1
+      let perline = 3
+   end if
+   call divide(m,perline,q,r)       ! No. of lines
+   if inverse=1 then let lines = 2*q+1 else let lines = q+1
+   if chars-r*zone < 12 then let extra = 1   ! Error on extra line
+   let lines = lines + extra
+end if
+
+! Pack them
+
+let menu$ = ""
+call packb(menu$,1,1,large)
+call packb(menu$,2,1,vert)
+call packb(menu$,3,1,extra)
+call packb(menu$,4,1,inverse)
+call packb(menu$,5,4,m)
+call packb(menu$,9,4,ml)
+call packb(menu$,13,4,perline)
+
+! Open window
+
+if vert = 1 then              ! Vertical window
+   let lines = 2*m + 2
+   let y1 = (25-lines)/25
+   let y2 = 1
+   let width = max(zone,12)/chars
+   if where$ = "left" then
+      let x1 = 0
+      let x2 = width
+   else
+      let x1 = 1 - width
+      let x2 = 1
+   end if
+else                          ! Horizontal window
+   let x1 = 0
+   let x2 = 1
+   let width = lines/25
+   if where$ = "top" then
+      let y1 = 1 - width
+      let y2 = 1
+   else
+      let y1 = 0
+      let y2 = width
+   end if
+end if
+open #9: screen x1,x2,y1,y2
+if vert=0 then set zonewidth zone
+
+! Colors
+
+set color c$
+let p = pos(c$,"/")
+if p=0 then
+   if graph=1 then set back b else set back 0
+else
+   clear
+end if
+
+end sub
+
+sub menu_show(M$(),m1,menu$,#9)
+
+window #9
+let large = unpackb(menu$,1,1)
+let vert = unpackb(menu$,2,1)
+let extra = unpackb(menu$,3,1)
+let inverse = unpackb(menu$,4,1)
+let m = unpackb(menu$,5,4)
+let m = min(m1,m)
+let ml = unpackb(menu$,9,4)
+let perline = unpackb(menu$,13,4)
+set cursor 1,1
+
+if inverse=1 then                 ! Inverse video
+   ask color c
+   ask back b
+   set color b
+   set back c
+end if
+
+def show$(i,l)
+    let sss$ = str$(i)
+    if l=1 then
+       if i<10 then let sss$ = sss$ & " "
+    else
+       if i<10 then let sss$ = " " & sss$
+       let sss$ = sss$ & " "
+    end if
+    let show$ = sss$
+end def
+
+if vert=1 then                    ! Vertical window
+   for i = 1 to m
+       print show$(i,large);
+       print M$(i)[1:ml]
+       print
+   next i
+else                              ! Horizontal window
+   let f$ = repeat$("#",ml)       ! Format
+   for i = 1 to m
+       let x$ = using$(f$,M$(i)[1:ml])
+       if large=0 then print " ";
+       print show$(i,large);
+       if mod(i,perline)=0 then
+          print x$
+          if inverse=1 and i<m then print    ! Inv. video double spaced
+       else
+          print x$,
+       end if
+   next i
+   if extra=1 and mod(m,perline)<>0 then print       ! Error needs new line
+end if
+
+if inverse=1 then
+   set color c
+   set back b
+end if
+
+end sub
+
+sub menu_ask(m1,a,menu$,#9)     ! Get response
+
+    window #9
+    ask cursor x,y        ! Get response
+    let m = min(m1,unpackb(menu$,5,4))    ! Cf maxent
+    do                    ! Force legal response
+        get key a
+        let a = a-314     ! f-key
+        if a<1 or a>m then
+           set cursor x,y
+           print "Push f1-f"; str$(m);
+        else
+           exit do
+        end if
+    loop
+
+end sub
+
+sub menu(M$(),m,a,menu$,#9)       ! Display menu, get response
+
+    call menu_show(M$,m,menu$,#9)
+    call menu_ask(m,a,menu$,#9)
+    clear
+
+end sub
+
+sub menu_all(M$(),m,prompt$,ans,menu$,#1,#9)   ! Do everything
+
+    window #1
+    print prompt$; "? ";
+    call menu(M$,m,ans,menu$,#9)
+    window #1
+    print M$(ans)
+
+end sub

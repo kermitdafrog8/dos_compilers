@@ -1,0 +1,3 @@
+LIBRARY "fntdlib.trc"         ! Trigonometric functions (degrees)
+DECLARE DEF cot, sec, csc, asin, acos, acot, asec, acsc
+OPTION ANGLE degrees

@@ -1,0 +1,299 @@
+EXTERNAL
+
+SUB format (line$(),arg$)
+
+    ! FORMAT
+    !
+    ! a True BASIC(tm), Inc. product
+    !
+    ! ABSTRACT
+    !    Indents a True BASIC program, and 
+    !    capitalizes the leading keywords
+    !    and certain other keywords.
+    !
+    ! SYNTAX
+    !    DO FORMAT       [arg$ not currently used]
+    !
+    ! Copyright (c) 1985 by True BASIC, Incorporated
+
+
+    LET mincom = 35               ! Comments start here
+    LET newind = 0                ! Indentation for next line
+    LET numflag = 0               ! Line number flag
+    LET c$ = line$(1)[1:1]        ! Are there line numbers?
+    IF c$ >= "0" and c$ <= "9" then LET numflag = 1 else LET num$ = ""
+
+    FOR i = 1 to ubound(line$)
+        LET l$ = line$(i)
+        CALL trisect              ! Divide l$ into num$, text$, com$
+        LET utext$ = ucase$(text$)     ! For comparing and capitalizing
+        LET p2 = 0                ! Character pointer for keyword
+        CALL keyword              ! Find command and capitalize
+        LET ind = newind
+        IF key$ = "SET" or key$ = "ASK" then CALL setask
+        IF key$ = "IF" then CALL onelineif
+        CALL indent               ! Calculate amount of indentation
+        CALL join                 ! Put line together
+        LET line$(i) = l$
+    NEXT i
+
+    DECLARE DEF posnq
+
+    SUB trisect                   ! Divide into num$, text$, com$
+
+        IF numflag = 1 then
+           CALL getlinenum (l$, num$, text$)
+           LET num$ = num$ & " "
+        ELSE
+           LET text$ = l$
+        END IF
+
+        CALL sepcom (text$, com$)
+
+        LET text$ = rtrim$(ltrim$(text$))   ! Stripped body
+
+    END SUB
+
+    SUB keyword
+
+        ! Find keyword(s) starting at p
+        ! key$ = keywords
+        ! Capitalize them
+
+        CALL nextword (utext$, p, p2, key$)      ! Move pointers to next word
+
+        SELECT CASE key$
+
+        CASE "SELECT", "LINE", "BOX", "OPTION", "EXIT", "CAUSE"
+             CALL addkey          ! Additional keyword
+
+        CASE "PLOT"
+             LET c2 = p2
+             CALL nextword (utext$, c, c2, x$)   ! Look at next word
+             IF x$ = "POINTS" or x$ = "POINTS:" then
+                LET p2 = c2
+             ELSEIF x$ = "LINES" or x$ = "LINES:" then
+                LET p2 = c2
+             ELSEIF x$ = "AREA" or x$ = "AREA:" then
+                LET p2 = c2
+             ELSEIF x$ = "TEXT" or x$ = "TEXT," then
+                LET p2 = c2
+             END IF
+
+        CASE "END"
+             IF p2 < len(utext$) then
+                CALL addkey       ! Not simply END
+                LET key$ = key$ & " " & x$  ! Make sure one space
+             END IF
+
+        CASE "MAT"
+             LET c2 = p2
+             CALL nextword (utext$, c, c2, x$)   ! Look at next word
+             SELECT CASE x$
+             CASE "INPUT", "PRINT", "READ", "WRITE"
+                  LET p2 = c2     ! Add second word
+             CASE "LINE", "PLOT"
+                  LET p2 = c2
+                  CALL addkey     ! Third word
+             CASE else            ! Nothing to do
+             END SELECT
+
+        CASE "DECLARE"
+             CALL addkey          ! Always keyword
+             IF x$ = "INTERNAL" or x$ = "EXTERNAL" then CALL addkey  ! One more
+
+        CASE "GET"
+             CALL addkey
+
+        CASE else                 ! Nothing to do
+
+        END SELECT
+
+        LET text$[p:p2] = utext$[p:p2]      ! Capitalize keywords(s)    
+
+    END SUB
+
+    SUB addkey                    ! Add next word to keyword
+
+        CALL nextword (utext$, c, p2, x$)   ! Move p2 only
+
+    END SUB
+
+    SUB setask                    ! Check for SET #3: XXX, etc.
+
+        LET savedkey$ = key$
+        LET p = p2+1
+        LET p = posnq (utext$, ":", p)
+        IF p = 0 then             ! Ordinary SET or ASK
+           CALL addkey
+           IF x$ = "MAX" then CALL addkey   ! Allow for ASK MAX XXXXX
+        ELSE
+           LET p2 = p+1
+           CALL nextword (utext$, p, p2, x$)
+           CALL keyword
+        END IF
+        LET key$ = savedkey$
+
+    END SUB
+
+    SUB onelineif                 ! Checks for keywords in one-line if-then
+
+        ! Isoneline = 1 if a one-line if-then.  Used in indent
+        LET isoneline = 0
+
+        LET savedkey$ = key$
+
+        LET p = posnq (utext$, "THEN", p)   ! Locate THEN
+
+        LET p2 = p + 4
+        IF p2 <= len(utext$) then      ! One line if-then
+           LET isoneline = 1
+           CALL keyword           ! Capitalize it
+           LET p = posnq (utext$, "ELSE", p)     ! Look for ELSE
+           IF p <> 0 then
+              LET p2 = p + 4      ! Start of word to capitalize
+              CALL keyword        ! Capitalize it
+           END IF
+        END IF
+        LET key$ = savedkey$
+
+    END SUB
+
+    SUB indent                    ! Calculate number of spaces to indent
+
+        SELECT CASE key$
+
+        CASE "DO"
+             LET newind = ind + 3
+
+        CASE "IF"
+             IF isoneline = 0 then LET newind = ind + 3
+
+        CASE "SUB", "PICTURE"
+             LET newind = ind + 4
+
+        CASE "DEF", "FUNCTION"
+             IF posnq (utext$, "=", p) = 0 then LET newind = ind + 4
+
+        CASE "FOR"
+             LET newind = ind + 4
+
+        CASE "SELECT", "WHEN"
+             LET newind = ind + 5
+
+        CASE "LOOP", "END IF"     ! Structure closers
+             LET newind, ind = ind - 3
+
+        CASE "END SUB", "END DEF", "NEXT", "END PICTURE", "END FUNCTION"
+             LET newind, ind = ind - 4
+
+        CASE "END SELECT", "END WHEN"
+             LET newind, ind = ind - 5
+
+        CASE "ELSE", "ELSEIF"     ! In middle
+             LET ind = ind - 3
+
+        CASE "CASE", "USE"
+             LET ind = ind - 5
+
+        CASE else                 ! Nothing to do
+
+        END SELECT
+
+    END SUB
+
+    SUB join                      ! Put line together
+
+        IF ind < 0 then LET ind = 0    ! To prevent abort
+
+        IF text$ <> "" then       ! Normal case
+
+           LET l$ = num$ & repeat$(" ", ind) & text$  ! Line number and indented text
+           IF com$ <> "" then     ! Must add comment
+              LET l = len(l$)
+              LET l2 = l + 3      ! At least 3 spaces
+              LET l2 = max(mincom,l2)  ! At least mincom
+              LET r2 = mod(l2,5)
+              IF r2 > 0 then LET l2 = l2 + 5 - r2     ! Multiple of 5
+              LET l$ = l$ & repeat$(" ", l2-l-1) & com$
+           END IF
+        ELSE                      ! No text
+           LET l$ = num$
+           IF com$ <> "" then LET l$ = l$ & repeat$(" ", ind) & com$
+        END IF
+
+    END SUB
+
+END SUB                           ! Subroutine format
+
+SUB getlinenum (line$, num$, rest$)
+
+    LET length = len(line$)
+    FOR j = 1 to length
+        LET ch$ = line$[j:j]
+        IF ch$ < "0" or "9" < ch$ then EXIT FOR
+    NEXT j
+    ! If a normal exit, then nothing or only a line number.
+
+    LET num$ = line$[1:j-1]
+    LET rest$ = line$[j:length]
+
+END SUB
+
+SUB sepcom (line$, comment$)
+
+    ! Separate on-line comment, if any
+
+    DECLARE DEF posnq
+
+    LET p = posnq (line$, "!", 1)
+    IF p = 0 then
+       LET comment$ = ""
+    ELSE
+       LET comment$ = line$[p:maxnum]
+       LET line$ = line$[1:p-1]
+    END IF
+
+END SUB
+
+SUB nextword (line$, p1, p2, word$)
+
+    ! word$ = next word AFTER character p2
+    ! p1 points to begin, p2 to end of word$
+
+    FOR p1 = p2 + 1 to len(line$)
+        LET c$ = line$[p1:p1]
+        IF c$ <> " " and c$ <> "," then EXIT FOR
+    NEXT p1
+    LET p2 = pos(line$ & " ", " ", p1)      ! End
+    LET p3 = pos(line$, ",", p1)
+    IF p3 > 0 then LET p2 = min(p2,p3)
+    LET p2 = p2 - 1
+    LET word$ = line$[p1:p2]
+
+END SUB
+
+DEF posnq (line$, s$, pstart)
+
+    ! Search for first occurrence, on or after pstart, of s$ in line$, 
+    ! not in quotes.  returns position, or 0 if none.
+
+    LET p = pos(line$, s$, pstart)
+    IF p > 0 then
+       LET qpos = 0
+       DO
+          LET qpos = pos(line$, """", qpos+1)
+          IF qpos = 0 or qpos >= p then EXIT DO  ! Even number of quotes
+          LET qpos = pos(line$, """", qpos+1)
+          IF qpos = 0 then        ! Odd number of quotes before
+             LET p = 0
+             EXIT DO
+          ELSEIF qpos >= p then   ! Odd number of quotes before, but
+             LET p = pos(line$, s$, qpos)   ! ... check later in line
+             IF p = 0 then EXIT DO
+          END IF
+       LOOP
+    END IF
+    LET posnq = p
+
+END DEF

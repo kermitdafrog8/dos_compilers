@@ -1,0 +1,13 @@
+! Imitate ringing of a telephone.
+!
+FOR ring = 1 to 8           ! Let ring 8 times
+
+   FOR i = 1 to 30          ! Each ring = 30 alternations
+      SOUND 600, .03        ! Freq 600 for .03 sec.
+      SOUND 1500, .03       ! Then 1500 for .03 sec.
+   NEXT i
+
+   PAUSE 2
+
+NEXT ring
+END

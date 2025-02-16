@@ -1,0 +1,15 @@
+True BASIC         CONTINUE
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+   CONTINUE        ³              ³ to restart execution of a program
+                   ³              ³ suspended by the BREAK command
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+You cannot use CONTINUE to restart a program that has terminated
+normally, or to resume after True BASIC has given an error message,
+or after you've modified the program.
+
+See also:   HELP BREAK  suspending the execution of your program

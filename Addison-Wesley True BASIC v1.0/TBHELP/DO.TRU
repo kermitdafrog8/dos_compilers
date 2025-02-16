@@ -1,0 +1,24 @@
+True BASIC                   DO
+     
+      Type           ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+DO FORMAT            ³              ³  to format your current file,
+                     ³              ³  capitalizing keywords and
+                     ³              ³  indenting appropriate lines
+                     ³              ³
+DO NUMBER            ³              ³  to add line numbers to your
+                     ³              ³  current file
+                     ³              ³
+DO UNNUMBER          ³              ³  to remove line numbers from 
+                     ³              ³  your current file
+                     ³              ³
+DO RENUM             ³              ³  to renumber the line numbers
+                     ³              ³  on a line-numbered file
+                     ³              ³
+DO PAGE              ³              ³  to print your current file with
+                     ³              ³  headers and pagination
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The DO command runs a program that inspects and/or alters your current file.
+Your True BASIC disk must be in the drive when you use these DO commands.
+See the Reference Manual for instructions on writing your own DO programs.

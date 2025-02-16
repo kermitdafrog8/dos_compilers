@@ -1,0 +1,15 @@
+! Inventory for 5 items.
+!
+READ item1$, number1
+READ item2$, number2
+READ item3$, number3
+READ item4$, number4
+READ item5$, number5
+
+PRINT "You have these items:"
+PRINT item1$, item2$, item3$, item4$, item5$
+PRINT number1, number2, number3, number4, number5
+
+DATA hammers, 4, umbrellas, 2, wood stoves, 1
+DATA bags of salt, 4, pliers, 2
+END

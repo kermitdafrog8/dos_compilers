@@ -1,0 +1,17 @@
+! Compute interest on a bank account.
+! Stop when the money has doubled.
+!
+LET money = 10000                 ! Start with $10,000
+LET original = money              ! Remember original amount
+
+LET interest = 8.5/100            ! Interest is 8.5%
+
+DO until money >= 2 * original    ! Loop until money doubles
+
+   PRINT years, money             ! Print year and money
+   LET years = years + 1          ! Keep track of how long
+   LET money = money + (interest * money)   ! Add in interest
+
+LOOP
+PRINT "In"; years ; "years, you'll have $"; money
+END

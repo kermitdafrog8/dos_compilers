@@ -1,0 +1,3 @@
+LIBRARY "fnhlib.trc"         ! Hyperbolic functions
+DECLARE DEF sinh, cosh, tanh, coth, sech, csch
+DECLARE DEF asinh, acosh, atanh, acoth, asech, acsch

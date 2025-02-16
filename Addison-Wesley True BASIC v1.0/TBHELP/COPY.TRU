@@ -1,0 +1,24 @@
+True BASIC           COPY
+
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+                   ³    F5        ³ to copy marked lines to right after
+                   ³              ³ the cursor position
+                   ³              ³
+  COPY block       ³              ³ to copy marked lines to right after block
+                   ³              ³
+COPY block1,block2 ³              ³ to copy block1 to right after block2
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The COPY key is F5.  You must have already marked a section of text.  
+Simply place the cursor one line before where you want to put the marked
+text and press F5.  The lines will be copied.
+
+The COPY command also copies marked text.  With the COPY command, you
+can indicate which lines to move right in the command.
+
+
+See also:  HELP MARK    marking lines
+           HELP MOVE    moving lines

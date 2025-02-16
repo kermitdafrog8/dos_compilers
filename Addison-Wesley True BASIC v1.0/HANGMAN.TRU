@@ -1,0 +1,26 @@
+!  Game of Hangman.
+!  Copyright (c) 1985 by True BASIC, Inc.
+
+! This program plays the word game "Hangman".
+
+! You'll be asked to guess a word by guessing the individual letters
+! in the word.  For each word, you'll start with a display of the
+! alphabet, an empty gallows, and a series of asterisks which correspond
+! to the letters in the word you are to guess.  Each time you choose
+! a letter which is in the word, that letter will replace the asterisks
+! in the appropriate positions in the word.  For each incorrect guess,
+! an additional part of a body will appear on the gallows.  The game
+! continues until you have guessed the word or are completely hanged.
+
+! After each game, you'll be asked if you want to play another game.
+! Enter the letter "y" if you want to try another word, and "n" if you
+! want to stop.
+
+
+WHEN EXCEPTION IN
+   SET WINDOW 0,1,0,1
+   CHAIN "Hang_g.trc"
+USE
+   CHAIN "Hang_m.trc"
+END WHEN
+END

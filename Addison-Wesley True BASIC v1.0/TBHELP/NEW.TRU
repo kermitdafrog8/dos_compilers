@@ -1,0 +1,16 @@
+True BASIC            NEW 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ NEW               ³              ³ to create a new, empty file as
+                   ³              ³ your current file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The NEW command discards the current file, and creates a new, empty file.
+
+If you want to keep your current file, be sure to use the SAVE or REPLACE
+command before typing the NEW command.
+
+See also:  HELP OLD  calling up a saved file from the disk

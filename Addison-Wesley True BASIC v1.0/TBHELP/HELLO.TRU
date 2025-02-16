@@ -1,0 +1,18 @@
+              HELLO 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+  HELLO            ³              ³ to begin a session with True BASIC
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+Use the HELLO command in response to the DOS prompt 
+
+      A> or B>
+
+Then type NEW to create a new, empty current file, or OLD filename to
+call up a saved file from your disk.
+
+Your True BASIC disk should be in your current drive when you
+give the HELLO command.

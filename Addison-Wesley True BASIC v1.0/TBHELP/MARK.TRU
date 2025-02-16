@@ -1,0 +1,24 @@
+True BASIC               MARK
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³    F4        ³ to MARK a line for editing
+                   ³              ³
+MARK block         ³              ³ to MARK a specified block of lines
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The MARK key, F4, and MARK command are used to mark a block of text
+which can then be deleted, moved, or copied as one lump.
+
+To mark text, move the cursor to the first line to mark, press the MARK
+key F4, then move the cursor to the last line to mark and press F4
+again.  All lines between are highlighted.
+
+Then use the DELETE, COPY, or MOVE keys to perform the operation.
+
+To unmark the marked lines, simply press F4 again.
+
+See also:  HELP DELETE        deleting things
+           HELP COPY          copying things
+           HELP MOVE          moving things
+           HELP EDIT          restricting editing to a marked block

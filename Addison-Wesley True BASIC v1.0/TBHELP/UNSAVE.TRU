@@ -1,0 +1,16 @@
+True BASIC            UNSAVE 
+
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ UNSAVE filename   ³              ³ to delete the saved file named
+                   ³              ³ `filename' from your disk
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+Be careful with the UNSAVE command.  It's not reversible, and if you
+UNSAVE a file, there's no way to get it back.
+
+See also:  HELP SAVE    saving a file on your disk
+           HELP FILES   displaying the names of saved files

@@ -1,0 +1,4 @@
+LET miles = 320
+LET gallons = 14.3
+PRINT miles, gallons, miles/gallons
+END

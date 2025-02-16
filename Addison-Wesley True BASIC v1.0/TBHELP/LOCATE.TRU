@@ -1,0 +1,22 @@
+True BASIC           LOCATE 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ LOCATE text       ³              ³ to display in the history window all
+                   ³              ³ lines containing the specified text
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The LOCATE command finds all lines containing some text in your file,
+and prints them in the history window.  As with the CHANGE command,
+only exact matches work, that is, `LOCATE the' will not locate words
+such as `then' or `they'.  You may surround the text with double quotes
+to match parts of words. The LOCATE command is case-sensitive only when
+you use quotes.
+
+To move within your current file to a bit of text, use the FIND
+(F3) key instead.
+
+See also:    HELP FIND     finding the next occurrence of specified text
+             HELP CHANGE   changing all occurrences of specified text

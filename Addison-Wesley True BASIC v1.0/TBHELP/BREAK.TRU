@@ -1,0 +1,22 @@
+True BASIC           BREAK
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+  BREAK            ³              ³ to insert a breakpoint at the first
+                   ³              ³ line in a marked block
+                   ³              ³
+  BREAK block      ³              ³ to insert a breakpoint at the
+                   ³              ³ first line in the specified block
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+True BASIC suspends execution of your program just before the execution
+of a breakpointed line and lets you inspect and change the values of
+variables.  You can use certain True BASIC statements, such as LET and
+PRINT, as commands in the history window to do this.
+
+To remove a breakpoint, simply break on that line again.  All breakpoints
+are removed when you modify a program.
+
+See also:  HELP CONTINUE    continuing the running of a suspended program

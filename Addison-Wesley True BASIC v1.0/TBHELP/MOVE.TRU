@@ -1,0 +1,23 @@
+True BASIC              MOVE
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+                   ³    F6        ³ to move marked lines to right after
+                   ³              ³ the cursor position
+                   ³              ³
+MOVE block         ³              ³ to move marked lines to right after block
+                   ³              ³
+MOVE block1,block2 ³              ³ to move block1 to after block2
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The MOVE key is F6.  You must have already marked a section of text.
+Simply place the cursor one line before where you want to put the marked
+text and press F6.  The lines will be moved.
+
+The MOVE command also moves marked text.  With the MOVE command, you
+can indicate which lines to move right in the command.
+
+See also:    HELP MARK    marking lines
+             HELP COPY    copying lines

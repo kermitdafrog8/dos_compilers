@@ -1,0 +1,35 @@
+! Draws three houses using pictures
+!
+SET Window 0, 10, 0, 10
+SET BACK "green"
+OPTION ANGLE degrees
+DRAW House with Scale(1)*Shift(7,6)
+DRAW House with Scale(1.5)*Shift(1.8,4)
+DRAW House with Rotate(45)*Scale(2,1.6)*Shift(6.2,1.8)
+END
+
+
+PICTURE House
+    SET COLOR "cyan"                       
+    PLOT area: -1,-1; -1,1; 1,1; 1,-1      ! The house itself
+
+    SET COLOR "magenta"
+    PLOT area: -1,1; 0,1.5; 1,1                    ! Its roof
+    PLOT area: -1,1; -1,1.4; -.8,1.4; -.8,1     ! and chimney
+
+    SET COLOR "white"
+    PLOT area: -.15,-1; -.15,-.3; .15,-.3; .15,-1    ! A door
+
+    DRAW Window with Shift(-.5,-.5)           ! and 4 windows
+    DRAW Window with Shift(-.5,.5)
+    DRAW Window with Shift(.5,.5)
+    DRAW Window with Shift(.5,-.5)
+END PICTURE
+
+PICTURE Window
+    SET COLOR "background"
+    PLOT area: -.1,-.2; -.1,.2; .1,.2; .1,-.2   ! The window
+    SET COLOR "white"
+    PLOT -.1,0; .1,0                         ! and its sills
+    PLOT 0,-.2;0,.2
+END PICTURE

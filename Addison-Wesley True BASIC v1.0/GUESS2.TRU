@@ -1,0 +1,35 @@
+! Program to play a guessing game.
+!
+RANDOMIZE
+LET answer = Int(Rnd*6) + 1       ! From 1 to 6
+
+PRINT "I'm thinking of a number from 1 to 6."
+PRINT "You have 3 chances to guess it."
+PRINT
+
+FOR chance = 1 to 3
+   PRINT "Enter your guess";     ! Ask for number
+   INPUT guess                   ! Get a guess
+
+   IF guess < 1 then             ! Check it out
+      PRINT "Must be at least 1."
+   ELSE
+      IF guess > 6 then
+         PRINT "Can't be more than 6."
+      ELSE
+         IF guess < answer then
+            PRINT "Too low."
+         ELSE
+            IF guess > answer then
+               PRINT "Too high."
+            ELSE                 ! Must be right
+               PRINT "Correct!!!"
+               STOP
+            END IF
+         END IF
+      END IF
+   END IF
+NEXT chance
+
+PRINT "The number was"; answer; "."
+END

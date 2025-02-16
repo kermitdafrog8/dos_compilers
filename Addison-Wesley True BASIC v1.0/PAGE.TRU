@@ -1,0 +1,86 @@
+EXTERNAL
+
+SUB Page (line$(),arg$)
+
+    !  Page
+    !  
+    !  a True BASIC(tm), Inc. product
+    ! 
+    !  ABSTRACT
+    !     Sends a True BASIC program to the [first]
+    !     printer port and prints the file with page 
+    !     headers; inserts a form feed at page breaks.
+    !
+    !  SYNTAX
+    !     DO PAGE [,filename for header]
+    ! 
+    !  Copyright (c) 1985 by True BASIC, Inc.
+
+    CALL initialise               ! default characteristics
+    CALL open_channel             ! find file to use & get it
+    CALL current_file(line$)      ! do the work
+
+    SUB initialise
+        IF arg$ <> "" then
+           LET formatted_name$ = Ucase$(arg$)    ! name specified by user
+        ELSE
+           LET formatted_name$ = "True BASIC(tm)"     ! supply default
+        END IF
+        LET pagelength = 65       ! lines on page
+        LET margin = 4            ! top & bottom margins
+        LET page_width = 80       ! width of printing area
+        LET count = 1e10          ! initialise counter
+        LET formatted_time$ = time$    ! remember current time
+        LET formatted_date$ = date$[5:6] & "-" & date$[7:8] & "-" & date$[1:4]
+    END SUB
+
+    SUB open_channel
+        DO
+           WHEN exception in      ! protect in case of error
+                OPEN #99: printer      ! get out of loop if ok
+                SET #99: margin PAGE_WIDTH
+                EXIT DO
+           USE
+                PRINT "Sorry, "; extext$    ! explain the error
+           END WHEN
+        LOOP
+    END SUB
+
+    SUB current_file(line$())
+        FOR i = 1 to Ubound(line$)     ! loop through current file
+            CALL processor(line$(i))   ! print each line
+        NEXT i
+    END SUB
+!
+    SUB processor(data_string$)
+        CALL divide(len(data_string$),page_width,q,r)
+        IF q = 0 then             ! increment line count
+           LET count = count + 1
+        ELSE IF r = 0 then
+           LET count = count + q
+        ELSE
+           LET count = count + q + 1
+        END IF
+        IF count >= pagelength-margin then
+           PRINT #99: chr$(12)      ! form feed at end of page
+           LET pages = pages + 1    ! increment page count
+           CALL header         ! supply the header
+        END IF
+        PRINT #99: data_string$     ! print the line
+        IF pos(data_string$,chr$(12)) <> 0 then       ! look for <ctrl L>
+           LET pages = pages + 1     ! increment page count
+           CALL header        ! supply the header
+        END IF
+    END SUB
+
+    SUB header
+        LET heading$ = Ucase$(formatted_name$) & "  page " & str$(pages)
+        PRINT #99: using$("<##############################",heading$);
+        PRINT #99: ,formatted_time$,,formatted_date$
+        PRINT #99
+        PRINT #99
+        PRINT #99
+        LET count = margin     ! reset line count
+    END SUB
+
+END SUB

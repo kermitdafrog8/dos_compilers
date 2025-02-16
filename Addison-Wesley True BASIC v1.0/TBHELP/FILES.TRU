@@ -1,0 +1,19 @@
+True BASIC               FILES 
+          
+ Type         ³  Press  ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+              ³         ³
+ files        ³         ³  to display names of all files on current drive     
+              ³         ³  with extension .TRU or .TRC          
+              ³         ³     
+ files *.*    ³         ³  to display names of all files on current drive     
+              ³         ³     
+ files b:*.*  ³         ³  to display names of all files on alternate drive B
+              ³         ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The FILES command displays in your history window the names of the files
+saved on your disk.
+
+See also:  HELP OLD   calling up a saved file from your disk
+           HELP SAVE  saving your current file on disk

@@ -1,0 +1,44 @@
+! State capital quiz.
+!
+RANDOMIZE
+DIM state$(50,2)               ! 50 states, 2 items per state
+
+FOR i = 1 to 50                ! Run through states and capitals
+   READ state$(i,1)            ! Read state name
+   READ state$(i,2)            ! And capital
+NEXT i
+
+FOR i = 1 to 10                ! Ask 10 questions 
+   LET n = Int(50*Rnd)+1       ! Pick a number between 1 and 50
+   PRINT "The capital of "; state$(n,1); " is";
+   LINE INPUT capital$         ! Get the reply
+
+   IF Lcase$(capital$) = Lcase$(state$(n,2)) then    ! Correct?
+      PRINT "Right!"
+   ELSE
+      PRINT "Nope, it's ";state$(n,2);"."
+   END IF
+NEXT i
+
+DATA Alabama,Montgomery, Alaska,Juneau, Arizona,Phoenix
+DATA Arkansas,Little Rock, California,Sacramento 
+DATA Colorado,Denver, Connecticut,Hartford, Delaware,Dover 
+DATA Florida,Tallahassee, Georgia,Atlanta, Hawaii,Honolulu 
+DATA Idaho,Boise, Illinois,Springfield, Indiana,Indianapolis 
+DATA Iowa,Des Moines, Kansas,Topeka, Kentucky,Frankfort 
+DATA Louisiana,Baton Rouge, Maine,Augusta, Maryland,Annapolis 
+DATA Massachusetts,Boston, Michigan,Lansing
+DATA Minnesota,St. Paul, Mississippi,Jackson
+DATA Missouri,Jefferson City, Montana,Helena
+DATA Nebraska,Lincoln, Nevada,Carson City
+DATA New Hampshire,Concord, New Jersey,Trenton
+DATA New Mexico,Santa Fe, New York,Albany
+DATA North Carolina,Raleigh, North Dakota,Bismarck
+DATA Ohio,Columbus, Oklahoma,Oklahoma City, Oregon,Salem
+DATA Pennsylvania,Harrisburg, Rhode Island,Providence
+DATA South Carolina,Columbia, South Dakota,Pierre
+DATA Tennessee,Nashville, Texas,Austin, Utah,Salt Lake City
+DATA Vermont,Montpelier, Virginia,Richmond, Washington,Olympia
+DATA West Virginia,Charleston, Wisconsin,Madison
+DATA Wyoming,Cheyenne
+END

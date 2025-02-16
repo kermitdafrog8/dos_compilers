@@ -1,0 +1,24 @@
+True BASIC          COMMANDS 
+
+The following table lists several frequently used True BASIC commands.
+Type HELP TOPICS for a list which includes other available commands.
+     
+  Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+               ³              ³
+   NEW         ³              ³ to create a new, empty current file
+               ³              ³
+   OLD         ³              ³ to get a file from the disk
+               ³              ³
+  SAVE         ³              ³ to save your current file on disk
+               ³              ³
+ REPLACE       ³              ³ to replace a file on disk with your 
+               ³              ³ current file
+               ³              ³
+  UNSAVE       ³              ³ to delete a file from the disk
+               ³              ³
+   RUN         ³    F9        ³ to run your current file
+               ³              ³
+  FILES        ³              ³ to display a list of files on your disk
+               ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ

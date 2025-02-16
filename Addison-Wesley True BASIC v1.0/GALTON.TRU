@@ -1,0 +1,86 @@
+! Galton box
+!
+! a True BASIC(tm), Inc. product
+!
+! ABSTRACT
+!    This program displays the Galton box to illustrate the
+!    Central Limit Theorem.
+!
+!    The program uses True BASIC's animation capabilities to
+!    show the movement of the balls as they drop into the slots.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+SET mode "graphics"
+SET window  -5, 27, 0, 20
+DIM count(11)
+RANDOMIZE
+
+SET color "red"                   ! Draw the bottom
+PLOT 0,0; 22,0
+
+FOR x = 0 to 22 step 2            ! Draw the "boxes" for the balls
+    PLOT x,0; x,9
+NEXT x
+
+SET color "green"                 ! Draw the pegs
+FOR r = 1 to 10
+    FOR c = 1 to r
+        CALL peg(r,c,0)
+    NEXT c
+NEXT r
+
+SET color "yellow"                ! Draw the first ball
+CALL disk(ball$)
+
+FOR b = 1 to 60
+    LET r,c = 1
+    CALL ball(r,c,ball$,0)        ! Drop a ball
+    FOR t = 1 to 10
+        CALL ball(r,c,ball$,-1)
+        LET r = r + 1
+        IF rnd < .5 then LET c = c+1   ! See to which side the ball rolls
+        IF t=10 then LET count(c) = count(c) + 1
+        CALL ball(r,c,ball$,count(c))
+    NEXT t
+NEXT b
+
+END
+
+SUB peg(r,c,cnt)                  ! Draws a peg
+
+    CALL convert(r,c,x,y,cnt)
+    BOX AREA x - .11, x + .11, y - .11, y + .1
+
+END SUB
+
+SUB ball(r,c,b$,cnt)              ! Moves a ball
+
+    CALL convert(r,c,x,y,cnt)
+    IF cnt < 0 then
+       BOX CLEAR x-.25, x+.25, y+.25, y+.75
+    ELSE
+       BOX SHOW b$ at x-.25, y+.25
+    END IF
+
+END SUB
+
+SUB convert(r,c,x,y,cnt)          ! Converts a ball's location
+
+    IF r<11 then
+       LET x = 12 - r + 2*(c-1)
+       LET y = 20 - r
+    ELSE
+       LET x = 2*c - 1
+       LET y = cnt/2 - .5
+    END IF
+
+END SUB
+
+SUB disk(b$)                      ! Draw and remember the first ball
+
+    BOX ELLIPSE 10.75,11.25,19.25,19.75
+    FLOOD 11,19.5
+    BOX KEEP 10.75, 11.55, 19.25, 19.75 in b$    ! Remember the image
+
+END SUB

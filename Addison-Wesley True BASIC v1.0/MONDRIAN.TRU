@@ -1,0 +1,17 @@
+! Paint Mondrian pictures.
+!
+CLEAR                           ! Make sure screen is clear
+
+FOR i = 1 TO 20                 ! Repeat 20 times
+
+   GET point: x1, y1            ! One corner of box
+   PLOT x1, y1                  ! Leave cursor at that point
+   GET point: x2, y2            ! Opposite corner of box
+   PLOT x2, y2                  ! Leave cursor at new point
+
+   SET COLOR Int(Mod(i,2)) + 2  ! Alternate red & yellow
+   BOX AREA x1, x2, y1, y2      ! Draw rectangle (or line)
+
+NEXT i
+
+END

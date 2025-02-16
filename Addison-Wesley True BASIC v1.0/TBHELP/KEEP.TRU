@@ -1,0 +1,23 @@
+True BASIC                 KEEP 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ KEEP              ³              ³ to delete all but the MARKed lines
+                   ³              ³ from your current file
+                   ³              ³
+ KEEP block        ³              ³ to delete all but the specified block
+                   ³              ³ of lines from your current file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+A block can be a function, subprogram, picture, a line
+number (100), or a range of line numbers (100-210).  You
+may also type KEEP when a block of lines is MARKed, and all
+but the MARKed lines will be deleted.
+
+This command is helpful if you have a block of lines which
+you would like to save separately.  Use the command with 
+care, however, because it will delete the remaining portion of
+your current file!
+

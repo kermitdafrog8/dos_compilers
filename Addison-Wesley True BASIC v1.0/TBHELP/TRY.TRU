@@ -1,0 +1,24 @@
+True BASIC             TRY 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ TRY old,new       ³              ³ to change occurrences of the word `old'
+                   ³              ³ to `new', giving you the chance to
+                   ³              ³ decide whether to make each change
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The TRY command is very much like the CHANGE command.  However,
+it highlights each occurrence of the original word in your 
+program and gives you an opportunity to decide whether or not
+to make the indicated change in that particular place.
+
+Each occurrence of the original word `old' will be
+highlighted, and you will be asked "Change?"  If you want to 
+make the change, simply press Return.  If you do not want to
+make the change in that particular place, type `n' (or `no')
+and press Return.  In that case, the word will be left as it was.
+You may also type `q' (for quit) to abandon the command.
+
+See also: HELP CHANGE    changing all occurrences of a word or number

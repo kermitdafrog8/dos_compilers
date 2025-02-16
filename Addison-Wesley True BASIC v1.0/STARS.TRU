@@ -1,0 +1,9 @@
+! Plot random points, like stars.
+!
+DO
+   LET x = Rnd        ! Pick two random numbers
+   LET y = Rnd
+   PLOT x,y           ! Plot a point at the random spot
+LOOP
+
+END

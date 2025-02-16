@@ -1,0 +1,2 @@
+LIBRARY "fnmlib.trc"      ! Mathematical functions
+DECLARE DEF logbase, erf, normal, norm1, factrl, binom, binompr, poisson

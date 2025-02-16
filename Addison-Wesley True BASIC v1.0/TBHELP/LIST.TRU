@@ -1,0 +1,23 @@
+True BASIC                LIST 
+
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  LIST             ³              ³ to list your current file on a printer
+                   ³              ³
+  LIST block       ³              ³ to list a specified block of lines
+                   ³              ³ on a printer
+                   ³              ³
+  LIST n1-n2       ³              ³ to list lines n1 through n2 of your file
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+The LIST command prints your current file on a printer. It works only if 
+your computer has a printer connected to it.
+
+You can list a specified part of your file on the printer.  You can MARK
+a block of lines, then type LIST, or you can give the command: LIST block,
+where `block' is the name of a function, subroutine, or picture.  If your
+file is line-numbered, you can specify the line numbers of the block you
+wish to list. You can also specify numbers for listing part of an unnumbered
+file: LIST 5-10 will print the fifth through the tenth lines of the file.
+
+If you just want to see sections of your program displayed on the screen,
+use the Find key or the TO command instead.

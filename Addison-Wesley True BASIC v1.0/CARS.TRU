@@ -1,0 +1,13 @@
+! Plot number of cars sold from 1900 to 1980.
+!
+SET WINDOW 1900, 1980, 0, 10e6
+
+FOR year = 1900 to 1980 step 10      ! Years by decades
+    READ cars                        ! Read number of cars
+    PLOT year, cars;                 ! Plot to this point
+NEXT year
+
+! Car production data.
+DATA 4190, 187e3, 2.2e6, 3.3e6, 4.4e6, 8.0e6, 7.8e6
+DATA 8.2e6, 8.0e6
+END

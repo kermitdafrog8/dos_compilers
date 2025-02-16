@@ -1,0 +1,24 @@
+True BASIC          FIND
+     
+    Type      ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+              ³    F3        ³ to find the next occurrence of a
+              ³              ³ specified word or number
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+Make sure that the cursor is in the editing window when you press the
+Find key.  The word `Find:'appears in the history window.  Type the 
+text you want to find and press Return. It will look only from the 
+current cursor location to the end of the file.
+
+To find further occurrences of the same text, press the FIND key and
+then the return key, without typing any new text.  As with the CHANGE
+and LOCATE commands, the upper/lower case of the text is ignored, and 
+the FIND key finds only complete words or numbers.  That is, if you try 
+to find `the', you won't find the word `then', or if you try to find `10', 
+you won't find `100'.  If you really do want to find only part of a word, 
+enclose the text to be found in double quotes.  Typing "the" in response to
+the Find: prompt will find the word `then', or any word containing the
+sequence `the'.
+
+See also:    HELP LOCATE    printing occurrences of text in file
+             HELP CHANGE    changing all occurrences of some text

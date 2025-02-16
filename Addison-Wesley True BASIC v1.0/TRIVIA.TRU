@@ -1,0 +1,31 @@
+! Trivia quiz.
+!
+READ num_quest                    ! Number of questions
+
+FOR i = 1 to num_quest            ! Read all questions
+
+    READ question$, answer$       
+
+    PRINT question$;
+    LINE INPUT reply$             ! Get user's guess
+
+    IF reply$ = answer$ then      ! If correct...
+       LET right = right + 1      ! count right replies
+       PRINT "Correct."           ! and say bravo.
+    ELSE
+       PRINT "No, the correct answer is "; answer$; "."
+    END IF
+
+NEXT i
+
+PRINT "You got"; 100 * right/num_quest; "% right."
+
+DATA 5
+
+DATA What is the capital of Austria, Vienna
+DATA What year did Franklin Pierce take office, 1853
+DATA "What is the capital of Manitoba, Canada", Winnipeg
+DATA "How many years, on average, does a baboon live", 20
+DATA How about a gray squirrel, 5
+
+END

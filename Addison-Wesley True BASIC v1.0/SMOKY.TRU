@@ -1,0 +1,16 @@
+! Plays the beginning of
+! "On Top of Old Smoky".
+
+DO while more data
+
+   READ music$    ! Get the string representations
+   PLAY music$    ! And play the notes
+
+LOOP
+
+DATA O4 L4 C C E G O5 L2 C. O4 A.
+DATA L4 A F G A L1 G
+DATA L4 C C E G L2 G. D.
+DATA L4 E F E D L2 C.
+
+END

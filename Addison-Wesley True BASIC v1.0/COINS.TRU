@@ -1,0 +1,7 @@
+! Flip a coin five times.
+!
+FOR toss = 1 to 5
+    IF Rnd<.5 then PRINT "Heads, you win"
+NEXT toss
+
+END

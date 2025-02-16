@@ -1,0 +1,110 @@
+! Knight's tour
+!
+! a True BASIC(tm), Inc. product
+!
+! ABSTRACT
+!    Conducts a "Knight's Tour" of a chess board.
+!    A Knight starts at the lower left of the
+!    screen and selects legal moves, each move
+!    to an unused space, until the chessboard
+!    has no spaces available into which to move.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+SET mode "graphics"
+SET window -3,13,1,11
+DIM move(8,2)                     ! Legal moves
+DIM board(-1 to 10,-1 to 10)      ! Status of board
+
+CALL initdraw                     ! Board and knight
+CALL initial                      ! Tables
+RANDOMIZE
+
+LET x, y = 1                      ! Initial position
+FOR t = 2 to 64
+    CALL nextmove(x,y,newx,newy)  ! Find new position
+    BOX SHOW k0$ at x+.1,y+.1     ! Shadow knight to old
+    BOX SHOW k$ at newx+.1,newy+.1     ! Knight to new
+    PAUSE .2                      ! Otherwise too fast
+    LET x = newx                  ! Now the position
+    LET y = newy
+NEXT t
+
+SUB initial                       ! Set up tables
+    MAT READ move                 ! Legal (x,y) changes
+    DATA 2,1,2,-1,1,2,1,-2,-1,2,-1,-2,-2,1,-2,-1
+
+    FOR x = -1 to 10              ! Mark positions off board
+        FOR y = -1 to 0
+            LET board(x,y) = -1
+            LET board(y,x) = -1
+        NEXT y
+        FOR y = 9 to 10
+            LET board(x,y) = -1
+            LET board(y,x) = -1
+        NEXT y
+    NEXT x
+
+    FOR x = 1 to 8                ! Moves possible from here
+        FOR y = 1 to 8
+            LET count = 0
+            FOR m = 1 to 8        ! Try 8 legal possibilities
+                LET x1 = x+move(m,1)
+                LET y1 = y+move(m,2)
+                IF board(x1,y1)>=0 then LET count = count + 1   ! On board
+            NEXT m
+            LET board(x,y) = count     ! Possible moves
+        NEXT y
+    NEXT x
+END SUB
+
+SUB nextmove(x,y,x2,y2)           ! Find hardest to get to
+    DIM moves(8,2)                ! Optimal moves
+    LET board(x,y) = -1           ! Can't move there anymore
+    LET bmin = 9                  ! For minimum calculation
+    FOR m = 1 to 8                ! 8 possibles
+        LET x1 = x+move(m,1)
+        LET y1 = y+move(m,2)
+        LET b = board(x1,y1) - 1  ! Now one less possible move
+        LET board(x1,y1) = b
+        IF b >= 0 and b<bmin then      ! Possible move, new low
+           LET bmin = b
+           LET nmove = 1
+           LET moves(nmove,1) = x1
+           LET moves(nmove,2) = y1
+        ELSEIF b>=0 and b = bmin then     ! Tie
+           LET nmove = nmove + 1
+           LET moves(nmove,1) = x1
+           LET moves(nmove,2) = y1
+        END IF
+    NEXT m
+    LET nm = int(nmove*rnd+1)             ! Pick at random
+    LET x2 = moves(nm,1)
+    LET y2 = moves(nm,2)
+END SUB
+
+SUB initdraw                      ! Draw board and knight
+    SET cursor 1,15               ! Title
+    PRINT "Knight's Tour"
+
+    FOR x = 1 to 9                ! Board
+        PLOT x,1;x,9
+        PLOT 1,x;9,x
+    NEXT x
+
+    SET color "green"             ! Outline of knight
+    DRAW knight with shift(1,1)
+    BOX KEEP 1.1,1.9,1.1,1.9 in k0$    ! Save for show
+    SET color "red"               ! Red knight
+    FLOOD 1.5,1.5
+    BOX KEEP 1.1,1.9,1.1,1.9 in k$     ! Save it also
+END SUB
+
+PICTURE knight                    ! Picture of knight
+    PLOT .2,.1;.8,.1;.8,.2;
+    PLOT .7,.25;.7,.3;.8,.4;.65,.7;.6,.9;.55,.9;
+    PLOT .5,.82;.2,.75;.2,.6;.3,.6;.4,.55;
+    PLOT .25,.45;.2,.37;.3,.3;.3,.25;.2,.2;.2,.1
+END PICTURE
+
+END

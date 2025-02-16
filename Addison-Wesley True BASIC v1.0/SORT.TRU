@@ -1,0 +1,37 @@
+! Program to sort text in a list.
+
+DIM name$(1)                      ! We'll redim later
+
+CALL Get_list                     ! Get list of items 
+
+LET n = Ubound(name$)             ! How many we have
+
+CALL Sort_list                    ! Sort the list
+MAT PRINT name$                   ! Now print sorted list
+
+SUB Get_list
+
+    PRINT "Enter items to be sorted"
+    MAT INPUT name$(?)            ! Redimension to input
+
+END SUB
+
+SUB Sort_list
+
+    FOR i = n to 2 step -1  
+       FOR j = 1 to i-1
+          IF name$(j) > name$(j+1) then CALL Swap
+       NEXT j
+    NEXT i
+
+END SUB
+
+SUB Swap
+
+    LET temp$ = name$(j)          ! Temporary variable
+    LET name$(j) = name$(j+1)
+    LET name$(j+1) = temp$
+
+END SUB
+
+END

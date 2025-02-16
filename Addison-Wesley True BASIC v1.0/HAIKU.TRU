@@ -1,0 +1,47 @@
+! Haiku creator.
+!
+RANDOMIZE
+DECLARE DEF Pick$
+
+DIM article$(3), adjective$(15), noun$(12), verb$(15), prep$(4)
+
+MAT READ article$, adjective$
+MAT READ noun$, verb$, prep$
+
+LET line$ = Pick$(article$) & " " & Pick$(adjective$)
+LET line$ = line$ & ", " & Pick$(adjective$) & " "
+LET line$ = line$ & Pick$(noun$) & "--"
+PRINT line$
+
+LET line$ = Pick$(prep$) & " " & Pick$(article$) & " "
+LET line$ = line$ & Pick$(adjective$) & " " & Pick$(noun$)
+PRINT line$
+
+LET line$ =  Pick$(article$) & " " & Pick$(noun$) & " "
+LET line$ = line$ & Pick$(verb$) & "."
+PRINT line$
+
+DATA the, a, this
+DATA distant, foggy, wet, black, snowy, spring, sighing
+DATA broken, hidden, cold, ruined, stiff, forgotten
+DATA drowsy, gleaming
+
+DATA mountain, garden, shack, cloud, bamboo, stone
+DATA wheelbarrow, pine, field, sparrow, pathway, pond
+
+DATA rings, appears, disappears, remains, dissolves, shows
+DATA huddles, rises up, is still, creaks, sways, is hidden
+DATA seems lost, forgets itself, sleeps
+
+DATA under, by, within, beneath
+
+END
+!
+! Pick$.  Choose an element of an array.
+!
+DEF Pick$(array$())
+
+    LET n = Int(Rnd * Ubound(array$)) + 1
+    LET Pick$ = array$(n)
+
+END DEF

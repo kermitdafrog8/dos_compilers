@@ -1,0 +1,12 @@
+! A picture of a triangle.
+!
+PICTURE Triangle
+
+    PLOT 0,0; 1,1; 1,0; 0,0    ! A triangle
+
+END PICTURE
+
+SET WINDOW 0, 15, 0, 10        ! Set the window
+
+DRAW Triangle                  ! Draw the triangle
+END

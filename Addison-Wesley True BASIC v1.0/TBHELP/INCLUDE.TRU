@@ -1,0 +1,15 @@
+True BASIC       INCLUDE 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ INCLUDE filename  ³              ³ to insert a saved file into your
+                   ³              ³ current file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+To insert a saved file into your current file, move the cursor to the
+line in your current file just before where you want the other file 
+to be inserted.  Then press F2 to move to the command line, and give 
+the command INCLUDE filename.  The saved file `filename' will be inserted 
+at that place in your current file.

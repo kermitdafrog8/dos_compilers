@@ -1,0 +1,21 @@
+True BASIC             EDIT 
+
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ EDIT block        ³              ³ to restrict your editing to a single
+                   ³              ³ block of lines
+                   ³              ³
+ EDIT              ³              ³ to resume editing your entire file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The EDIT command, with a block of lines specified, will restrict editing to 
+that block. A block may be a subroutine, function, or a range of line numbers.
+
+You may also use the EDIT command to restrict editing to a marked block
+of lines.
+
+Use the EDIT command with no lines marked and no block specified to resume
+editing your entire file.

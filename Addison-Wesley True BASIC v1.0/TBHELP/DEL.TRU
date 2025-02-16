@@ -1,0 +1,22 @@
+True BASIC                DEL
+
+ Type   ³    Press         ³
+ÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+        ³     backspace    ³ to delete character to left of cursor
+        ³        Del       ³ to delete character at the cursor position
+        ³                  ³ (if cursor is on line tag, delete whole line)
+        ³                  ³
+        ³    Ctrl - Home   ³ to delete word to left of cursor
+        ³    Ctrl - PgUp   ³ to delete word at or to right of cursor
+        ³                  ³
+        ³        Esc       ³ to delete from cursor to start of line
+        ³     Ctrl - End   ³ to delete from cursor to end of line
+ÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+These keystrokes enable you to delete characters, words, or lines
+around your cursor.  For help in deleting lines or blocks of lines,
+type HELP DELETE.
+
+When the combination of Ctrl and another key is specified (for
+example, Ctrl-End), hold down the Ctrl key while you press the
+other key.

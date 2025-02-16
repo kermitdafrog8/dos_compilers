@@ -1,0 +1,20 @@
+True BASIC            SPLIT
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ SPLIT n           ³              ³ to divide your screen so that the
+                   ³              ³ division between windows is at the
+                   ³              ³ nth line
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+When you begin a session with True BASIC, the editing window contains
+17 lines and the history window contains 7 lines.  You can adjust this
+division of the screen with the SPLIT command.  Typing SPLIT 10 will
+give you 9 lines in your editing window and 15 lines in your history
+window.  Typing SPLIT 24 will give you 23 lines in your editing window
+and one line in the history window.  You must leave at least one line
+in the history window so that you can enter commands.
+
+See also:  HELP WINDOWS  using the editing and history windows

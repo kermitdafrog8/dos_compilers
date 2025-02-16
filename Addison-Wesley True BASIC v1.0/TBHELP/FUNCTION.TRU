@@ -1,0 +1,24 @@
+True BASIC             FUNCTION KEYS
+
+³    Press  ³        Description
+ÃÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+³     F1    ³   move to editing window
+³     F2    ³   move to history window
+³           ³
+³     F3    ³   find item (in editing window only)
+³     F4    ³   mark current line  (in editing window only)
+³           ³
+³     F5    ³   in editing window: copy marked text to after current line
+³           ³   in history window: copy current line to command line
+³           ³   on command line: copies last line entered
+³           ³
+³     F6    ³   move marked text to after current line
+³           ³
+³     F7    ³   undo effects of last deletion or insertion
+³           ³
+³     F9    ³   run your current program
+³           ³
+³     F10   ³   get HELP
+ÁÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+ See also:   HELP CURSOR    moving the cursor around
+             HELP DELETE    deleting characters and lines

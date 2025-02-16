@@ -1,0 +1,53 @@
+! Illustrate use of windows
+!
+! a True BASIC(tm) product
+!
+! ABSTRACT
+!      WINDOWS opens three different windows on the screen
+!      and frames each of them.  It draws an ellipse and
+!      plots text in each.  Finally, it clears the first
+!      window and prints text.  The program displays each 
+!      window in a different color.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+set mode "graphics"
+OPEN #1: screen 0,.5,.5,1       ! Open 3 windows
+SET COLOR "red"
+OPEN #2: screen .1,.4,0,.4
+SET COLOR "green"
+OPEN #3: screen .6,1,.2,.8
+SET COLOR "yellow"
+
+FOR w = 1 to 3                  ! Move window to window
+    WINDOW #w
+    SET WINDOW -w,w,-w,w
+    BOX LINES -w,w,-w,w         ! Frame
+NEXT w
+
+FOR w = 1 to 3                  ! Plot in each
+    WINDOW #w
+    BOX CIRCLE -1,1,-1,1
+NEXT w
+
+FOR w = 1 to 3                  ! Write in each
+    WINDOW #w
+    PLOT TEXT, at -w/4, 0 : "# " & str$(w)
+NEXT w
+
+PAUSE 2
+WINDOW #1
+ASK max cursor row,col
+CLEAR
+SET CURSOR 3,1
+PRINT " Windows can be"
+PRINT " used for text"
+PRINT " and graphics."
+PRINT
+PRINT " This window has"
+PRINT row;"rows and"
+PRINT col;"columns."
+BOX LINES -1,1,-1,1
+
+
+END

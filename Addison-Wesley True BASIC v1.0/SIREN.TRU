@@ -1,0 +1,14 @@
+! Imitates the sound of a siren.
+!
+FOR cycle = 1 to 10                    ! Repeat 10 times
+
+    FOR freq = 400 to 815 step 15      ! Increasing frequency
+        SOUND freq, .02                ! For .02 seconds
+    NEXT freq
+
+    FOR freq = 815 to 400 step -15     ! Decreasing frequency
+        SOUND freq, .02                ! For .02 seconds
+    NEXT freq
+
+NEXT cycle
+END

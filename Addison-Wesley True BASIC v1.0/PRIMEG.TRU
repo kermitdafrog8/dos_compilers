@@ -1,0 +1,62 @@
+! Finds primes by sieving.
+!
+! a True BASIC(tm), Inc. product
+!
+! ABSTRACT
+!    PRIMEG uses True BASIC graphics to display
+!    the prime numbers between 1 and 100.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+SET MODE "graphics"
+DIM slot(100)
+
+OPEN #1: screen 0,1,.1,.9
+SET WINDOW 0,10,0,10
+PLOT TEXT, at 2.75,-1: "Prime Number Sieve"
+SET COLOR "green"
+CALL squares(10,10)
+SET COLOR "yellow"
+CALL numbers
+
+LET upper = 100                   ! primes to 100
+LET c = 1                         ! color to mark
+CALL mark(1,c)
+FOR n = 2 to upper                ! run through numbers
+    IF slot(n) = 0 then           ! 0 means it's prime
+       IF n*n <= upper then       ! bother to remove multiples
+          LET c = mod(c,3)+1      ! next color
+          FOR i = n  to upper step n    ! run through all multiples
+              LET slot(i) = 1     ! mark as nonprime
+              IF i<>n then CALL mark(i,c)   ! graphically
+          NEXT i
+          PAUSE 1
+       END IF
+    END IF
+NEXT n
+END
+
+SUB squares(x,y)
+    FOR i=0 to x
+        PLOT i,0;i,y
+    NEXT i
+    FOR i=0 to y
+        PLOT 0,i;x,i
+    NEXT i
+END SUB
+
+SUB mark(np,c)
+    LET n = np-1                  ! ignore 0
+    LET x = mod(n,10)
+    LET y = 9 - int(n/10)
+    SET COLOR c
+    BOX AREA x+.2,x+.8,y+.2,y+.8
+END SUB
+
+SUB numbers                       !  Numbers into squares
+    FOR v = 0 to 9
+        FOR h = 1 to 10
+            PLOT TEXT, at h-.7,9.5-v: str$(v*10+h)
+        NEXT h
+    NEXT v
+END SUB

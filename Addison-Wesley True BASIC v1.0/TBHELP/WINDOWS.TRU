@@ -1,0 +1,24 @@
+True BASIC           WINDOWS
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³     F1       ³ to move into the editing window
+                   ³              ³
+                   ³     F2       ³ to move into the history window
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+The True BASIC system  displays two "windows" on your screen.
+The top 17 lines show your current file.  The bottom 7 lines
+show your commands, and the results of True BASIC INPUT and PRINT
+statements.  We call the top window the "editing window" and the bottom
+window the "history window."
+
+When you move into the editing window, you may change your program
+directly by using "screen editing." The editing window is like a word
+processor that lets you change your program simply be retyping parts
+of it.  In other words, "What you see is what you get."
+
+The history window shows a history of your True BASIC session.  The very
+last line of the history window is called the "command" line.  When the
+cursor is on that line, you can issue commands such as RUN and SAVE.
+
+See also: HELP SPLIT  changing the sizes of the editing and history windows

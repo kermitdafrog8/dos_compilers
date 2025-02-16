@@ -1,0 +1,24 @@
+True BASIC        COMPILE 
+
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+  COMPILE          ³              ³ to create a compiled version of
+                   ³              ³ your program
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+A compiled program will run faster than the original source program,
+because True BASIC does not have to recompile the program in order to
+run it.
+
+After the program is compiled, you will no longer see the source code
+displayed in the editing window, and you will not be able to edit it.
+Type RUN to run the compiled version, or SAVE <filename> to keep a copy
+of the compiled program on the disk. If you don't specify a file extension
+with the SAVE command, True BASIC will save the compiled program with the
+extension .TRC.  You should be sure that you have saved a copy of your 
+source program.
+
+See also:  HELP RUN     running your current program
+           HELP SAVE    saving your current file on disk

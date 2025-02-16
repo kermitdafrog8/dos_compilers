@@ -1,0 +1,21 @@
+! A bouncing ball.
+
+SET WINDOW 0, 30, 0, 20
+
+LET delta = +1                         ! +1 is up, -1 is down
+LET x = 15                             ! Start in center
+LET y = 10
+
+BOX CIRCLE x, x+1, y, y+1              ! Show first ball
+FLOOD x+.5, y+.5                       ! Fill in circle
+BOX KEEP x, x+1, y, y+1 in ball$       ! Remember that image
+
+DO
+   BOX CLEAR x, x+2, y, y+2    ! Erase old ball plus border
+   LET y = y + delta           ! Continue on course
+
+   IF y < 1 or y > 19 then LET delta = -delta   
+
+   BOX SHOW ball$ at x,y               ! Draw new ball
+LOOP
+END

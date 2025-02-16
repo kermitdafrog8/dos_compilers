@@ -1,0 +1,21 @@
+True BASIC              KEYS
+
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ HELP FUNCTION     ³  F10, then   ³ to see a description of the function
+                   ³ type FUNCTION³ keys F1 through F10
+                   ³              ³
+ HELP CURSOR       ³  F10, then   ³ to see a description of cursor movement
+                   ³ type CURSOR  ³
+                   ³              ³
+ HELP DEL          ³  F10, then   ³ to see how to delete characters and
+                   ³ type DEL     ³ lines
+                   ³              ³
+ HELP KEYBOARD     ³  F10, then   ³ to see the layout of the keyboard
+                   ³ type KEYBOARD³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+True BASIC handles all the normal typewriter keys almost the way an
+electric typewriter does.  But it also uses many special keys.
+You can have each kind described by the HELP command.

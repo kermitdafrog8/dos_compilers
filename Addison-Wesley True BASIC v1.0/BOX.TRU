@@ -1,0 +1,7 @@
+! Draw a box.
+!
+SET WINDOW -14, 14, -10, 10     ! 0,0 is center of window
+
+BOX LINES -5, 5, -5, 5          ! 5*2 is length of each side
+
+END

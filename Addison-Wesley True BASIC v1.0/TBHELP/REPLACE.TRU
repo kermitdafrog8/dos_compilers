@@ -1,0 +1,20 @@
+True BASIC           REPLACE 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ REPLACE           ³              ³ to replace a saved version of a file
+                   ³              ³ with your current file
+                   ³              ³
+ REPLACE filename  ³              ³ to replace the saved file `filename'
+                   ³              ³ with your current file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+You may omit the file name if you used it in a previous NEW, SAVE, or
+REPLACE command.  The file with that name will be overwritten on the
+disk with the contents of your current file.
+
+See also:  HELP SAVE    saving a file on disk
+           HELP OLD     calling up a saved file
+           HELP FILES   displaying the names of the saved files on your disk

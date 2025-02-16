@@ -1,0 +1,20 @@
+! Draw a circle picture.
+!
+PICTURE Circle(sides)
+
+    FOR i = 0 to sides
+       LET u = (i*2*Pi)/sides       ! Find next angle
+       PLOT Cos(u), Sin(u);         ! Plot next segment
+    NEXT i
+    PLOT                            ! Turn off beam
+
+END PICTURE
+
+SET WINDOW -15, 15, -10, 10         ! Set the window
+ASK MAX COLOR cmax                  ! Maximum colors
+
+FOR j = 1 to 30                     ! Draw a bunch of circles
+   SET COLOR Mod(j,cmax) + 1        ! In different colors
+   DRAW Circle(j) with Scale(j/3)   ! Bigger and better
+NEXT j
+END

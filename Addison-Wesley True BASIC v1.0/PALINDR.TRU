@@ -1,0 +1,26 @@
+! Check for palindromes.
+!
+DO
+   PRINT "The phrase";
+   LINE INPUT phrase$                 ! No error-checking
+
+   IF phrase$ = "" then STOP          ! Stop on null string
+
+   LET reversed$ = ""                 ! Initialize reversed$  
+   FOR i = Len(phrase$) to 1 step -1  ! Go thru backwards
+
+      LET reversed$ = reversed$ & phrase$[i:i]   ! Getting chars
+
+   NEXT i
+
+   PRINT "That's: "; reversed$   
+   IF reversed$ = phrase$ then        ! Check reversed & original
+      PRINT "It's a palindrome."
+   ELSE
+      PRINT "Not a palindrome."
+   END IF
+   PRINT
+
+LOOP
+
+END

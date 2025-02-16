@@ -1,0 +1,12 @@
+! Print pattern of x's.
+!
+FOR row = 1 to 6
+
+      FOR xcount = 1 to row
+         PRINT "x";
+      NEXT xcount
+
+
+   PRINT
+NEXT row
+END

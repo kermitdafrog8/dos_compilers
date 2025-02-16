@@ -1,0 +1,22 @@
+True BASIC         HELP
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ HELP topic        ³ F10, then    ³ to get help with a specified topic
+                   ³ name of topic³
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+You can get help either by the HELP command, or by the HELP (F10)
+key.  The HELP key is more flexible, because you can use it at
+any time, even in the middle of giving input to programs.
+
+To get help, press the HELP key.  It asks for a topic.  Supply
+one, and the explanation is given.
+
+You must spell out the topic fully.  You may use either upper
+or lower case.
+
+Type HELP TOPICS to see a list of topics for which help is
+available.

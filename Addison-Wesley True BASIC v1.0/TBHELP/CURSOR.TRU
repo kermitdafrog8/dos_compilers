@@ -1,0 +1,24 @@
+True BASIC              CURSOR 
+
+The "cursor" _ indicates your current position within a window. When you're
+inserting characters, anything you type is inserted just before the cursor.
+When you're overtyping, the cursor appears as ş and anything you type
+replaces the character at the cursor position.  Press the Ins key to change
+from inserting to overtyping and vice versa.
+
+Type      ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+          ³    Ins       ³  to switch between insert and replace modes
+          ³             ³  to move cursor up one line
+          ³             ³  to move cursor down one line
+          ³             ³  to move cursor left one character
+          ³             ³  to move cursor right one character
+          ³   Home       ³  to move cursor to beginning of current window
+          ³    End       ³  to move cursor to end of current window
+          ³   PgUp       ³  to move cursor up one "page" in current window
+          ³   PgDn       ³  to move cursor down one "page" in current window
+          ³    tab       ³  to move cursor to start of next word or number
+          ³ shift & tab  ³  to move cursor to start of previous word or number
+          ³   Ctrl & -  ³  to move cursor to beginning of current line
+          ³   Ctrl & -  ³  to move cursor to end of current line
+ÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ

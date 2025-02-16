@@ -1,0 +1,21 @@
+EXTERNAL
+
+SUB Rolldice (sum_dice, num_dice)
+
+    LET sum_dice = 0
+    FOR i = 1 to num_dice
+        LET roll = Int(6*Rnd + 1)
+        LET sum_dice = sum_dice + roll
+    NEXT i
+
+END SUB
+
+DEF Coin$ 
+
+    IF Rnd < .5 then
+       LET Coin$ = "heads"
+    ELSE
+       LET Coin$ = "tails"
+    END IF
+
+END DEF

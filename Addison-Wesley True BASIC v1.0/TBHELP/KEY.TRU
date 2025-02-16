@@ -1,0 +1,23 @@
+True BASIC              KEY 
+     
+      Type         ³   Press  ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³          ³
+ KEY               ³          ³ to change the meaning of a non-printing
+                   ³          ³ key on your keyboard
+                   ³          ³
+ KEY TO filename   ³          ³ to save your key reassignments in a file
+                   ³          ³
+ KEY FROM filename ³          ³ to retrieve the key assignments saved
+                   ³          ³ in file `filename'
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+When you type the command KEY, you'll see the prompt `Press key to redefine:'.
+Press the key whose meaning you want to change.  You'll then see the prompt
+`Define it as:'.  Type in the sequence of keystrokes you want to assign
+to the key.  Finish by pressing Ctrl-a.
+
+The redefinition will last only through your current True BASIC session.
+However, you can save your key reassignments in a file with the KEY TO
+command, and retrieve them to use in another session with the KEY FROM
+command.

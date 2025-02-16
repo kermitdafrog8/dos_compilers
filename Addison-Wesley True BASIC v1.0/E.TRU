@@ -1,0 +1,34 @@
+let digits = 200
+dim a( 0 to 200 )
+
+let high = digits
+let x = 0
+for n = 0 to digits
+    let a( n ) = 1
+next n
+
+let a(1) = 2
+let a(0) = 0
+
+do while high > 9
+    let high = high - 1
+    let n = high
+    
+    do
+        let a( n ) = mod( x, n )
+        let x = 10 * a( n - 1 ) + int( x / n )
+        let n = n - 1
+    loop while 0 <> n
+
+    if x >= 10 then
+        print using$( "##", x );
+    else
+        print using$( "#", x );
+    end if
+loop
+
+print ""
+print "done"
+end
+
+

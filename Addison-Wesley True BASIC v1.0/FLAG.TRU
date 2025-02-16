@@ -1,0 +1,54 @@
+! U. S. Flag
+!
+! a True BASIC(tm), Inc. product
+!
+! ABSTRACT
+!    Draws the American flag.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+OPEN #1: screen .06,.94,.18,.85
+SET WINDOW 0,27,-.25,13.25
+SET BACK 17
+DIM a(5), b(5)
+
+LET x0 = 11.2
+FOR y = 12 to 0 step -1
+    LET delta = .4*y/12 - .25
+    IF y = 5 then LET x0 = 0
+    IF mod(y,2) = 1 then SET COLOR "white" else SET COLOR "magenta"
+    BOX AREA x0,27,y+delta,y+1+delta
+NEXT y
+
+LET delta = .8
+SET COLOR "white"
+CALL pts(a,b)
+CALL star(4.5,8,a,b)
+BOX KEEP 4.1,5.1,7.6,8.4 in star$
+FOR row = 1 to 9
+    LET y = (row-.5)*delta + 6
+    LET x0 = 2 - mod(row,2)
+    FOR col = x0 to 11 step 2
+        BOX SHOW star$ at col-.9, y-.4
+    NEXT col
+NEXT row
+SET COLOR "cyan"
+BOX LINES 0,27,-.25,13.25
+
+END
+
+SUB pts(a(),b())
+    LET new = pi/2
+    FOR i = 1 to 5
+        LET a(i) = .3*cos(new)
+        LET b(i) = .3*sin(new)
+        LET new = new + 4/5*pi
+    NEXT i
+END SUB
+
+SUB star(x,y,a(),b())
+    FOR i = 1 to 5
+        PLOT x+a(i),y+b(i);
+    NEXT i
+    PLOT x+a(1),y+b(1)
+END SUB

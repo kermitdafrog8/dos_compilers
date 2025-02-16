@@ -1,0 +1,24 @@
+True BASIC           OLD Command
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+  OLD filename     ³              ³ to call up the file named `filename' on
+                   ³              ³ your disk and make it your current file
+                   ³              ³
+  OLD b:filename   ³              ³ to call up the file `filename' on
+                   ³              ³ alternate disk drive B
+                   ³              ³
+  OLD filename.ext ³              ³ to call up a file which is saved with
+                   ³              ³ the extension `ext' instead of `tru'.
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The OLD command calls up a file stored on a disk, and makes it your
+current file.  Whatever file you had been using is no longer your current
+file.
+
+If your previous current file was important, be sure to SAVE or
+REPLACE it before you use the OLD command!
+
+See also: HELP SAVE    saving your current file on disk
+          HELP FILES   displaying the saved files on your disk
+          HELP NEW     creating a new, empty file as your current file

@@ -1,0 +1,19 @@
+True BASIC           DELETE
+
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ DELETE            ³    Del       ³ to delete a block of MARKed lines
+                   ³ (when cursor ³
+                   ³ is on a line ³
+                   ³    tag)      ³
+                   ³              ³
+ DELETE block      ³              ³ to delete the specified block, where
+                   ³              ³ `block' may be a function or subroutine,
+                   ³              ³ a line number, or a range of line numbers
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+See also:  HELP MARK  the MARK key
+           HELP MOVE  the MOVE key and command

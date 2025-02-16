@@ -1,0 +1,17 @@
+! Lissajous experiment.
+!
+SET WINDOW -1, 1, -1, 1
+DO
+   PRINT "X multiplier, Y multiplier";
+   INPUT xmult, ymult
+   CLEAR
+
+   FOR i = 0 to 2*Pi step Pi/100        ! Draw the figure
+       PLOT Sin(xmult*i), Cos(ymult*i);
+   NEXT i
+
+   PLOT                                 ! Turn off the beam
+   PAUSE 3                              ! Wait 3 seconds
+   CLEAR                                ! Then clear the screen
+LOOP
+END

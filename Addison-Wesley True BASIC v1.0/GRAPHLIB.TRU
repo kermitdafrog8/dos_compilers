@@ -1,0 +1,185 @@
+!  Graphics routines
+!
+!  a True BASIC(tm) product
+!
+!  ABSTRACT
+!  A library of general purpose graphics routines
+!  for use in user programs.
+!
+!  Copyright (c)1985, True BASIC, Inc.
+
+EXTERNAL
+
+SUB frame                         ! Frame window
+    ASK window x1,x2,y1,y2
+    BOX LINES x1,x2,y1,y2
+END SUB
+
+SUB axes                          ! Draw axes
+    ASK window x1,x2,y1,y2
+    PLOT x1,0;x2,0
+    PLOT 0,y1;0,y2
+END SUB
+
+SUB ticks(x,y)                    ! Axes with ticks, x and y units apart
+    ASK screen u1,u2,v1,v2
+    ASK window x1,x2,y1,y2
+    ASK mode m$
+    PLOT x1,0;x2,0
+    PLOT 0,y1;0,y2
+    IF m$="hires" then LET xu=640 else LET xu = 320
+    LET p1 = abs(v2-v1)*200       ! Pixels vertical
+    LET p2 = abs(u2-u1)*xu        ! Pixels horizontal
+    LET r = min(p1/50,p2/50)      ! Small fraction
+    LET r = max(r,2)+.5           ! At least 2, avoid round error
+    LET d1 = r/p1*abs(y2-y1)      ! For x
+    LET d2 = r/p2*abs(x2-x1)      ! For y
+    CALL mark(x1,x,1,d1)
+    CALL mark(x2,x,1,d1)
+    CALL mark(y1,y,2,d2)
+    CALL mark(y2,y,2,d2)
+
+    SUB mark(u2,us,c,d)           ! Does one tick
+        IF u2=0 then EXIT SUB
+        FOR u = 0 to u2 step sgn(u2)*us
+            IF c=1 then
+               PLOT u,-d;u,d
+            ELSE
+               PLOT -d,u;d,u
+            END IF
+        NEXT u
+    END SUB
+
+END SUB
+
+
+SUB polygon(x1,x2,y1,y2,n)        ! n-sided, in box
+
+    LET c1 = (x1+x2)/2            ! Center
+    LET c2 = (y1+y2)/2
+    LET r1 = abs(x2-x1)/2         ! Radius
+    LET r2 = abs(y2-y1)/2
+    LET delta = 2*pi/n            ! Angle step
+    FOR i = 0 to n
+        LET a = i*delta
+        LET x = c1 + r1*cos(a)
+        LET y = c2 + r2*sin(a)
+        PLOT x,y;
+    NEXT i
+    PLOT
+
+END SUB
+
+SUB bars(data(),n)                ! Bar graph of data
+
+    LET low,high = data(1)        ! Scale
+    FOR i = 2 to n
+        LET x = data(i)
+        IF x<low then LET low = x
+        IF x>high then LET high = x
+    NEXT i
+    LET low = min(low,0)
+    LET high = max(high,0)
+    IF high = low then LET high = high + 1
+    LET range = max(abs(high),abs(low))
+    LET r = int(log10(range))
+    LET s = 10^r
+    CALL divide(high,s,q,r)
+    IF r>0 then LET high = (q+1)*s
+    CALL divide(low,s,q,r)
+    LET low = q*s
+
+    LET n2 = max(n,8)             ! Coordinates
+    ASK screen u1,u2,v1,v2
+    LET pix = abs(u2-u1)*320      ! Horizontal pixels
+    LET left = -32                ! 4 characters
+    LET w = int((pix+left)/n2)    ! Pixels per bar
+    LET w1 = int(w/3)
+    LET w2 = int(w/6)
+    LET delta = (high-low)/16
+    SET WINDOW left,n2*w,low-delta/2,high
+    SET COLOR 1
+    PLOT 0,0;n*w,0
+    PLOT 0,low;0,high
+    SET COLOR 2
+    FOR i = 1 to n
+        BOX AREA (i-1)*w+w1,i*w-w2,0,data(i)
+    NEXT i
+    SET COLOR 3
+    LET f$ = ">###"
+    IF high>0 then PLOT TEXT, at left,high-delta: using$(f$,str$(high)[1:4])
+    PLOT TEXT, at left,0-delta/2: using$(f$,"0")
+    IF low<0 then PLOT TEXT, at left,low: using$(f$,str$(low)[1:4])
+
+END SUB
+
+SUB arc(x,y,r,a1,a2)              ! Arc of circle, between angles a1, a2
+
+    DEF radn(x) = x*pi/180
+    FOR d = a1 to a2 step .5
+        LET d1 = mod(d,360)
+        SELECT CASE d1
+        CASE is <= 45
+             LET u = radn(d1)     ! Degrees to radians
+             CALL ab
+             PLOT points: x+b,y+a
+        CASE is <= 90
+             LET u = radn(90-d1)
+             CALL ab
+             PLOT points: x+a,y+b
+        CASE is <= 135
+             LET u = radn(d1-90)
+             CALL ab
+             PLOT points: x-a,y+b
+        CASE is <= 180
+             LET u = radn(180-d1)
+             CALL ab
+             PLOT points: x-b,y+a
+        CASE is <= 225
+             LET u = radn(d1-180)
+             CALL ab
+             PLOT points: x-b,y-a
+        CASE is <= 270
+             LET u = radn(270-d1)
+             CALL ab
+             PLOT points: x-a,y-b
+        CASE is <= 315
+             LET u = radn(d1-270)
+             CALL ab
+             PLOT points: x+a,y-b
+        CASE else
+             LET u = radn(360-d1)
+             CALL ab
+             PLOT points: x+b,y-a
+        END SELECT
+    NEXT d
+
+    SUB ab
+        LET a = r*u*(1-u*u/8)
+        LET b = r*(1-u*u/2)
+    END SUB
+
+END SUB
+
+
+SUB fplot(a,b)                    ! Plot function f from a to b
+
+    DIM temp(0 to 64,2)
+    DECLARE DEF f
+    LET delta = (b-a)/64
+    LET y1 = +1e100
+    LET y2 = -1e100
+    FOR i = 0 to 64
+        LET x = a + i*delta
+        LET y = f(x)
+        IF y<y1 then LET y1 = y
+        IF y>y2 then LET y2 = y
+        LET temp(i,1) = x
+        LET temp(i,2) = y
+    NEXT i
+    SET WINDOW a,b,y1,y2
+    FOR i = 0 to 64
+        PLOT temp(i,1), temp(i,2);
+    NEXT i
+    PLOT
+END SUB

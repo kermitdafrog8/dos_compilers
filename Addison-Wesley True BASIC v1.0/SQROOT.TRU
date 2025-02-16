@@ -1,0 +1,9 @@
+! Square roots.
+!
+PRINT "Number", "Square Root"     ! Print labels
+PRINT                             ! Leave blank line
+
+FOR number = 0 to 1 step .1       ! Go from 0 to 1 in small steps
+   PRINT number, Sqr(number)      ! Print number and square root
+NEXT number
+END

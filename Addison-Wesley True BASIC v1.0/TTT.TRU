@@ -1,0 +1,146 @@
+! not sure how to define constants, so
+! 1 = pieceX
+! 2 = pieceY
+! 0 = pieceBlank
+! 9 = scoreMax
+! 6 = scoreWin
+! 5 = scoreTie
+! 4 = scoreLose
+! 2 = scoreMin
+
+dim board( 0 to 8 )
+dim stack( 0 to 31 )  ! 4 * 8 levels of recursion
+let sp = 0            ! stack pointer
+let mc = 0            ! move count
+
+sub push( x )
+    let stack( sp ) = x
+    let sp = sp + 1
+end sub
+
+def pop
+    let sp = sp - 1
+    let pop = stack( sp )
+end def
+
+def winner2( move )
+    let x = board( move )
+    select case move
+        case 0
+            if ( x <> board(1) or x <> board(2) ) and ( x <> board(3) or x <> board(6) ) and ( x <> board(4) or x <> board(8) ) then let x = 0
+        case 1
+            if ( x <> board(0) or x <> board(2) ) and ( x <> board(4) or x <> board(7) ) then let x = 0
+        case 2
+            if ( x <> board(0) or x <> board(1) ) and ( x <> board(5) or x <> board(8) ) and ( x <> board(4) or x <> board(6) ) then let x = 0
+        case 3
+            if ( x <> board(4) or x <> board(5) ) and ( x <> board(0) or x <> board(6) ) then let x = 0
+        case 4
+            if ( x <> board(0) or x <> board(8) ) and ( x <> board(2) or x <> board(6) ) and ( x <> board(1) or x <> board(7) ) and ( x <> board(3) or x <> board(5) ) then let x = 0
+        case 5
+            if ( x <> board(3) or x <> board(4) ) and ( x <> board(2) or x <> board(8) ) then let x = 0
+        case 6
+            if ( x <> board(7) or x <> board(8) ) and ( x <> board(0) or x <> board(3) ) and ( x <> board(4) or x <> board(2) ) then let x = 0
+        case 7
+            if ( x <> board(6) or x <> board(8) ) and ( x <> board(1) or x <> board(4) ) then let x = 0
+        case 8
+            if ( x <> board(6) or x <> board(7) ) and ( x <> board(2) or x <> board(5) ) and ( x <> board(0) or x <> board(4) ) then let x = 0
+    end select
+
+    let winner2 = x
+end def
+
+def minmax( alpha, beta, depth, move )
+    let mc = mc + 1
+    let value = 0
+
+    if depth >= 4 then
+        let p = winner2( move )
+        if p <> 0 then
+            if p = 1 then
+                let value = 6
+            else
+                let value = 4
+            end if
+        else
+            if depth = 8 then let value = 5
+        end if
+    end if
+
+    if 0 = value then
+         if board( move ) = 2 then
+            let value = 2
+            let pieceMove = 1
+        else
+            let value = 9
+            let pieceMove = 2
+        end if
+
+        let p = 0
+        do while p <= 8
+            if board( p ) = 0 then
+                let board( p ) = pieceMove
+
+                ! true basic supports recursion but not local variables
+                call push( value )
+                call push( p )
+                call push( alpha )
+                call push( beta )
+
+                let score = minmax( alpha, beta, depth + 1, p )
+
+                let beta = pop
+                let alpha = pop
+                let p = pop
+                let value = pop
+
+                let pieceMove = board( p )
+                let board( p ) = 0
+
+                if 1 = pieceMove then
+                    if score > value then
+                        let value = score
+                        if ( ( value = 6 ) or ( value >= beta ) ) then
+                            let p = 10
+                        else
+                            if ( value > alpha ) then let alpha = value
+                        end if
+                    end if
+                else
+                    if score < value then
+                        let value = score
+                        if ( ( value = 4 ) or ( value <= alpha ) ) then
+                            let p = 10
+                        else
+                            if ( value < beta ) then let beta = value
+                        end if
+                    end if
+                end if
+            end if
+            let p = p + 1
+        loop
+    end if
+
+    let minmax = value
+end def
+
+sub runit( move )
+    let board( move ) = 1
+    let score = minmax( 2, 9, 0, move )
+    if 5 <> score then print "score should always be a tie"
+    let board( move ) = 0
+end sub
+
+for i = 0 to 8
+    let board( i ) = 0
+next i
+
+for iter = 1 to 10
+    call runit( 0 )
+    call runit( 1 )
+    call runit( 4 )
+next iter
+
+print "moves: "; mc
+
+end
+

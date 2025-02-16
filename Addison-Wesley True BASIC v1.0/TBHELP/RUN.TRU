@@ -1,0 +1,23 @@
+True BASIC             RUN 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ RUN               ³    F9        ³ to begin executing your current file
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+Press F9, the RUN key, or type RUN to begin executing your current file.
+If there are no grammatical or spelling errors in the program, it starts
+to run immediately.
+
+However, if there are grammatical or spelling errors, a message is
+printed in the history window, and the cursor moves up into the editing
+window, to that spot in the file where the error was found.  You may
+then edit that line.  To move on to the next error, press the F2 key.
+When there are no more grammatical or spelling errors, the F2 key will 
+return you to the history window and print "Ok.".  Then you may type RUN
+or press F9 again.
+
+See also:  HELP OLD  calling up a saved file from the disk
+           HELP NEW  creating a new, empty file as your current file

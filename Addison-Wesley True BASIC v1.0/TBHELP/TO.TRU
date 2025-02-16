@@ -1,0 +1,21 @@
+True BASIC              TO
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ TO  block         ³              ³ to move the cursor to the first line
+                   ³              ³ in a block
+                   ³              ³
+ TO  n             ³              ³ to move the cursor to the nth line in
+                   ³              ³ an unnumbered file or line number n
+                   ³              ³ in a line-numbered file
+                   ³              ³  
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The specified block can be the name of a function, subroutine, or
+picture. It can also be a number n.  In that case, the TO command
+moves the cursor to the nth line in an unnumbered program or to
+line number n in a numbered program.
+
+Typing TO with no block or number specified will move the cursor to
+the first line of the program.

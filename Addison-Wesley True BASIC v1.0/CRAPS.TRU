@@ -1,0 +1,35 @@
+! Craps game.
+!
+RANDOMIZE
+
+FOR game = 1 to 10                 ! Play 10 games
+
+  LET die1 = Int(6*Rnd + 1)        ! Roll 1 die
+  LET die2 = Int(6*Rnd + 1)        ! And the other
+  LET dice = die1 + die2           ! Sum of two dice
+
+  PRINT dice;                      ! Print this roll
+
+  SELECT CASE dice                 ! Branch on roll
+
+    CASE 2, 3, 12                  ! dice = 2, 3, or 12
+      PRINT "You lose"
+  
+    CASE 7, 11                     ! dice = 7 or 11 
+      PRINT "You win"
+  
+    CASE else                      ! Anything else
+      LET point = dice             ! Remember that roll
+      DO
+        LET die1 = Int(6*Rnd + 1)  ! Roll again
+        LET die2 = Int(6*Rnd + 1)  ! Both dice
+        LET dice = die1 + die2    
+        PRINT dice;                ! Print this roll
+      LOOP until dice = 7 or dice = point
+
+      IF dice=point then PRINT "You win" else PRINT "You lose"
+  END SELECT
+
+NEXT game
+
+END

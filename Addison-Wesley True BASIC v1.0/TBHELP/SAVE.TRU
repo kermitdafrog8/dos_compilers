@@ -1,0 +1,21 @@
+True BASIC            SAVE 
+     
+      Type         ³   Press      ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+                   ³              ³
+ SAVE filename     ³              ³ to put your current file on disk with
+                   ³              ³ the name `filename'
+                   ³              ³
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+The SAVE command puts a copy of your current file on disk.  Use
+this whenever you want to keep a file on disk.
+
+If no such file exists, one is created.  If the file already
+exists, the SAVE is denied by True BASIC. In that case, you should
+use the REPLACE command instead.
+
+See also: HELP REPLACE      replacing a file on disk with your
+                            current file
+          HELP OLD          retrieving a file from disk
+          HELP FILES        displaying a list of the files on your disk

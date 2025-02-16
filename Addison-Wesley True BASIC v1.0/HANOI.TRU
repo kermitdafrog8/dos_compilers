@@ -1,0 +1,100 @@
+! Towers of Hanoi
+!
+! a True BASIC(tm), Inc. product
+!
+! ABSTRACT
+!    Hanoi is an animated illustration of the Towers
+!    of Hanoi problem, in which a series of disks must
+!    be moved from one peg to another, without ever
+!    putting a larger disk on top of a smaller one.
+!    Hanoi demonstrates the use of recursion in True BASIC.
+!    Most of the work is done within the recursive
+!    subroutine `Hanoi'.  Other subroutines are primarily
+!    for handling the graphics.
+!
+! Copyright (c) 1985 by True BASIC, Inc.
+
+DIM count(0 to 6,3)               ! For graphics
+CALL initial(#3)
+WINDOW #3
+
+LET disks = 6
+LET count(0,1) = disks            ! All on disk 1
+FOR i = 1 to disks
+    LET count(i,1) = disks+1-i
+NEXT i
+CALL setup(disks)
+CALL hanoi(disks,1,2,3,count)
+CALL ending
+
+END
+
+SUB setup(n)                      ! Disks on no. 1
+    SET COLOR 1
+BOX AREA 0,4,0,1
+    SET COLOR 3
+    FOR i = 1 to 3
+        BOX AREA i-.02,i+.02,1.05,7
+    NEXT i
+    FOR j = n to 1 step -1
+        CALL disk(1,n+1-j,j,2)
+    NEXT j
+
+END SUB
+
+SUB hanoi(n,a,b,c,count(,))             ! Recursive routine
+    IF n = 1 then
+       CALL move(a,b,count)
+    ELSE
+       CALL hanoi(n-1,a,c,b,count)
+       CALL move(a,b,count)
+       CALL hanoi(n-1,c,b,a,count)
+    END IF
+END SUB
+
+SUB disk(d,h,s,c)                 ! Disk no., height, size, color
+    LET x1 = d - (s+1)/15
+    LET x2 = d + (s+1)/15
+    LET y1 = 1 + h-1
+    LET y2 = 1 + h
+    SET COLOR c
+    BOX AREA x1,x2,y1+.05,y2
+    IF c = 0 then
+       SET COLOR 3
+       BOX AREA d-.02,d+.02,y1+.05,y2
+    END IF
+    PAUSE .2
+END SUB
+
+SUB move(a,b,c(,))
+    LET n = c(0,a)
+    LET n2 = c(0,b)
+    LET s = c(n,a)
+    CALL disk(a,n,s,0)            ! Erase
+    CALL disk(b,n2+1,s,2)         ! Draw
+    LET c(0,a) = n-1
+    LET c(0,b) = n2+1
+    LET c(n2+1,b) = s
+END SUB
+
+SUB initial(#1)
+
+    SET MODE "graphics"
+    OPEN #1: screen .1875,.8125,.2,.8
+    SET WINDOW 0,4,0,8
+    SET BACK 17
+    SET COLOR 1
+    PLOT TEXT, at .5,10: "The Towers of Hanoi"
+
+END SUB
+
+SUB ending
+
+    PLOT TEXT, at .5,-2: "  N I R V A N A "
+    FOR i = 1 to 31
+        PAUSE .2
+        LET c = mod(i,3)*3 +14
+        SET BACK c
+    NEXT i
+
+END SUB
