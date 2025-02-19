@@ -95,7 +95,6 @@ start:
         mov      di, offset array
         mov      byte ptr[ di + 1 ], 2
         mov      byte ptr[ di ], 0
-        mov      cl, 10
 
         ; register bx is n. register si is high. register di is x at the start of each inner loop
 
@@ -115,7 +114,13 @@ start:
         mov      di, ax           ; save the quotient in di.
 
         mov      al, byte ptr [ offset array + bx - 1 ] ; load a[ n - 1 ]
-        mul      cl
+        mov      dx, ax           ; multiply ax by 10 via adding to itself 3 times than adding dx twice
+        add      ax, ax		  ; ... this is much faster than mov cl, 10 then mul cl
+        add      ax, ax
+        add      ax, ax
+        add      ax, dx
+        add      ax, dx
+
         add      di, ax           ; x := 10 * a[ n - 1 ] + x DIV n;
 
         dec      bx               ; n := n - 1;
