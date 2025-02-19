@@ -1,4 +1,4 @@
-; 8086 assembly to compute e to n digits.
+; 8086 assembly to find primes like BYTE's benchmark
 ; build with masm 5.0 like this:
 ;    ntvdm -h masm /Zi /Zd /z /l %1,,,;
 ;    ntvdm -h link %1,,%1,,nul.def
@@ -69,28 +69,34 @@ start:
         mov      ds, ax
 
   iteragain:                        ; for ( iter = 1; iter <= 10; iter++ )
-        xor      dx, dx             ; count of primes found
+        xor      dx, dx             ; count of primes found. count = 0;
 
         ; set all array entries to true:  for (i = 0; i <= SIZE; i++) flags[i] = TRUE;
 
-        mov      ah, true
-        mov      al, true
+        mov      ax, ds
+        mov      es, ax
+        mov      ax, 0101h
         mov      di, offset flags
         mov      cx, ( arraysize + 2 ) / 2 ; 4096
-        push     ds
-        pop      es
         cld
         rep stosw
 
         ; iterate through array entries and count primes
 
-        mov      di, offset afterFlags   ; handy place for this constant
-        xor      cx, cx             ; handy place for 0
         xor      bx, bx             ; bx is "i" in the outer for loop
 
   nextprime:                        ; for (i = 0; i <= SIZE; i++) {
-        cmp      byte ptr [ flags + bx ], 0
-        jz       flagisoff
+        mov      cx, arraysize
+        sub      cx, bx             ; cx is the count of array entries to search (at most)
+        mov      si, cx             ; save for later
+        mov      di, offset flags
+        add      di, bx             ; where to start searching; offset bx in the array
+        mov      al, 1
+        repnz    scasb              ; scan the array for a 1
+        jnz      checknextiter      ; if a 1 wasn't found we're done with this iteration
+        sub      si, cx		    ; si - cx = starting count - remaining count
+        add      bx, si             ; update bx with the offset of the 1
+        dec      bx		    ; cx is always decremented even when a 1 is found
 
         mov      ax, 3              ; ax == prime = i + i + 3
         add      ax, bx
@@ -99,8 +105,10 @@ start:
         add      si, bx             ; for (k = i + prime; k <= SIZE; k += prime)
 
         add      si, ax             ; k += prime
+        mov      di, offset afterFlags   ; handy place for this constant
         cmp      si, di             ; is si >= offset afterFlags? (i.e. k <= size)
         jge      inccount           ; redundant check to the one in the loop below but it saves a jump instruction in the loop
+        xor      cl, cl
 
   kloop:                        
         mov      [ si ], cl         ; flags[ k ] = false. use cl for 0 because it's faster than an immediate
