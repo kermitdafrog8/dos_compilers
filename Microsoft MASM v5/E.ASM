@@ -114,14 +114,12 @@ start:
         mov      di, ax           ; save the quotient in di.
 
         mov      al, byte ptr [ offset array + bx - 1 ] ; load a[ n - 1 ]
-        mov      dx, ax           ; multiply ax by 10 via adding to itself 3 times than adding dx twice
-        add      ax, ax		  ; ... this is much faster than mov cl, 10 then mul cl
-        add      ax, ax
-        add      ax, ax
-        add      ax, dx
-        add      ax, dx
 
-        add      di, ax           ; x := 10 * a[ n - 1 ] + x DIV n;
+        add      ax, ax		  ; multiply ax by 10 via adding itself once + itself thrice
+        add      di, ax
+        add      ax, ax		  ; ax is now 4x
+        add      ax, ax		  ; ax is now 8x
+        add      di, ax		  ; x := 10 * a[ n - 1 ] + x DIV n;
 
         dec      bx               ; n := n - 1;
         jnz      innerloop        ; if n isn't 0 then loop again
