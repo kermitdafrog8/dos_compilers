@@ -57,7 +57,7 @@ sieve_dataseg segment para public 'sievedata'
     ITER          dw      0
     PKFLAGS       dd      0
     
-    align 16
+    align 16	  ; allocate 8192 bytes even though 8191 will actually be used by the sieve algorithm
     flags         db      arraysize + 1 dup( ? )
     afterflags    db      0
 sieve_dataseg ends
@@ -67,6 +67,7 @@ sieve_dataseg ends
 start:
         mov      ax, sieve_dataseg
         mov      ds, ax
+        cld                         ; good for the duration of this app
 
   iteragain:                        ; for ( iter = 1; iter <= 10; iter++ )
         xor      dx, dx             ; count of primes found. count = 0;
@@ -78,7 +79,6 @@ start:
         mov      ax, 0101h
         mov      di, offset flags
         mov      cx, ( arraysize + 2 ) / 2 ; 4096
-        cld
         rep stosw
 
         ; iterate through array entries and count primes
@@ -94,9 +94,9 @@ start:
         mov      al, 1
         repnz    scasb              ; scan the array for a 1
         jnz      checknextiter      ; if a 1 wasn't found we're done with this iteration
-        sub      si, cx		    ; si - cx = starting count - remaining count
-        add      bx, si             ; update bx with the offset of the 1
-        dec      bx		    ; cx is always decremented even when a 1 is found
+        sub      si, cx             ; si - cx == starting count - remaining count
+        add      bx, si             ; update bx with the offset of the 1 in the array
+        dec      bx                 ; cx is always decremented even when a 1 is found
 
         mov      ax, 3              ; ax == prime = i + i + 3
         add      ax, bx
@@ -118,16 +118,14 @@ start:
 
   inccount:
         inc      dx                 ; count++
-
-  flagisoff:                        ; check if outer loop is done
-        inc      bx
-        cmp      bx, arraysize + 1
+        inc      bx		    ; i++
+        cmp      bx, arraysize	    ; check if i < SIZE
         jnz      nextprime
 
   checknextiter:                    ; are we done iterating loops times?
         inc      word ptr [ ITER ]
         cmp      word ptr [ ITER ], loops
-        jnz      iteragain
+        jnz      iteragain	    ; really checking for 0..9, not 1..10
 
         mov      ax, dx
         call     printint
