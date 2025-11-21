@@ -1,7 +1,7 @@
 /*
  * DDS MICRO-C MS-DOS File system definitions
  *
- * Copyright 1989-2020 Dave Dunfield
+ * Copyright 1989-1994 Dave Dunfield
  * All rights reserved.
  */
 
@@ -20,7 +20,6 @@
 #define F_WRITE		0x02	/* File is opened for WRITE */
 #define	F_APPEND	0x04	/* Append to file opened for WRITE */
 #define	F_BINARY	0x10	/* Inhibit TEXT translations */
-#define F_FERROR	0x20	/* Error while read/write operations */
 #define	F_VERB		0x40	/* Issue error message if failure */
 #define	F_QUIT		0x80	/* Terminate execution if failure */
 
@@ -38,15 +37,6 @@ struct FILE_structure {
 	int  FILE_io_ptr;		/* Access pointer into buffer */
 	int  FILE_io_top;		/* Amount of buffer used */
 	char FILE_buffer[]; };	/* I/O data buffer */
-
-/* Structure of findfirst/findnext block */
-struct FF_block {
-	char		FF_reserved[21];	/* Reserved */
-	char		FF_attrib;			/* file Attributes */
-	unsigned	FF_time;			/* file Time stamp */
-	unsigned	FF_date;			/* file Date stamp */
-	unsigned	FF_size[2];			/* Size of file */
-	char		FF_name[13]; };		/* Name of file */
 
 extern register lprintf();	/* Low level 'printf' */
 extern unsigned IOB_size;	/* Default I/O buffer size */

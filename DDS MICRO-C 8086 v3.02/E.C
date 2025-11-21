@@ -1,25 +1,22 @@
-#include <stdio.h>
+#include stdio.h
 
-#define DIGITS_TO_FIND 200
+#define DIGITS_TO_FIND 200 /*9009*/
 
-char buf[ 128 ];
+int main() {
 
-int main()
-{
-
-  int limit;
-  int x, n;
+  int N, x;
   int a[ DIGITS_TO_FIND ];
-  limit = DIGITS_TO_FIND;
+  int n;
+  N = DIGITS_TO_FIND;
   x = 0;
 
-  for (n = limit - 1; n > 0; --n) {
+  for (n = N - 1; n > 0; --n) {
       a[n] = 1;
   }
 
   a[1] = 2, a[0] = 0;
-  while (limit > 9) {
-      n = limit--;
+  while (N > 9) {
+      n = N--;
       while (--n) {
           a[n] = x % n;
 
@@ -29,5 +26,6 @@ int main()
   }
 
   printf( "\ndone\n" );
+
   return 0;
 }

@@ -2,18 +2,15 @@
 rem *
 rem * Link object modules with libraries into ".COM" file
 rem *
-rem * Copyright 1988-2020 Dave Dunfield
+rem * Copyright 1988-1994 Dave Dunfield
 rem *
-rem * See CC.C for comments reguarding modifications for different linkers
-rem *
-set MCDIR=.
-echo DDS MICRO-C PC86 Link Command
+echo DDS MICRO-C 8086 Link Command by Dave Dunfield.
 if .%1 == . goto help
-if .%MCDIR% == . goto nomcd
+if .%MCDIR% == . set MCDIR=\mc
 if .%1 == .-s goto small
 :tiny
 echo Linking TINY model...
-ntvdm -c link /noi %MCDIR%\PC86RL_T %1 %2 %3 %4 %5 %6 %7 %8 %9,%1,NUL,%MCDIR%\MCLIB;
+link/noi %MCDIR%\PC86RL_T %1 %2 %3 %4 %5 %6 %7 %8 %9,%1,NUL,%MCDIR%\MCLIB;
 if errorlevel 1 goto fail
 echo Converting...
 exe2bin %1 %1.COM
@@ -23,18 +20,16 @@ goto stop
 if .%2 == . goto help
 echo Linking SMALL model...
 shift
-ntvdm -c link /noi %MCDIR%\PC86RL_S %1 %2 %3 %4 %5 %6 %7 %8 %9,%1,NUL,%MCDIR%\MCLIB;
+link/noi %MCDIR%\PC86RL_S %1 %2 %3 %4 %5 %6 %7 %8 %9,%1,NUL,%MCDIR%\MCLIB;
 if errorlevel 1 goto fail
 goto stop
 :help
 echo.
 echo Use: "%0 [-s] <filename(s)> ..."
 echo.
-echo Copyright 1988-2020 Dave Dunfield
+echo Copyright 1988-1994 Dave Dunfield
 echo All rights reserved.
 goto stop
-:nomcd
-echo Environment variable MCDIR is not set!
 :fail
 echo Link aborted due to errors!!!
 :stop

@@ -1,7 +1,7 @@
 /*
  * DDS MICRO-C: Definitions for TSR function on IBM P.C.
  *
- * Copyright 1990-2020 Dave Dunfield
+ * Copyright 1990-1994 Dave Dunfield
  * All rights reserved.
  */
 

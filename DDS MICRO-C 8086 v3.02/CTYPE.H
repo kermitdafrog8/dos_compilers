@@ -5,14 +5,12 @@
  * lookup. The accepted range of character values which may be
  * tested is (0 to 127, and EOF).
  *
- * NOTE: These macro's use a large (129 byte) character classification
- * table. If you are doing only a few character classification operations,
- * you may wish to NOT include this file, and use the smaller functions
- * from the library.
+ * NOTE: Since these are "parameterized" macros, they MUST be
+ *       processed by the external pre-processor (MCP). If you
+ *       are using the internal processor do not include this
+ *       file, and library functions will be used instead.
  *
- * This file **REQUIRES** the extended pre-processor (MCP).
- *
- * Copyright 1990-2020 Dave Dunfield
+ * Copyright 1990-1994 Dave Dunfield
  * All rights reserved.
  */
 
@@ -25,7 +23,7 @@
 #define IS_HEX	0x20		/* Valid hex-alphabetic character */
 #define IS_PUN	0x40		/* Non-graphic printable character */
 
-extern const char _chartype_[];	/* Classification table */
+extern char _chartype_[];	/* Classification table */
 
 /* Character classification macros */
 #define	iscntrl(c)	(_chartype_[(c)+1] & IS_CTL)

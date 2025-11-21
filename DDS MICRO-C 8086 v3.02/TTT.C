@@ -1,203 +1,120 @@
-#include <stdio.h>
+#include stdio.h
 
-#define SCORE_WIN 6
-#define SCORE_TIE 5
-#define SCORE_LOSE  4
-#define SCORE_MAX 9
-#define SCORE_MIN 2
+#define true 1
+#define false 0
+
+#define ABPrune true         /* alpha beta pruning */
+#define WinLosePrune true    /* stop early on win/lose */
+#define ScoreWin 6
+#define ScoreTie 5
+#define ScoreLose  4
+#define ScoreMax 9
+#define ScoreMin 2
 #define DefaultIterations 10
 
 #define PieceX 1
 #define PieceO 2
 #define PieceBlank 0
 
-int g_Moves = 0;
-int g_Iterations = DefaultIterations;
+#define ttype char
 
-static char g_board[ 9 ];
+int g_Iterations;
+int g_IMoves;
+ttype g_board[ 9 ];
 
-#if 0 /* slower than winner2 */
+/*
+    In Small-C v1.2 the "&&" operator doesn't work in LookForWinner. Use bitwise & instead.
+*/
 
-char LookForWinner()
+LookForWinner()
 {
-    char p;
-    p = g_board[0];
+    int p;
+    p = g_board[0]; /* faster as int than ttype on 8086 and Z80 */
     if ( PieceBlank != p )
     {
-        if ( p == g_board[1] && p == g_board[2] )
+        if ( p == g_board[1] & p == g_board[2] )
             return p;
 
-        if ( p == g_board[3] && p == g_board[6] )
+        if ( p == g_board[3] & p == g_board[6] )
             return p;
     }
 
     p = g_board[3];
-    if ( PieceBlank != p && p == g_board[4] && p == g_board[5] )
+    if ( PieceBlank != p & p == g_board[4] & p == g_board[5] )
         return p;
 
     p = g_board[6];
-    if ( PieceBlank != p && p == g_board[7] && p == g_board[8] )
+    if ( PieceBlank != p & p == g_board[7] & p == g_board[8] )
         return p;
 
     p = g_board[1];
-    if ( PieceBlank != p && p == g_board[4] && p == g_board[7] )
+    if ( PieceBlank != p & p == g_board[4] & p == g_board[7] )
         return p;
 
     p = g_board[2];
-    if ( PieceBlank != p && p == g_board[5] && p == g_board[8] )
+    if ( PieceBlank != p & p == g_board[5] & p == g_board[8] )
         return p;
 
     p = g_board[4];
     if ( PieceBlank != p )
     {
-        if ( ( p == g_board[0] ) && ( p == g_board[8] ) )
+        if ( p == g_board[0] & p == g_board[8] )
             return p;
 
-        if ( ( p == g_board[2] ) && ( p == g_board[6] ) )
+        if ( p == g_board[2] & p == g_board[6] )
             return p;
     }
 
     return PieceBlank;
-} //LookForWinner
+} /*LookForWinner*/
 
-#endif
-
-char winner2( char move )
+MinMax( alpha, beta, depth ) ttype alpha; ttype beta; ttype depth; 
 {
-    int x;
+    ttype pieceMove, score;   /* better perf with char than int. out of registers so use stack */
+    int p, value;    /* better perf with these as an int on Z80, 8080, and 8086 */
 
-    switch( move )
-    {
-        case 0:
-        {
-            x = g_board[ 0 ];
-            if ( ( ( x == g_board[1] ) && ( x == g_board[2] ) ) ||
-                 ( ( x == g_board[3] ) && ( x == g_board[6] ) ) ||
-                 ( ( x == g_board[4] ) && ( x == g_board[8] ) ) )
-               return x;
-            break;
-        }
-        case 1:
-        {
-            x = g_board[ 1 ];
-            if ( ( ( x == g_board[0] ) && ( x == g_board[2] ) ) ||
-                 ( ( x == g_board[4] ) && ( x == g_board[7] ) ) )
-                return x;
-            break;
-        }
-        case 2:
-        {
-            x = g_board[ 2 ];
-            if ( ( ( x == g_board[0] ) && ( x == g_board[1] ) ) ||
-                 ( ( x == g_board[5] ) && ( x == g_board[8] ) ) ||
-                 ( ( x == g_board[4] ) && ( x == g_board[6] ) ) )
-                return x;
-            break;
-        }
-        case 3:
-        {
-            x = g_board[ 3 ];
-            if ( ( ( x == g_board[4] ) && ( x == g_board[5] ) ) ||
-                 ( ( x == g_board[0] ) && ( x == g_board[6] ) ) )
-                return x;
-            break;
-        }
-        case 4:
-        {
-            x = g_board[ 4 ];
-            if ( ( ( x == g_board[0] ) && ( x == g_board[8] ) ) ||
-                 ( ( x == g_board[2] ) && ( x == g_board[6] ) ) ||
-                 ( ( x == g_board[1] ) && ( x == g_board[7] ) ) ||
-                 ( ( x == g_board[3] ) && ( x == g_board[5] ) ) )
-                return x;
-            break;
-        }
-        case 5:
-        {
-            x = g_board[ 5 ];
-            if ( ( ( x == g_board[3] ) && ( x == g_board[4] ) ) ||
-                 ( ( x == g_board[2] ) && ( x == g_board[8] ) ) )
-                return x;
-            break;
-        }
-        case 6:
-        {
-            x = g_board[ 6 ];
-            if ( ( ( x == g_board[7] ) && ( x == g_board[8] ) ) ||
-                 ( ( x == g_board[0] ) && ( x == g_board[3] ) ) ||
-                 ( ( x == g_board[4] ) && ( x == g_board[2] ) ) )
-                return x;
-            break;
-        }
-        case 7:
-        {
-            x = g_board[ 7 ];
-            if ( ( ( x == g_board[6] ) && ( x == g_board[8] ) ) ||
-                 ( ( x == g_board[1] ) && ( x == g_board[4] ) ) )
-                return x;
-            break;
-        }
-        case 8:
-        {
-            x = g_board[ 8 ];
-            if ( ( ( x == g_board[6] ) && ( x == g_board[7] ) ) ||
-                 ( ( x == g_board[2] ) && ( x == g_board[5] ) ) ||
-                 ( ( x == g_board[0] ) && ( x == g_board[4] ) ) )
-                return x;
-            break;
-         }
-    }
+    g_IMoves++;
 
-    return PieceBlank;
-} //winner2
-
-int MinMax( int alpha, int beta, int depth, int move )
-{
-    int value, p, score;
-    char pieceMove;
-    
-    g_Moves++;
-    
     if ( depth >= 4 )
     {
-        //p = LookForWinner();
-        p = winner2( move );
+        p = LookForWinner();
 
         if ( PieceBlank != p )
         {
             if ( PieceX == p )
-                return SCORE_WIN;
+                return ScoreWin;
 
-            return SCORE_LOSE;
+            return ScoreLose;
         }
 
         if ( 8 == depth )
-            return SCORE_TIE;
+            return ScoreTie;
     }
 
     if ( depth & 1 ) 
     {
-        value = SCORE_MIN;
+        value = ScoreMin;
         pieceMove = PieceX;
     }
     else
     {
-        value = SCORE_MAX;
+        value = ScoreMax;
         pieceMove = PieceO;
     }
 
-    for ( p = 0; p < 9; p++ )
+    p = 0;
+    while ( p < 9 )
     {
         if ( PieceBlank == g_board[ p ] )
         {
             g_board[p] = pieceMove;
-            score = MinMax( alpha, beta, depth + 1, p );
+            score = MinMax( alpha, beta, depth + 1 );
             g_board[p] = PieceBlank;
 
             if ( depth & 1 ) 
             {
-                if ( SCORE_WIN == score )
-                    return SCORE_WIN;
+                if ( ScoreWin == score )
+                    return ScoreWin;
 
                 if ( score > value )
                 {
@@ -211,8 +128,8 @@ int MinMax( int alpha, int beta, int depth, int move )
             }
             else
             {
-                if ( SCORE_LOSE == score )
-                    return SCORE_LOSE;
+                if ( ScoreLose == score )
+                    return ScoreLose;
 
                 if ( score < value )
                 {
@@ -225,41 +142,49 @@ int MinMax( int alpha, int beta, int depth, int move )
                 }
             }
         }
+
+        p++;
     }
 
     return value;
-}  //MinMax
+}  /*MinMax*/
 
-int FindSolution( int position )
+FindSolution( position ) ttype position;
 {
-    memset( g_board, 0, sizeof g_board );
-    g_board[ position ] = PieceX;
-    MinMax( SCORE_MIN, SCORE_MAX, 0, position );
+    int i;
 
-    return 0;
-} //FindSolution
-
-void ttt()
-{
-    int times;
-
-    for ( times = 0; times < g_Iterations; times++ )
+    i = 0;
+    while ( i < 9 )
     {
-        g_Moves = 0;
-        FindSolution( 0 );
-        FindSolution( 1 );
-        FindSolution( 4 );
+        g_board[ i ] = PieceBlank;
+        i++;
     }
-} //ttt
 
-int main( int argc, char * argv[] )
+    g_board[ position ] = PieceX;
+    i = 0;
+    while ( i < g_Iterations )
+    {
+        g_IMoves = 0;
+        MinMax( ScoreMin, ScoreMax, 0 );
+        i++;
+    }
+
+    return g_IMoves;
+} /*FindSolution*/
+
+main()
 {
-    if ( argc > 1 )
-        sscanf( argv[ 1 ], "%d", &g_Iterations ); /* no atoi in MS C 1.0 */
+    int moves;
+    moves = 0;
+    g_IMoves = 0;
+    g_Iterations = DefaultIterations;
 
-    ttt();
-    printf( "%d moves\n", g_Moves );
-    printf( "%d iterations\n", g_Iterations );
-} //main
+    moves = FindSolution( 0 );
+    moves = moves + FindSolution( 1 );
+    moves = moves + FindSolution( 4 );
 
+    printf( "move count:      %d\n", moves ); /* 6493 * g_Iterations */
+    printf( "iteration count: %d\n", g_Iterations );
+    return 0;
+} /*main*/
 
