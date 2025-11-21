@@ -2,15 +2,15 @@
  * Compatibility definitions for the "CONSOLE" interface.
  *
  * The "CONSOLE" interface has been renamed to "VIDEO", and the function
- * names renamed to be consistant with the "WINDOW" library. This header
+ * names renamed to be consistent with the "WINDOW" library. This header
  * file maps the "VIDEO" functions back to the "CONSOLE" names, and allows
- * previously written MICRO-C programs, which use that interface to compile
- * correctly.
+ * programs written with MICRO-C version 1.*, which use that interface to
+ * compile correctly.
  *
  * When coding a program for the first time under MICRO-C, DO NOT USE THIS
  * FILE. Learn the "VIDEO" functions, since they are now standard.
  *
- * Copyright 1990-1994 Dave Dunfield
+ * Copyright 1990-2020 Dave Dunfield
  * All rights reserved.
  */
 

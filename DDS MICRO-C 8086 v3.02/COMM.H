@@ -1,7 +1,7 @@
 /*
  * DDS MICRO-C IBM/PC Communications parameters
  *
- * Copyright 1990-1994 Dave Dunfield
+ * Copyright 1990-2020 Dave Dunfield
  * All rights reserved.
  */
 
@@ -13,18 +13,22 @@
 #define	TXOFF		0x20	/* Transmit XOFF pending */
 #define	TXON		0x10	/* Transmit XON  pending */
 #define	TRANSPARENT	0x08	/* Transparent mode enable */
+#define	HFLOW		0x04	/* Hardware flow control */
 
 /*
- * Common Baudrate divisors
+ * Common Baudrate divisors (calculated: 115200 / rate)
  */
 #define	_110		1047	/*   110 baud */
 #define	_300		384		/*   300 baud */
+#define	_600		192		/*   600 baud */
 #define	_1200		96		/*  1200 baud */
 #define	_2400		48		/*  2400 baud */
 #define	_4800		24		/*  4800 baud */
 #define	_9600		12		/*  9600 baud */
 #define	_19200		6		/* 19.2K baud */
 #define	_38400		3		/* 38.4K baud */
+#define	_57600		2		/* 57.6K baud */
+#define	_115200		1		/*115.2K baud */
 
 /*
  * Mode bits: OR together one from each section
@@ -50,8 +54,8 @@
  * Bits in modem control register
  */
 #define	LOOPBACK	0x10	/* Set loopback mode */
-#define	OUTPUT_2	0x08	/* General purpose output #2 */
-#define	OUTPUT_1	0x04	/* General purpose output #1 */
+#define	OUTPUT_2	0x08	/* Enable interrupt to PC bus */
+#define	OUTPUT_1	0x04	/* General purpose output */
 #define	SET_RTS		0x02	/* Assert RTS output */
 #define	SET_DTR		0x01	/* Assert DTR output */
 

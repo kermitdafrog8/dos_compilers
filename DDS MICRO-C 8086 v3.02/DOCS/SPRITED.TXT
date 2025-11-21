@@ -1,0 +1,394 @@
+
+
+
+
+
+
+
+
+
+
+                                    SPRITED
+
+                                       A
+
+                                 Sprite Editor
+
+                                 For Micro-C/PC
+                                    and the
+                                  LRG Library
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                         Dunfield Development Services
+                         -----------------------------
+                             High quality tools for
+                              Embedded Development
+
+
+                      https://dunfield.themindfactory.com
+
+
+                       Copyright 1998-2020 Dave Dunfield
+                              All rights reserved.
+
+
+
+                                 SPRITE Editor
+
+                               TABLE OF CONTENTS
+
+
+                                                                         Page
+
+     1. INTRODUCTION                                                        1
+
+
+     2. USING SPRITED                                                       1
+
+        2.1 The main editing display                                        1
+        2.2 Editing Keys                                                    2
+        2.3 File Menu                                                       6
+    SPRITE Editor                                                    Page: 1
+
+
+    1. INTRODUCTION
+
+          SPRITED is a small and simple editor which assists in the creation
+       and maintenance of sprite images for  use  with  the  Micro-C/PC  LRG
+       library's lrg_draw() and lrg_erase() functions. SPRITED allows you to
+       create and modify sprite bitmaps quickly and easily, and to save them
+       in either the form of a Micro-C array declaration,  or  as  a  binary
+       image.
+
+    2. USING SPRITED
+
+       2.1 The main editing display
+
+             The main editing view of the sprite is located on the left hand
+          side of the screen,  which is enlarged to provide as large a  view
+          of the sprite as possible.  The sprite is also shown "actual size"
+          in the upper right hand corner of the screen.
+
+             At the lower right hand  side  of  the  screen,  is  shown  the
+          currently selected color,  as well as the six next higher and  six
+          next lower color entries in the palette.  The  selected  entry  is
+          always centered in this display,  and is also framed by two  small
+          line indicators.
+
+             Along  the  bottom  of  the  display  is  the   message   area.
+          Informational messages will appear here in green,  while error and
+          warning messages will appear in red.  When no message  is  active,
+          the display shows the current size  of  the  sprite,  the  current
+          cursor position,  and the currently selected color  palette  entry
+          number.
+    SPRITE Editor                                                    Page: 2
+
+
+       2.2 Editing Keys
+
+             When the main editing display is active, the following keys may
+          be used:
+
+          2.2.1 Up/Down/Left/Right arrow keys - Move cursor
+
+                The arrow keys may be used to  move  the  flashing  "cursor"
+             around within the enlarged view  of  the  sprite.  This  cursor
+             position will control the location  in  the  sprite  where  the
+             actions performed by the remaining keys will take effect.
+
+                Moving the cursor beyond the edge of the sprite will cause a
+             "wrap", and the cursor will appear at the opposite edge.
+
+          2.2.2 Home - Home cursor
+
+                The Home key provides a quick shortcut to move the cursor to
+             the upper left (0, 0) position.
+
+          2.2.3 PgUp/PgDn - Select color entry
+
+                The PgUp  and  PgDn  keys  will  scroll  through  the  color
+             palette,  selecting each color in  turn.  The  color  currently
+             selected is indicated in the color display at the  lower  right
+             hand of the screen,  and will be the color used for  subsequent
+             sprite update operations.
+
+          2.2.4 Ctrl-PgUp/Ctrl-PgDn - Select color entry (paging)
+
+                Pressing Ctrl and PgUp/PgDn behaves exactly  like  PgUp/PgDn
+             as noted above,  except that the position is the color  palette
+             is scrolled by 14 entries at a time  (The  size  of  the  color
+             display),  which allows you to quickly view all colors,  or  to
+             easily move to a distant location in the color palette.
+
+          2.2.5 Ctrl-Left/Ctrl-Right arrow keys - Adjust X dimension
+          2.2.6 Ctrl-Home/Ctrl-End - Adjust Y dimension
+
+                These keys increase/decrease the X and Y dimensions  of  the
+             sprite being edited.  These should be used early in the editing
+             process to set the actual final size of the sprite.
+
+          2.2.7 Ins - Insert pixel at cursor
+
+                A single pixel  is  inserted  in  the  line  containing  the
+             cursor.  All pixels at the right of the line  will  be  shifted
+             over to the right.
+    SPRITE Editor                                                    Page: 3
+
+
+          2.2.8 Del - Delete pixel at cursor
+
+                A single pixel is  deleted  from  the  line  continuing  the
+             cursor.  All pixels to the right of the cursor as shifted  over
+             to the left.
+
+             NOTE:  Pixels can be inserted vertically or with shifts on  the
+             left hand side by using the Flip/Rotate functions  to  reorient
+             the sprite before inserting or removing the pixel.
+
+          2.2.9 SPACE - Set color of Pixel
+
+                Sets the  color  of  the  pixel  under  the  cursor  to  the
+             currently selected color  (as shown in  the  lower  right  hand
+             portion of the display).
+
+          2.2.10 End/ALT-E - End block operation
+
+                This key cancels any  block  which  may  be  in  effect  and
+             returns the editor to unbounded operation.
+
+          2.2.11 F1/ALT-Q - Help display
+
+                Displays a brief summary of the keys and functions.
+
+          2.2.12 F2/ALT-G - Get color
+
+                Moves the color palette  selection  position  to  the  color
+             entry matching the color currently under the cursor.  Use  this
+             key to "pickup" a color from the sprite instead of selecting it
+             with PgUp/PgDn.
+
+          2.2.13 F3/ALT-T - Clear (transparent)
+
+                Sets the pixel under the cursor  to  be  transparent  (color
+             entry 0).
+
+                If used when a block is active  (See F5/ALT-B),  the  entire
+             block is set to be transparent.
+    SPRITE Editor                                                    Page: 4
+
+
+          2.2.14 F4/ALT-F - Fill shape under cursor
+
+                Sets the color of  the  pixel  under  the  cursor,  and  all
+             connected pixels  which  match  it's  color  to  the  currently
+             selected color. Use this to change the color of a shape.
+
+                Use this at the beginning  (blank sprite)  to set  the  base
+             color for the entire sprite  (if not transparent which  is  the
+             default).
+
+                If used when  a  block  is  active,  the  color  filling  is
+             restricted to the bounds of the block. This has limitations, as
+             the cursor  (and hence the starting point)  will have to be  at
+             one corner of the block,  however it is very useful for  making
+             filled rectangles (including lines).  Simply set up your block,
+             if not already one color, press F3/ALT-T to clear it,  and then
+             press F4/ALT-F to fill the rectangle.
+
+          2.2.15 F5/ALT-B - Set block marker
+
+                This sets the current cursor location as the  base  position
+             of a  "block".  The block will always comprise a rectangle from
+             this point to any subsequent cursor position.  When moving  the
+             cursor after this command, you will note a box displayed on the
+             screen marking the boundaries of the block.
+
+                A block can be used for bounded  clear/fill/flip/rotate  and
+             save  operations,  as  well  as  to  perform  copy  and   paste
+             operations with the internal clipboard.
+
+                Only one block may be active at any time.  Pressing F5/ALT-B
+             when a block is already in effect,  will reposition  the  block
+             base position to the current cursor location.
+
+                To cancel a block and return to non-bounded operation, press
+             the "End" key.
+
+          2.2.16 F6/ALT-H - Flip Horizontal
+
+                Flips the sprite/block in a horizontal direction  (about the
+             vertical axis),  producing a  "mirror image"  of the  original,
+             where the left becomes the right  and  the  right  becomes  the
+             left.
+
+          2.2.17 F7/ALT-V - Flip Vertical
+
+                Flips the sprite/block in the vertical direction  (about the
+             horizontal axis), causing the top to become the bottom, and the
+             bottom to become the top.
+    SPRITE Editor                                                    Page: 5
+
+
+          2.2.18 F8/ALT-R - Rotate
+
+                Rotates the sprite 1/4 turn  (90  degrees)  in  a  clockwise
+             direction.  This causes the top to become the right hand  side,
+             and all other edges to follow suite. Successive applications of
+             this function  will  result  in  rotations  of  1/2  turn  (180
+             degrees) and 3/4 turn (270 degrees).
+
+                When applied to an entire sprite,  the sprite  need  not  be
+             square, however the X and Y dimensions will be swapped whenever
+             the sprite is rotated.
+
+                When applied to a block, the block must be square (so as not
+             to disturb the rest of the image).
+
+          2.2.19 F9/ALT-C - Copy block to clipboard
+
+                Copies the currently active block to the clipboard,  so that
+             it can be pasted back later.  This is useful for both copying a
+             block within the sprite,  and for saving a block so that it can
+             be restored in the event that you  are  unsatisfied  with  your
+             changes.
+
+          2.2.20 F10/ALT-P - Paste block from clipboard
+
+                The block last copied to the clipboard is copied back to the
+             sprite at the current cursor position,  which will indicate the
+             upper left hand position of the copied block.  In other  words,
+             the copied block will extend down  and  to  the  right  of  the
+             cursor position.
+
+                To facilitate  easy  flip/rotate  operations  on  the  newly
+             copied block,  SPRITED will automatically mark a  block  around
+             the newly copied image.  If you do not  wish  to  reorient  the
+             image, just press End to cancel this new block.
+
+          2.2.21 ALT-Y - Palette editor
+
+                Allows interactive editing of  the  palette  entry  for  the
+             currently selected color.  The screen will show a bar graph for
+             the current Red,  Green and Blue color values.  You may use the
+             following keys:
+
+                F1-F2 = Adjust RED   color value
+                F3-F4 = Adjust GREEN color value
+                F5-F6 = Adjust BLUE  color value
+                Enter = Exit and save new palette entry.
+                Esc   = Exit and discard new palette entry.
+
+          2.2.22 ALT-Z - Set border color
+
+                Sets the color  of  the  editor  borders  to  the  currently
+             selected color.  NOTE:  The borders  are  part  of  the  editor
+             display only, they are not part of the sprite image.
+    SPRITE Editor                                                    Page: 6
+
+
+          2.2.23 Esc/ALT-X - File menu
+
+                Activates a menu of file operations.
+
+       2.3 File Menu
+
+             The File menu is activated  by  the  Esc  or  ALT-X  keys,  and
+          presents the following options.
+
+          2.3.1 [1] - Load SPRITE
+
+                Loads a sprite from file.  If the file extension  is  either
+             ".C"  or  ".H",  it is assumed to contain a C  character  array
+             definition.  If a different file extension is used, the file is
+             read as a binary image.
+
+                NOTE: Parsing of C source is very minimal. The sprite should
+             be the only item in the file,  and it should be  in  the  exact
+             form as is saved by SPRITED when saving a sprite to a C  source
+             file.
+
+                When working with sprites,  it is often convenient to  place
+             all of your sprites in separate  'C'  files within a directory,
+             along with the SPRITED editor.  You can then  easily  edit  the
+             individual sprites.  Sprites files can then be used from any  C
+             program with the #include directive.
+
+          2.3.2 [2] Save SPRITE
+
+                Saves the sprite image into a file.
+
+                If used when a block is active,  only  the  content  of  the
+             block is written to the file. If no block is active, the entire
+             sprite image is written.
+
+                The data is written in the  exact  format  required  by  the
+             Micro-C/PC LRG library  functions:  lrg_draw  and  lrg_erase(),
+             specifically,  the  first  two  bytes  contain  the  X  and   Y
+             dimensions,  and the remaining bytes contain  the  row  by  row
+             color values.
+
+                If the file extension is either ".C" or ".H",  the file will
+             be written as a C source character array definition  (You  will
+             be prompted for the C array name).  If any other file extension
+             is used, the file is written as a binary image.
+    SPRITE Editor                                                    Page: 7
+
+
+          2.3.3 [3] Load PALETTE
+
+                Loads the color palette from a C source  file,  and  updates
+             the editor color palette to match.  If the  file  extension  is
+             either  ".C"  or  ".H",  it is assumed to contain a C character
+             array definition.  If a different file extension is  used,  the
+             file is read as a binary image.
+
+                NOTE: Parsing of C source is very minimal. The sprite should
+             be the only item in the file,  and it should be  in  the  exact
+             form as is saved by SPRITED when saving  the  palette  to  a  C
+             source file.
+
+          2.3.4 [4] Save PALETTE
+
+                Saves the color palette into a file.
+
+                The data is written as 256  entries  of  three  bytes  each,
+             representing the Red,  Green and Blue intensity values for each
+             color.
+
+                If the file extension is either ".C" or ".H",  the file will
+             be written as a C source  two  dimensional  [256][3]  character
+             array definition  (you will be prompted for the C array  name).
+             If any other file extension is used,  the file is written as  a
+             binary image.
+
+          2.3.5 [5] - Load CLIPBOARD
+
+                Loads a clipboard from sprite image file.  This  provides  a
+             convenient way to merge two sprites via  the  F10/altP  "Paste"
+             function.
+
+                If the file extension is either ".C" or ".H",  it is assumed
+             to contain a C character array definition.  If a different file
+             extension is used, the file is read as a binary image.
+
+                NOTE: Parsing of C source is very minimal. The sprite should
+             be the only item in the file,  and it should be  in  the  exact
+             form as is saved by SPRITED when saving a sprite to a C  source
+             file.
+
+          2.3.6 [0] - Exit program
+
+                Terminates SPRITED and returns to the operating system.

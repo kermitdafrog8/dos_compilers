@@ -1,52 +1,34 @@
-/*  sieve.c */
+#include <stdio.h>
+
+/* sieve.c */
 
 /* Eratosthenes Sieve Prime Number Program in C from Byte Jan 1983
    to compare the speed. */
 
-#include stdio.h
-
+#define TRUE 1
+#define FALSE 0
 #define SIZE 8190
 
-char flags[8191];
+char flags[SIZE+1];
 
-main()
-{
-    int i,k;
-    int prime,count,iter;
-
-    iter = 1;
-    while ( iter <= 10 )
-    {
-        count = 0;                      /* initialize prime counter */
-        i = 0;
-        while ( i <= SIZE )
+int main()
         {
-            flags[i] = 1;
-            i++;
-        }
+        int i,k;
+        int prime,count,iter;
 
-        i = 0;
-        while ( i <= SIZE )
-        {
-            if (flags[i])
-            {
-                prime = i + i + 3;      /* twice index + 3 */
-                k = i + prime;
-                while ( k <= SIZE )
-                {
-
-                    flags[k] = 0;       /* kill all multiples */
-                    k = k + prime;
+        for (iter = 1; iter <= 10; iter++) {    /* do program 10 times */
+                count = 0;                      /* initialize prime counter */
+                for (i = 0; i <= SIZE; i++)     /* set all flags TRUE */
+                        flags[i] = TRUE;
+                for (i = 0; i <= SIZE; i++) {
+                        if (flags[i]) {         /* found a prime */
+                                prime = i + i + 3;      /* twice index + 3 */
+                                for (k = i + prime; k <= SIZE; k += prime)
+                                        flags[k] = FALSE;       /* kill all multiples */
+                                count++;                /* primes found */
+                                }
+                        }
                 }
-
-                count++;                /* primes found */
-            }
-
-            i++;
+        printf("%d primes.\n",count);           /*primes found in 10th pass */
+        return 0;
         }
-        iter++;
-    }
-
-    printf("%d primes.\n",count);           /*primes found in 10th pass */
-    return 0;
-}

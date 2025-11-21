@@ -1,7 +1,7 @@
 /*
  * DDS MICRO-C IBM/PC Video interface definitions
  *
- * Copyright 1989-1994 Dave Dunfield
+ * Copyright 1989-2020 Dave Dunfield
  * All rights reserved.
  */
 
@@ -19,7 +19,7 @@
 #define _KIN	0xff8a			/* Insert key	*/
 #define _KDL	0xff8b			/* Delete key	*/
 #define _KBS	0xff8c			/* Backspace	*/
-/* Functions keys */
+/* Function keys */
 #define _K1		0xff8d			/* Function 1	*/
 #define _K2		0xff8e			/* Function 2	*/
 #define _K3		0xff8f			/* Function 3	*/
