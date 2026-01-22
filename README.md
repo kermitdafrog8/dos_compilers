@@ -46,5 +46,6 @@ If you're running Linux or MacOS and see perplexing compilation errors, it could
 
 Here are runtimes for the benchmarks in milliseconds for a 4.77Mhz 8086 (not 8088) as emulated by [NTVDM](https://github.com/davidly/ntvdm)
 
-<img width="819" height="1916" alt="table" src="https://github.com/user-attachments/assets/21e91a53-89ee-4668-a921-2992531f4f3f" />
+<img width="822" height="1937" alt="table" src="https://github.com/user-attachments/assets/fc3b828a-4767-4e3f-8017-2dd37e9c6c77" />
+
 
