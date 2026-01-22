@@ -1,0 +1,7 @@
+DEFINITION MODULE compmenu;
+
+IMPORT FIO;
+
+ PROCEDURE init_menu(nom_de_fichier : FIO.PathStr);
+
+END compmenu.

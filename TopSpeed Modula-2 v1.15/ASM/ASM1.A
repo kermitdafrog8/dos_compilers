@@ -1,0 +1,22 @@
+module ASM1;
+
+
+segment C_A1 ( FCODE , 28H );
+group   G_A1 (C_A1);
+
+select  C_A1;
+
+
+public ASM1$main:
+
+        mov     dl,20H
+        mov     ah,02
+        nop
+        nop
+prog:
+        int     21H
+        inc     dl
+        jnz     prog
+        ret     far  0
+
+end

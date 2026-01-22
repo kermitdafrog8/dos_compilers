@@ -1,0 +1,622 @@
+DEFINITION MODULE m;
+
+
+  CONST
+    Replace = 0;
+    Ovrlay  = 1;
+    Invert  = 2;
+    Erase   = 3;
+    zREPz   = 0;
+    zORz    = 1;
+    zXORz   = 2;
+    zNANDz  = 3;
+    zNREPz  = 4;
+    zNORz   = 5;
+    zNXORz  = 6;
+    zANDz   = 7;
+
+    (* Graphics Adaptor Definitions *)
+
+    ATT        = 128;           (* AT&T Std. Color & DEB Adaptors   *)
+    ATT640x400 = 128;           (*   640x400 monochrome             *)
+    DEB640x200 = 129;           (*   640x200 16-color               *)
+    DEB640x400 = 130;           (*   640x400 16-color               *)
+    CGA = 6;                    (* IBM Color Graphics Adaptor (CGA) *)
+    CGA320x200 = 4;             (*   320x200 4-color                *)
+    CGA640x200 = 6;             (*   640x200 2-color                *)
+    COR = 34;                   (* Cornerstone                      *)
+    COR1600x1280V = 34;         (*   Vista 1600 1600x1280 mono      *)
+    COR1600x1280VA = 37;        (*Vista 1600 1600x1280 no em, 2 mon *)
+    COR1600x1280DP = 35;        (*   DualPage   1600x1280 mono      *)
+    COR1600x1280DPA = 36;       (*   DualPage 1600x1280, no JP1     *)
+    EGA = 512;                  (* IBM Enhanced Graphics Adaptor    *)
+    EGAMono = 512;              (*   640x350 monochrome             *)
+    EGA320x200 = 544;           (*   320x200 16-color               *)
+    EGA640x200 = 528;           (*   640x200 16-color               *)
+    EGA640x350 = 560;           (*   640x350 16-color (128k EGA)    *)
+    MGA640x350 = 561;           (*   640x350 2-color                *)
+    EGA640x480 = 562;           (*   640x480 16-color  (VGA)        *)
+    MGA640x480 = 563;           (*   640x480 2-color   (MCGA)       *)
+    VGA320x200 = 564;           (*   320x200 256-color (PS2 VGA)    *)
+    EGA640x350S = 565;          (*   640x350 16-color (no bios-EGA) *)
+    VGA640x350S = 566;          (*   640x350 16-color (no bios-VGA) *)
+    VGA640x480S = 567;          (*   640x480 16-color (no bios-VGA) *)
+    JRT320x200 = 569;           (*320x200 16-color IBM PCjr & Tandy 1000 EX *)
+    EVA = 516;                  (* Tseng Labs EVA/480               *)
+    EVA640x480 = 516;           (*   640x480 16-color               *)
+    EVR = 1024;                 (* Everex Graphics Edge Adaptor     *)
+    EVR640x200 = 1024;          (*   640x200 16-color               *)
+    EVR640x400 = 1025;          (*   640x400 4-color                *)
+    GEN = 518;                  (* Genoa SuperEGA HiRes             *)
+    GEN800x600 = 518;           (*   800x600 16-color               *)
+    GEN1024x768 = 519;          (* Genoa SuperVGA HiRes-10 16-color *)
+    GEN640x350X = 530;          (*   640x350 256-color              *)
+    GEN640x480X = 531;          (*   640x480 256-color              *)
+    HER = 8;                    (* Hercules/AST Monochrome Adaptor  *)
+    HER720x348 = 8;             (*   720x348 monochrome             *)
+    MDS = 2;                    (* MDS Genius Graphics Display      *)
+    MDS736x1008 = 2;            (*   736x1008 monochrome            *)
+    NNR512x512 = 4096;          (* Number Nine 512x485 256-color    *)
+    NNR1024x768 = 4097;         (*    2048x4 @ 1024x768x16          *)
+    NSI = 514;                  (* NSI Logic Smart EGA/Plus         *)
+    NSI800x600 = 514;           (*   800x600 16-color               *)
+    OCD800x600 = 571;           (* Orchid Designer VGA 800x600x16   *)
+    OCD1024x768 = 572;          (*   1024x768 16 color              *)
+    OCD640x350X = 573;          (*   640x480 256 color              *)
+    OCD640x480X = 574;          (*   640x480 256 color              *)
+    PAR = 517;                  (* Paradise AutoSwitch EGA/480      *)
+    PAR640x480 = 517;           (*   640x480 16-color               *)
+    PAR800x600 = 529;           (*   800x600 16-color               *)
+    SIG = 32;                   (* Sigma Design                     *)
+    SIG640x400 = 32;            (*   640x400 16-color, Color-400    *)
+    SIG1664x1200 = 33;          (* Sigma LaserView 1664x1200 mono   *)
+    STB = 256;                  (* STB GraphicsPlus-II Adaptor      *)
+    STB640x352 = 256;           (*   640x352 monochrome             *)
+    STB320x200 = 257;           (*   320x200 16-color               *)
+    STB640x200 = 258;           (*   640x200 4-color                *)
+    STB640x400 = 384;           (*   640x400 monochrome             *)
+    STB800x600 = 571;           (* STB VGA Extra/EM 800x600x16      *)
+    STB1024x768 = 572;          (*   1024x768 16 color              *)
+    STB640x350X = 573;          (*   640x350 256 color              *)
+    STB640x480X = 574;          (*   640x480 256 color              *)
+    TEC = 16;                   (* Tecmar Graphics-Master Adaptor   *)
+    TEC720x352 = 16;            (*   720x352 monochrome             *)
+    TEC720x704 = 17;            (*   720x704 monochrome             *)
+    TEC320x200 = 18;            (*   320x200 16-color               *)
+    TEC640x200 = 19;            (*   640x200 16-color               *)
+    TEC640x400 = 20;            (*   640x400 16-color               *)
+    TOS = 16384;                (* Toshiba 3100                     *)
+    TOS640x400 = 16384;         (*   640x400 monochrome             *)
+    TTS = 2048;                 (* IBM 3270 PC                      *)
+    TTS720x350 = 2048;          (*   720x350 monochrome             *)
+    TTS360x350 = 2049;          (*   360x350 4-color                *)
+    VGA = 520;                  (* Video-7 VEGA Deluxe              *)
+    VGA640x480 = 520;           (*   640x480 16-color               *)
+    VGA752x410 = 521;           (*   752x410 16-color               *)
+    VGA720x540 = 522;           (* V7 VGA  720x540 16-color         *)
+    VGA800x600 = 523;           (*   800x600 16-color  (VGA)        *)
+    VGA640x350X = 524;          (* V7 VRAM  640x350 256-color       *)
+    VGA640x480X = 525;          (*   640x480 256-color              *)
+    VGA1024x768x2 = 527;        (*   1024x768 2-color               *)
+    WYS = 64;                   (* Wyse WY-700 Graphics Display     *)
+    WYS1280x800 = 64;           (*   1280x800 monochrome            *)
+    WYS1280x400 = 65;           (*   1280x400 monochrome            *)
+    WYS640x400 = 66;            (*   640x400 monochrome             *)
+    MEC1120x750 = 610;          (* NEC PC 98XA monochrome           *)
+    MEC640x400 = 611;           (* NEC PC 98VM monochrome           *)
+    NEC1120x750 = 626;          (* NEC PC 98XA 16-color             *)
+    NEC640x400 = 627;           (* NEC PC 98VM 16-color             *)
+
+   (* Defines for National Design Genesis-1024/1280 *)
+
+    NDI640x480x4D = 04140H;     (* 640x480   16-color, digitl *)
+    NDI640x480x4A = 04141H;     (* 640x480   16-color, analog *)
+    NDI1024x768x4J = 04148H;    (* 1024x768  16-color, JVC    *)
+    NDI1024x768x4M = 04149H;    (* 1024x768  16-color, Mitsu. *)
+    NDI1280x1024x4J = 0414AH;   (* 1280x1024 16-color, JVC    *)
+    NDI960x720x4N = 0414BH;     (* 960x720   16-color, NEC XL *)
+
+    (* Defines for Hewlett-Packard HP82328 IGC       *)
+
+    HP1024x768x4 = 0664AH;      (* 1024x768  16-color         *)
+
+    CUSTLIN = CGA640x200;       (* User defined linear memory *)
+    CUSTBS = SIG640x400;        (* User defined Bank select   *)
+    CUSTEGA = EGA640x350;       (* User defined EGA Superset  *)
+
+    (* Mouse Definitions *)
+
+    com1 = 1;                   (* Mouse Systems mouse, COM1      *)
+    com2 = 2;                   (* Mouse Systems mouse, COM2      *)
+    msMouse = 16;               (* Microsoft Bus Mouse            *)
+    msCOM1 = 17;                (* Microsoft Serial Mouse, COM1   *)
+    msCOM2 = 18;                (* Microsoft Serial Mouse, COM2   *)
+    MsDriver = 32;              (* Microsoft Mouse driver         *)
+    swRight = 1;
+    swMiddle = 2;               (*   (not on 2 button mice)       *)
+    swLeft = 4;
+    swAll = 7;
+
+    black = 0;                  (* all bits OFF *)
+    white = -1;                 (* all bits ON  *)
+
+    TextPg0 = 0;
+    GrafPg0 = 256;
+    GrafPg1 = 257;
+    ScrnXmin = 0;
+    ScrnYmin = 0;
+
+
+    cNormal = 0;                (* TEXTFACE *)
+
+    cBold = 1;
+    cItalic = 2;
+    cUnderline = 4;
+    cStrikeout = 8;
+    cMirrorX = 32;
+    cMirrorY = 64;
+    cProportional = 128;
+
+    alignLeft = 0;              (* TEXTALIGN - Horizontal         *)
+
+    alignCenter = 1;
+    alignRight = 2;
+
+    alignBaseline = 0;          (* TEXTALIGN - Vertical           *)
+
+    alignBottom = 1;
+    alignMiddle = 2;
+    alignTop = 3;
+
+    pathRight = 0;              (* TEXTPATH definitions           *)
+
+    pathUp = 900;
+    pathLeft = 1800;
+    pathDown = 2700;
+
+    capFlat = 0;                (* PENCAP definitions             *)
+
+    capRound = 1;
+    capSquare = 2;
+
+    joinRound = 0;              (* PENJOIN definitions            *)
+
+    joinBevel = 1;
+    joinMiter = 2;
+
+
+  TYPE
+    POINT = RECORD              (* "Point" structure type        *)
+              X: INTEGER;       (* X coordinate                  *)
+              Y: INTEGER;       (* Y coordinate                  *)
+            END;
+
+    COLRTABLE = ARRAY[0..15] OF LONGINT;
+
+    RECT = RECORD               (* "Rectangle" structure type   *)
+             xMin: INTEGER;     (* minimum X                    *)
+             yMin: INTEGER;     (* minimum Y                    *)
+             xMax: INTEGER;     (* maximum X                    *)
+             yMax: INTEGER;     (* maximum Y                    *)
+           END;
+
+    POLYHEAD = RECORD           (* Polygon "header" structure   *)
+                polyBgn: CARDINAL;   (* beginning index              *)
+                 polyEnd: CARDINAL;  (* ending index                 *)
+                 polyRect: RECT;     (* boundry limits               *)
+               END;
+
+    EVENT = RECORD              (* Event record structure       *)
+              ASCII: CHAR;      (* ASCII character code         *)
+              ScanCode: BYTE;   (* Keyboard scan code           *)
+              State: CARDINAL;  (* Keyboard & mouse switches    *)
+              CursorX: INTEGER; (* Cursor X position            *)
+              CursorY: INTEGER; (* Cursor Y position            *)
+              Time: INTEGER;    (* System time of event         *)
+            END;
+
+    CURRCD = RECORD             (* Cursor Image definition      *)
+               curWidth: CARDINAL;   (* must be 16                   *)
+               curHeight: CARDINAL;  (* must be 16                   *)
+               curAlign: CARDINAL;   (* must be 0                    *)
+               curRowBytes: CARDINAL;(* must be 2                    *)
+               curBits: CHAR;        (* must be 1                    *)
+               curPlanes: CHAR;      (* must be 1                    *)
+               curData: ARRAY [1..32] OF BYTE;      (* cursor data bytes *)
+             END;
+
+    PATRCD = RECORD             (* Pattern Image definition     *)
+               patWidth: CARDINAL;   (* must be 8                    *)
+               patHeight: CARDINAL;  (* must be 8                    *)
+               patAlign: CARDINAL;   (* must be zero                 *)
+               patRowBytes: CARDINAL;(* must be equal to patBits     *)
+               patBits: BYTE;        (* value of 1,2,4 or 8          *)
+               patPlanes: BYTE;      (* value of 1 thru 32           *)
+               patData: ARRAY [1..32] OF BYTE;      (* pattern data bytes *)
+             END;
+
+    PENSTATE = RECORD           (* Pen State record structure   *)
+                 psBkColor: LONGINT;  (* Background color             *)
+                 psPnColor: LONGINT;  (* Pen color                    *)
+                 psPnLoc: POINT;      (* Pen location                 *)
+                 psPnSize: POINT;     (* Pen size                     *)
+                 psPnMode: CARDINAL;  (* Pen mode (rasterOp)          *)
+                 psPnPat: CARDINAL;   (* Pen pattern index            *)
+                 psPnCap: CARDINAL;   (* Pen end-cap style            *)
+                 psPnJoin: CARDINAL;  (* Line join style              *)
+                 psPnDash: CARDINAL;  (* Line dash style              *)
+                 psPnOffset: CARDINAL;(* Dash starting offset         *)
+                 psPnLevel: CARDINAL; (* Pen visibility level         *)
+               END;
+
+    DIRREC = RECORD             (* FILEQUERY - directory record *)
+               reserved: ARRAY [1..21] OF CHAR;  (*    (DOS reserved) *)
+               fileAttr: BYTE;                   (* File attribute               *)
+               fileTime: CARDINAL;               (* File create time             *)
+               fileDate: CARDINAL;               (* File create date             *)
+               fileSize: LONGINT;                (* File size (bytes)            *)
+               fileName: ARRAY [1..14] OF CHAR;  (* "FILENAME.EXT\0"  *)
+             END;
+
+    IMAGEHEADER = RECORD        (* Image Header record structure*)
+                    imWidth: CARDINAL;   (* Pixel width (X)              *)
+                    imHeight: CARDINAL;  (* Pixel height (Y)             *)
+                    imAlign: CARDINAL;   (* Image alignment              *)
+                    imRowBytes: CARDINAL;(* Bytes per row                *)
+                    imBits: BYTE;        (* Bits per pixel               *)
+                    imPlanes: BYTE;      (* Planes per pixel             *)
+                    (*   imData:     array [1..?] of byte;
+                         image data, variable length *)
+                  END;
+
+    DASHRCD = RECORD            (* DEFINEDASH data record       *)
+                nCnts: CARDINAL;(* number of active entries, 1-8*)
+                cnt1: CARDINAL; (* distance ON,  1              *)
+                cnt2: CARDINAL; (* distance OFF, 2              *)
+                cnt3: CARDINAL; (* distance ON,  3              *)
+                cnt4: CARDINAL; (* distance OFF, 4              *)
+                cnt5: CARDINAL; (* distance ON,  5              *)
+                cnt6: CARDINAL; (* distance OFF, 6              *)
+                cnt7: CARDINAL; (* distance ON,  7              *)
+                cnt8: CARDINAL; (* distance OFF, 8              *)
+              END;
+
+    MAPARRAY = ARRAY [0..7] OF CARDINAL;
+
+        (* CursorMap data record *)
+
+        (* Sample User Definable Types: *)
+
+
+    CCBtype = RECORD            (*User Definable Clock_Communication_Block*)
+                Timer: CARDINAL;
+                tX: INTEGER;
+                tY: INTEGER;
+                tSw: INTEGER;
+              END;
+
+    MCBtype = RECORD            (*User Definable Mouse_Communication_Block*)
+                mX: INTEGER;
+                mY: INTEGER;
+                mSw: INTEGER;
+              END;
+
+    IMAGE = BYTE;               (* "image" type equivalence      *)
+
+    IMAGEPTR = POINTER TO IMAGE;
+
+
+
+
+  TYPE
+    adsMem = POINTER TO BYTE;
+
+    MAP = RECORD                (* "rowTable" Raster Line Pointers *)
+            rowTable: ARRAY [0..1280] OF adsMem; (* Table of row pointers     *)
+          END;
+
+    rowtblPtr = POINTER TO MAP;
+
+    BITMAP = RECORD             (* "bitmap" Data Structure           *)
+               devClass: INTEGER;    (* Device class                  *)
+               devType: INTEGER;     (* Device type                   *)
+               devProcs: adsMem;     (* Ptr to device procedure list  *)
+               rowBytes: INTEGER;    (* Bytes per scan line           *)
+               pixWidth: INTEGER;    (* Pixels horizontal             *)
+               pixHeight: INTEGER;   (* Pixels vertical               *)
+               pixResX: INTEGER;     (* Pixels per inch horzontally   *)
+               pixResY: INTEGER;     (* Pixels per inch vertically    *)
+               pixBits: INTEGER;     (* Color bits per pixel          *)
+               pixPlanes: INTEGER;   (* Color planes per pixel        *)
+               mapTable: ARRAY [0..23] OF rowtblPtr;(* Pointers to rowTable(s) *)
+               mapActive: INTEGER;   (* Active logical page           *)
+               mapPages: INTEGER;    (* Number of mapList entries,1-4 *)
+               mapList: ARRAY [0..3] OF INTEGER;    (* List of logical pages loaded *)
+               mapRsvd: ARRAY [0..5] OF INTEGER;    (*  (reserved for future use)   *)
+               mapSegment: CARDINAL; (* Map segment                   *)
+               mapHandle: CARDINAL;  (* Map handle                    *)
+               mapManager: adsMem;   (* Pointer to paging manager     *)
+             END;
+
+    BITMAPPTR = POINTER TO BITMAP;
+
+    (* Bitmap Device Type (devType) Definitions   *)
+
+
+  CONST
+    devSTD = 0; (* Standard memory mapped bitmap    *)
+    devEGA = 1; (* IBM EGA/VGA display bitmap       *)
+    devND1 = 040H; (* NDI Genesis-1024 bitmap          *)
+    devND2 = 041H; (* NDI Genesis-1280 bitmap          *)
+    devHP1 = 042H; (* Hewlett Packard1                 *)
+    devEMS = 080H; (* EMS expanded memory bitmap       *)
+    devWYS = 081H; (* Wyse 1280x800 display bitmap     *)
+    devSIG = 082H; (* Sigma Design Color-400 bitmap    *)
+    devLASVU = 083H; (* Sigma Design LaserView/plus      *)
+    devVISTA = 084H; (* Cornerstone VISTA 1600           *)
+    devREV512 = 085H; (* Number Nine Revolution 512x484   *)
+    devDUALPG = 086H; (* Cornerstone DualPage System      *)
+    devTSENG = 087H;
+        (* Tseng labs Bank Select - STB/GENOA/ORCHID *)
+    devREV2048 = 088H; (* #9 2048x4 Bank manager           *)
+
+    cDevClass = 0; (* "GetBMapField" index definitions *)
+    cDevType = 2;
+    cRowBytes = 8;
+    cPixWidth = 10;
+    cPixHeight = 12;
+    cPixRsX = 14;
+    cPixRsY = 16;
+    cPixBits = 18;
+    cPixPlanes = 20;
+    cMapTable = 22;
+
+
+  TYPE
+    METAPORT = RECORD (* "metaPort" Data Structure       *)
+                 portBMap: BITMAPPTR;
+                 (*  Pointer to "bitmap" record     *)
+                 portRect:     RECT;
+                 (* 'Local' coordinate port bounds  *)
+                 portOrgn:     POINT;
+                 (* 'Global' origin of portRect     *)
+                 portVirt:     RECT;
+                 (* 'Virtual' port bounds           *)
+                 portFlgs: INTEGER;
+                 (*  Port Flags                     *)
+                 portClip:     RECT;
+                 (* 'Local' clipping rectangle      *)
+                 portRgn: adsMem;
+                 (*    (reserved)                   *)
+                 bkPat: INTEGER;
+                 (*  Background pattern index       *)
+                 bkColor: LONGINT;
+                 (*  Background color               *)
+                 pnColor: LONGINT;
+                 (*  Pen color                      *)
+                 pnLoc:     POINT;
+                 (*  Pen location                   *)
+                 pnSize:     POINT;
+                 (*  Pen size                       *)
+                 pnMode: INTEGER;
+                 (*  Pen mode (rasterOp)            *)
+                 pnPat: INTEGER;
+                 (*  Pen pattern index              *)
+                 pnCap: INTEGER;
+                 (*  Pen end-cap style              *)
+                 pnJoin: INTEGER;
+                 (*  Line join style                *)
+                 pnDash: INTEGER;
+                 (*  Line dash style                *)
+                 pnOffset: INTEGER;
+                 (*  Dash sequence offset           *)
+                 pnLevel: INTEGER;
+                 (*  Pen visibility level           *)
+                 txFont: adsMem;
+                 (*  Pointer to current font record *)
+                 txFace: INTEGER;
+                 (*  Text facing flags              *)
+                 txMode: INTEGER;
+                 (*  Text mode (rasterOp)           *)
+                 txUnder: INTEGER;
+                 (*  Text underline position        *)
+                 txScore: INTEGER;
+                 (*  Text underline scoring         *)
+                 txPath: INTEGER;
+                 (*  Text path                      *)
+                 txAlign:     POINT;
+                 (*  Text alignment                 *)
+                 txAngle: INTEGER;
+                 (*  Text angle (stroked)           *)
+                 txSize:     POINT;
+                 (*  Text size  (stroked)           *)
+                 txSlant: INTEGER;
+                 (*  Text slant (stroked)           *)
+                 txExtra: INTEGER;
+                 (*  Text justify bits              *)
+                 txSpace: INTEGER;
+                 (*  Space justify bits             *)
+                 mkType: INTEGER;
+                 (*  Marker type index              *)
+                 mkSize:     POINT;
+                 (*  Marker size                    *)
+                 mkAngle: INTEGER;
+                 (*  Marker angle                   *)
+                 spare: ARRAY [1..10] OF INTEGER;
+                 (*    (spares)       *)
+               END;
+
+
+  TYPE
+    METAPORTPTR = POINTER TO METAPORT;
+
+    PUSHAREA = RECORD (* PUSHGRAFIX/POPGRAFIX savearea  *)
+                 saveArea: ARRAY [1..64] OF CARDINAL;
+               END;
+
+
+  CONST
+    cportBMap = 0; (* "GetPortField" Index Definitions *)
+    cportRect = 4;
+    cportOrgn = 12;
+    cportVirt = 16;
+    cportFlgs = 24;
+    cportClip = 26;
+    cportRgn = 34;
+    cbkPat = 38;
+    cbkColor = 40;
+    cpnColor = 44;
+    cpnLoc = 48;
+    cpnSize = 52;
+    cpnMode = 56;
+    cpnPat = 58;
+    cpnCap = 60;
+    cpnJoin = 62;
+    cpnDash = 64;
+    cpnOffset = 66;
+    cpnLevel = 68;
+    ctxFont = 70;
+    ctxFace = 74;
+    ctxMode = 76;
+    ctxUnder = 78;
+    ctxScore = 80;
+    ctxPath = 82;
+    ctxAlign = 84;
+    ctxAngle = 88;
+    ctxSize = 90;
+    ctxSlant = 94;
+    ctxExtra = 96;
+    ctxSpace = 98;
+    cmkType = 100;
+    cmkSize = 102;
+    cmkAngle = 106;
+    cspare = 108;
+
+    cxmin = 0;
+    cymin = 2;
+    cxmax = 4;
+    cymax = 6;
+    cX = 0;
+    cY = 2;
+    cseg = 0;
+    coff = 2;
+
+
+
+TYPE
+
+    fontRec =
+      RECORD
+        (* FONT DATA RECORD *)
+        fontVer : BYTE;
+          (* Font format version number *)
+        fontRev : BYTE;
+          (* Font style revision designation *)
+        nameLen : BYTE;
+          (* Font name length *)
+        fontName : ARRAY [1..46] OF CHAR;
+          (* Font Name (ASCII) *)
+        fontNull : CHAR;
+          (* (extra terminating null) *)
+        fontSign : ARRAY [1..8] OF CHAR;
+          (* "METAFONT" signature *)
+        fontSize : LONGINT;
+          (* Buffer size needed to hold font *)
+        fontMin : INTEGER;
+          (* Minimum character code *)
+        fontMax : INTEGER;
+          (* Maximum character code *)
+        ptSizeA : ARRAY [1..2] OF CHAR;
+          (* Point Size (ASCII) *)
+        ptSizeB : INTEGER;
+          (* Point Size (binary) *)
+        family : INTEGER;
+          (* Font style family *)
+        fontClass : INTEGER;
+          (* Device class *)
+        fontFlags : INTEGER;
+          (* Font flags *)
+        fontColor : ARRAY [1..2] OF LONGINT;
+          (* Font Color *)
+        minChar : CHAR;
+          (* Minimum ASCII character *)
+        maxChar : CHAR;
+          (* Maximum ASCII character *)
+        chWidth : INTEGER;
+          (* Fixed space character width *)
+        chHeight : INTEGER;
+          (* Character height *)
+        chKern : INTEGER;
+          (* Fixed space character offset *)
+        ascent : INTEGER;
+          (* Ascent *)
+        decent : INTEGER;
+          (* Decent *)
+        leading : INTEGER;
+          (* Leading *)
+        fxSpace : INTEGER;
+          (* Fixed character Spacing *)
+        chCenter : POINT;
+          (* Icon or Marker center (X,Y) *)
+        chAngle : INTEGER;
+          (* Italicise slant angle *)
+        chUnder : INTEGER;
+          (* Recommended txUnder setting *)
+        chScore : INTEGER;
+          (* Recommended txScore setting *)
+        locTbl : LONGINT;
+          (* offset to locTable *)
+        ofwdTbl : LONGINT;
+          (* offset to ofwdTable *)
+        kernTbl : LONGINT;
+          (* offset to kernTable *)
+        sizeTbl : LONGINT;
+          (* offset to size/rotation table *)
+        bmapTbl : LONGINT;
+          (* offset to font bitmap data record*)
+        rowTbl : LONGINT;
+          (* offset to bitmap rowTable(s) *)
+        fontTbl : LONGINT;
+          (* offset to font image/nodes table *)
+        fontRsvd : ARRAY [1..59] OF INTEGER;
+          (*reserved for future use*)
+      END;
+
+  CONST
+    cFontVer = 0;
+      (* "GetFontField" Index Definitions *)
+    cFontName = 2;
+    cFontSign = 50;
+    cFontSize = 58;
+    cFontMin = 62;
+    cFontMax = 64;
+    cPtSizeA = 66;
+    cPtSizeB = 68;
+    cFamily = 70;
+    cFontClass = 72;
+    cFontFlags = 74;
+    cFontColor = 76;
+    cMinChar = 84;
+    cChWidth = 86;
+    cChHeight = 88;
+    cChKern = 90;
+    cAscent = 92;
+    cDecent = 94;
+    cLeading = 96;
+    cFxSpace = 98;
+    cChCenter = 100;
+    cChAngle = 104;
+    cChUnder = 106;
+    cChScore = 108;
+    cLocTbl = 110;
+    cOfwdTbl = 114;
+    cKernTbl = 118;
+    cSizeTbl = 122;
+    cBmapTbl = 126;
+    cRowTbl = 130;
+    cFontTbl = 134;
+
+PROCEDURE InitGrafix ( devmode : INTEGER) ;
+
+
+END m.

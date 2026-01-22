@@ -1,0 +1,42 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  FORMIO.DEF - Modula-2 formatted i/o                                     *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => on,
+         o_a_size => on) *)
+(*# module(init_code => on) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+
+DEFINITION MODULE FormIO ;
+
+(*# call(o_a_copy=>off) *)
+
+PROCEDURE WrF ( Pat : ARRAY OF CHAR ) ;
+
+PROCEDURE WrF1 ( Pat : ARRAY OF CHAR ;
+                 P1  : ARRAY OF BYTE ) ;
+
+PROCEDURE WrF2 ( Pat : ARRAY OF CHAR ;
+                 P1,P2  : ARRAY OF BYTE ) ;
+
+PROCEDURE WrF3 ( Pat : ARRAY OF CHAR ;
+                 P1,P2,P3  : ARRAY OF BYTE ) ;
+
+PROCEDURE WrF4 ( Pat : ARRAY OF CHAR ;
+                 P1,P2,P3,P4  : ARRAY OF BYTE ) ;
+
+PROCEDURE WrF5 ( Pat : ARRAY OF CHAR ;
+                 P1,P2,P3,P4,P5  : ARRAY OF BYTE ) ;
+
+END FormIO.
+

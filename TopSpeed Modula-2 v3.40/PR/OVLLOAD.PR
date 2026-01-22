@@ -1,0 +1,15 @@
+#system dos exe
+#model compact
+#pragma debug(vid=>off,public=>on)
+#pragma define(BATCH=>off,CHECK=>off,DEBUG=>off,ENV=>off,FULLVID=>off,VidSupport=>on,DebugLoader=>off,EMS=>off)
+
+#compile loadera.a
+#compile corertl.a #to _corertl.obj
+#compile loader.mod
+
+#pragma link_option(map=>on,case=>on,pack=>off)
+#dolink  ovlload.exe
+
+-- create the library
+#implib loader.lib loader.exp
+

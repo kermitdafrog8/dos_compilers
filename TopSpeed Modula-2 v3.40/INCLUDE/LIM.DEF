@@ -1,0 +1,35 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  LIM.DEF - Modula-2 LIM expanded memory interface                        *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => on,
+         o_a_size => on) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+
+DEFINITION MODULE LIM; (* LIM expanded memory *)
+
+VAR
+    LIMPresent : BOOLEAN;
+    PageFr      : CARDINAL;
+
+PROCEDURE GetStatus() : SHORTCARD;
+PROCEDURE GetPageFrame(): CARDINAL;
+PROCEDURE AllocatePages( n : CARDINAL ) : CARDINAL;
+PROCEDURE FreePages() : CARDINAL;
+PROCEDURE MapPage( PPage,LPage,Handle : CARDINAL ): CARDINAL;
+PROCEDURE DeAllocatePages( Handle : CARDINAL );
+
+END LIM.
+
+
+

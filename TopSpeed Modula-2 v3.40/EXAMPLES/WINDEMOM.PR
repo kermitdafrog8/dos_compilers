@@ -1,0 +1,6 @@
+#system auto exe
+#model mthread jpi
+
+#compile %main
+#link %prjname
+

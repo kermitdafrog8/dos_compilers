@@ -1,0 +1,313 @@
+module LoaderA
+
+segment ENTERCODE(ENTERCODE,28H)
+extrn Loader$Main
+
+
+  jmp far LoaderA$Init
+  dw 0,0,0,0,0,0,0,0
+
+segment _TEXT(CODE,28H)
+group DGROUP(_TEXT)
+
+
+public LoaderA@MainName:
+(*%T ENV*)
+(*%F BATCH*) db 'TS', 0 (*%E*)
+(*%T BATCH*) db 'TSC', 0 (*%E*)
+(*%E*)
+(*%F ENV*)
+db 'DVTEST', 0
+(*%E*)
+org 62
+
+LoaderA$Init:
+  cld
+  push ds
+  mov ah,30H
+  int 21H
+  cmp al,2
+(*%T DebugLoader*)  jmp $start (*%E*)
+  jbe   $start
+  push ax
+  mov es,[2CH]
+  sub  di, di
+  sub  ax, ax
+  mov  cx, -1
+execLoop:                              (* get address of command *)
+  scasw
+  je   execFound
+  dec  di
+  loop execLoop
+execFound:
+  push es
+  pop ds
+  add  di, 2
+  mov si,di
+  push cs
+  pop es
+  mov di,LoaderA@MainName
+findpath:
+  lodsb
+  stosb
+  cmp al,0
+  jne findpath
+  (* take off EXE *)
+  cmp byte es:[di][-5],'.'
+  jne $noexe
+  mov byte es:[di][-5],0
+$noexe:
+(* extend handle size *)
+  pop ax
+  cmp al,3
+  ja $handleextnd
+  cmp ah,3
+  jb $start
+$handleextnd:
+  pop   ax
+  push  ax          (* recover address of PSP into AX *)
+
+  push  bx
+  push  es
+  mov   es,ax
+  mov   bx,es:[2]   (* recover END-OF-ALLOCATION segment in BX *)
+  mov   ax,es
+  sub   bx,ax       (* calculate total program size *)
+  sub   bx,11H      (* adjust down 11H paras., 256bytes plus 16 for slack *)
+  mov   ah,4AH      (* release this memory back to DOS to handle files *)
+  int   21H
+  sub   word es:[2],11H (* decrement END-OF-ALLOCATION value for libraries *)
+  pop   es
+  pop   bx
+
+  mov  ah,67H
+  push bx
+  mov  bx,255     (* prepare DOS to handle up to 255 file handles. *)
+  int  21H
+  pop  bx
+$start:
+  push ss
+  pop ds
+  mov dx,100H (* temporary DTA *)
+  mov ah,1AH
+  int 21H
+  pop ds
+  mov ax,1234H
+  push ax
+  sub ax,ax
+  push ax
+  mov bp,sp
+  mov ax, ds
+  call far Loader$Main
+
+
+public LoaderA$MoveUp:
+    push ds
+    mov ds, ax
+    dec cx
+    dec cx
+    add si, cx
+    add di, cx
+    std
+    inc cx
+    inc cx
+    shr cx, 1
+    rep; movsw
+    pop ds
+    cld
+    ret near 0
+
+public Loader$FileSeek :
+    mov  ax, 4200H
+    int  21H
+    ret 0
+
+public Loader$FileRead :
+    push ds
+    mov  ds, ax
+    mov  ah, 3FH
+    int  21H
+    pop  ds
+    jc   Loader$IoError
+    ret  0
+
+public Loader$FileWrite :
+    push ds
+    mov  ds, ax
+    mov  ah, 40H
+    int  21H
+    pop  ds
+    jc   Loader$IoError
+    ret  0
+
+public Loader$FileOpen :
+    push ds
+    mov  ds, bx
+    mov  ah, 3DH
+    int  21H
+    pop  ds
+    jc   Loader$IoError
+    ret  0
+
+public Loader$FileClose :
+    mov  ah, 3EH
+    int  21H
+    ret  0
+
+public Loader$IoError:
+    mov  ax, -1
+    ret  0
+
+public Loader$DosExit :
+    mov  ah, 4CH
+    int  21H
+
+public Loader$Exec:
+    mov ss, bx
+    mov sp, cx
+    mov ds, ax
+    mov es, ax
+    push dx
+    mov dx,80H
+    mov ah,1AH
+    int 21H
+    mov ax,ds
+    sub bp, bp
+    push si
+    ret far 0
+
+public Loader$FileSize:
+    sub  cx,cx
+    sub  dx,dx
+    mov  ax, 4202H (* seek relative to end *)
+    int  21H
+    ret  0
+
+public Loader$FileDelete :
+    push ds
+    mov  ds, bx
+    mov  ah, 41H
+    int  21H
+    pop  ds
+    ret  0
+
+public Loader$FileCreate :
+    push ds
+    mov  ds, bx
+    mov  ah, 3CH
+    sub  cx, cx
+    int  21H
+    pop  ds
+    jc   Loader$IoError2
+    ret  0
+
+public Loader$FileCreateNew :
+    push ds
+    mov  ds, bx
+$checkloop:
+    mov  ah, 4EH
+    sub cx,cx
+    int  21H
+    jc $oktocreate
+    mov bx,dx
+$findendloop:       (* look for end of string *)
+    inc bx
+    cmp byte[bx],0
+    jnz $findendloop
+$findextloop:       (* look for '.' *)
+    dec bx
+    cmp byte[bx],'.'
+    jnz $findextloop
+    dec bx
+    cmp byte[bx],'9'
+    jne $notoverflow
+    mov byte[bx],'0'
+    dec bx
+$notoverflow:
+    inc byte [bx]
+    jmp $checkloop
+$oktocreate:
+    mov  ah, 3CH
+    sub  cx, cx
+    int  21H
+    pop  ds
+    jc   Loader$IoError2
+    ret  0
+
+
+
+Loader$IoError2:
+    mov  ax, -1
+    ret  0
+
+
+segment _DATA(DATA,28H)
+
+extrn Loader$CallTrap
+extrn Loader$ReturnTrap
+
+public LoaderA@GateHandler:
+     push bx
+     push ax
+     pushf
+     mov bx, sp
+     xchg bp, ss:[bx][6]
+     mov bx, bp            (* bx points to just after gate *)
+     add bp, cs:[bp][-2]   (* destination of gate *)
+     cmp byte cs:[bp], 90H (* see if it is a return gate *)
+     je $retgate
+$callgate:
+     (* call frame looks like this:
+              ret cs ( if call )
+              ret ip ( if call )
+          bp->pointer to gate / old bp
+              old bx
+              old ax
+          sp->old flags
+     *)
+     mov ax, bp
+     dec ax
+     mov bp, sp
+     add bp, 6
+     sub bx, 3
+     (* ax -> segrec, bx -> gaterec *)
+     call far Loader$CallTrap
+     xchg ax, [bp]
+     mov bp, ax
+     popf
+     pop ax
+     pop bx
+     ret 0
+$retgate:
+     (* ret frame looks like this:
+              pointer to gate / old bp / target cs
+              old bx / target ip
+              old ax
+          bp->old flags
+          sp->old bx
+     *)
+     (* bp points one beyond seghdr *)
+     mov ax, bp      (* pointer to segrec *)
+     mov bx, cs:[bx] (* target offset *)
+     mov bp, sp
+     xchg bx, [bp][4]
+     push bx
+     mov bp, [bp][6]
+     call far Loader$ReturnTrap
+     mov bx, sp
+     mov ss:[bx][8], ax
+     pop bx
+     popf
+     pop ax
+     ret far 0
+
+
+segment STACK(STACK,74H)
+select STACK
+  org 07FF0H
+
+
+
+end *
+
+

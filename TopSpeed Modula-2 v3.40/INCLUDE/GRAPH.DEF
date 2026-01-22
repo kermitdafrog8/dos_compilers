@@ -1,0 +1,262 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  GRAPH.DEF - Modula-2 graphics                                           *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => off) *)
+
+(*%T _fcall *)
+(*# call (seg_name=>GRAPHICS) *)
+(*%E *)
+(*# module(implementation=>off) *)
+(*%F _fdata *)
+(*# data(seg_name => null) *)
+(*%E *)
+
+DEFINITION MODULE Graph; (* Basic graphics routines *)
+IMPORT CoreGraph;
+
+(*
+TYPE
+  VideoConfig = RECORD
+     numxpixels: CARDINAL;       (* number of pixels on X axis *)
+     numypixels: CARDINAL;       (* number of pixels on Y axis *)
+     numtextcols: CARDINAL;      (* number of text columns available *)
+     numtextrows: CARDINAL;      (* number of text rows available *)
+     numcolors: CARDINAL;        (* number of actual colors *)
+     bitsperpixel: CARDINAL;     (* number of bits per pixel *)
+     numvideopages: CARDINAL;    (* number of available video pages *)
+     mode: CARDINAL;             (* current video mode *)
+     adapter: CARDINAL;          (* active display adapter *)
+     monitor: CARDINAL;          (* active display monitor *)
+     memory: CARDINAL;           (* adapter video memory in K bytes *)
+   END;
+
+   GraphCoords = RECORD
+       xcoord, ycoord: INTEGER;
+   END;
+
+   TextCoords = RECORD
+       row, col: INTEGER;
+   END;
+*)
+
+CONST
+    AutoDetect = TRUE;
+CONST
+    FillMaskType ::= CoreGraph.FillMaskType;
+
+PROCEDURE GraphMode;
+PROCEDURE TextMode;
+
+PROCEDURE Plot(x,y: CARDINAL; Color: CARDINAL);
+(* set a single pixel to given color *)
+
+PROCEDURE Point(x,y: CARDINAL) : CARDINAL;
+(* read a pixel of the screen *)
+
+PROCEDURE HLine(x,y,x2: CARDINAL; FillColor: CARDINAL);
+(* draw a horizontal line of given color (used for filling) *)
+
+
+(* End of device dependant routines *)
+
+(* Device independant routines *)
+
+PROCEDURE Line(x1,y1,x2,y2: CARDINAL; Color: CARDINAL);
+(* draw an arbitrary line in given color *)
+
+PROCEDURE Circle(x0,y0,r: CARDINAL; c: CARDINAL);
+(* centre x0,y0; radius r *)
+
+PROCEDURE Disc(x0,y0,r : CARDINAL; FillColor: CARDINAL);
+(* filled circle, centre x0,y0; radius r *)
+
+PROCEDURE TrueCircle(x0,y0,r: CARDINAL; c: CARDINAL);
+(* centre x0,y0; radius r , adjusted to be "round" for display *)
+
+PROCEDURE TrueDisc(x0,y0,r : CARDINAL; FillColor: CARDINAL);
+(* filled circle, centre x0,y0; radius r, adjusted to be "round" for display *)
+
+PROCEDURE Ellipse ( x0,y0 : CARDINAL ;  (* center *)
+                    a0,b0 : CARDINAL ;  (* semi-axes *)
+                    c     : CARDINAL ;  (* color *)
+                    fill  : BOOLEAN ) ; (* wether filled *)
+
+
+
+PROCEDURE Polygon(n: CARDINAL; px,py: ARRAY OF CARDINAL; FillColor: CARDINAL);
+(* filled polygon of n points *)
+
+
+(*
+   Initialization routines.
+   Called to setup display output type.
+*)
+PROCEDURE  InitCGA();
+PROCEDURE  InitEGA();
+PROCEDURE  InitVGA();
+PROCEDURE  InitHerc();
+PROCEDURE  InitGraph();
+
+(*
+  procedure variables for device dependant routines
+*)
+
+(*
+    Device specific constants and routines
+    equivalent to the variables Width, Depth and NumColors
+*)
+CONST
+  CGAWidth           = 320 ;
+  CGADepth           = 200 ;
+  CGANumColor        = 4 ;
+  EGAWidth           = 640 ;
+  EGADepth           = 350 ;
+  VGAWidth           = 640 ;
+  VGADepth           = 480 ;
+  EGANumColor        = 16 ;
+  VGA256Width        = 320 ;
+  VGA256Depth        = 200 ;
+  VGANumColor        = 16 ;
+
+CONST
+  HercWidth          = 720 ;
+  HercDepth          = 348 ;
+  HercNumColor       = 2 ;
+
+VAR
+  Width    : CARDINAL ;     (* x values are 0..Width-1  *)
+  Depth    : CARDINAL ;     (* y values are 0..Depth-1  *)
+  NumColor : CARDINAL ;     (* Colors are 0..NumColor-1 *)
+
+(* MSDOS Extensions *)
+
+VAR
+    FillState: BOOLEAN;
+
+CONST
+    VideoConfig ::= CoreGraph.VideoConfig;
+    TextCoords ::= CoreGraph.TextCoords;
+    GraphCoords ::= CoreGraph.GraphCoords;
+
+    _DEFAULTMODE  =  MAX(CARDINAL);  (* restore screen to original mode *)
+    _TEXTBW40     =  0;       (* 40 x 25 text, 16 grey *)
+    _TEXTC40      =  1;       (* 40 x 25 text, 16/8 color *)
+    _TEXTBW80     =  2;       (* 80 x 25 text, 16 grey *)
+    _TEXTC80      =  3;       (* 80 x 25 text, 16/8 color *)
+    _MRES4COLOR   =  4;       (* 320 x 200, 4 color *)
+    _MRESNOCOLOR  =  5;       (* 320 x 200, 4 grey *)
+    _HRESBW       =  6;       (* 640 x 200, BW *)
+    _TEXTMONO     =  7;       (* 80 x 25 text, BW *)
+    _HERCMONO     =  8;       (* 720 x 348, BW for HGC *)
+    _MRES16COLOR  =  13;      (* 320 x 200, 16 color *)
+    _HRES16COLOR  =  14;      (* 640 x 200, 16 color *)
+    _ERESNOCOLOR  =  15;      (* 640 x 350, BW *)
+    _ERESCOLOR    =  16;      (* 640 x 350, 4 or 16 color *)
+    _VRES2COLOR   =  17;      (* 640 x 480, BW *)
+    _VRES16COLOR  =  18;      (* 640 x 480, 16 color *)
+    _MRES256COLOR =  19;      (* 320 x 200, 256 color *)
+
+    _MDPA     =  0001H;      (* Monochrome Display Adapter (MDPA) *)
+    _CGA      =  0002H;      (* Color Graphics Adapter     (CGA)  *)
+    _EGA      =  0004H;      (* Enhanced Graphics Adapter  (EGA)  *)
+    _VGA      =  0008H;      (* Video Graphics Array       (VGA)  *)
+    _MCGA     =  0010H;      (* MultiColor Graphics Array  (MCGA) *)
+    _HGC      =  0020H;      (* Hercules Graphics Card     (HGC)  *)
+
+    _MONO     =  0001H;      (* Monochrome *)
+    _COLOR    =  0002H;      (* Color (or Enhanced emulating color) *)
+    _ENHCOLOR =  0004H;      (* Enhanced Color *)
+    _ANALOG   =  0018H;      (* Analog *)
+
+    _GBORDER       =  FALSE;      (* draw outline only *)
+    _GFILLINTERIOR =  TRUE;       (* fill using current fill mask *)
+
+    _GTOP          =  TRUE;
+    _GNOTOP        =  FALSE;
+    _GCLEARSCREEN  =  0;
+    _GVIEWPORT     =  1;
+    _GWINDOW       =  2;
+
+    _GCURSOROFF    =  FALSE;
+    _GCURSORON     =  TRUE;
+
+    _GWRAPOFF      =  FALSE;
+    _GWRAPON       =  TRUE;
+
+    _GPSET         =  3;
+    _GPRESET       =  2;
+    _GAND          =  1;
+    _GOR           =  0;
+    _GXOR          =  4;
+
+    _BLACK         =  0000000H;
+    _BLUE          =  02A0000H;
+    _GREEN         =  0002A00H;
+    _CYAN          =  02A2A00H;
+    _RED           =  000002AH;
+    _MAGENTA       =  02A002AH;
+    _BROWN         =  000152AH;
+    _WHITE         =  02A2A2AH;
+    _GRAY          =  0151515H;
+    _LIGHTBLUE     =  03F1515H;
+    _LIGHTGREEN    =  0153F15H;
+    _LIGHTCYAN     =  03F3F15H;
+    _LIGHTRED      =  015153FH;
+    _LIGHTMAGENTA  =  03F153FH;
+    _LIGHTYELLOW   =  0153F3FH;
+    _BRIGHTWHITE   =  03F3F3FH;
+
+PROCEDURE GetVideoConfig(VAR V: VideoConfig);
+PROCEDURE SetClipRgn(x1, y1, x2, y2: CARDINAL);
+PROCEDURE GetBkColor(): LONGCARD;
+PROCEDURE GetFillMask(VAR Mask: CoreGraph.FillMaskType);
+PROCEDURE GetLinestyle(): CARDINAL;
+PROCEDURE SetBkColor(Color: LONGCARD): LONGCARD;
+PROCEDURE SetFillMask(Mask: CoreGraph.FillMaskType);
+PROCEDURE SetLinestyle(Mask: CARDINAL);
+PROCEDURE DisplayCursor(Toggle: BOOLEAN): BOOLEAN;
+PROCEDURE GetTextColor(): CARDINAL;
+PROCEDURE GetTextPosition(): TextCoords;
+PROCEDURE SetTextColor(Color: CARDINAL): CARDINAL;
+PROCEDURE SetTextPosition(row, col: CARDINAL): TextCoords;
+PROCEDURE SetTextWindow(r1, c1, r2, c2: CARDINAL);
+PROCEDURE Wrapon(Opt: BOOLEAN): BOOLEAN;
+PROCEDURE OutText(Text: ARRAY OF CHAR);
+PROCEDURE SetVideoMode(Mode: CARDINAL): BOOLEAN;
+PROCEDURE SetActivePage(Page: CARDINAL): CARDINAL;
+PROCEDURE SetVisualPage(Page: CARDINAL): CARDINAL;
+PROCEDURE ClearScreen(Area: CARDINAL);
+PROCEDURE Rectangle(x1, y1, x2, y2: CARDINAL; Color: CARDINAL;Fill: BOOLEAN);
+PROCEDURE Arc(x1, y1, x2, y2, x3, y3, x4, y4: CARDINAL; Color: CARDINAL);
+PROCEDURE Pie(x1, y1, x2, y2, x3, y3, x4, y4: CARDINAL; Colr: CARDINAL; Fill: BOOLEAN);
+PROCEDURE FloodFill(x, y: CARDINAL; Color: CARDINAL; Boundary: CARDINAL);
+PROCEDURE StackFill(x, y: CARDINAL; Color: CARDINAL; Boundary: CARDINAL);
+PROCEDURE RemapPalette(Pixel: CARDINAL; Color: LONGCARD): LONGCARD;
+PROCEDURE RemapAllPalette(Colarray: ARRAY OF LONGCARD): CARDINAL;
+PROCEDURE SelectPalette(Palnum: CARDINAL): CARDINAL;
+PROCEDURE GetImage(x1, y1, x2, y2: CARDINAL; Buffer: ADDRESS);
+PROCEDURE PutImage(x, y: CARDINAL; Buffer: ADDRESS; Action: CARDINAL);
+PROCEDURE ImageSize(x1, y1, x2, y2: CARDINAL): LONGCARD;
+PROCEDURE Cube(top: BOOLEAN; x1, y1, x2, y2, depth: CARDINAL; Color: CARDINAL; Fill: BOOLEAN);
+
+TYPE A1=ARRAY [0..0] OF SHORTCARD;
+
+(*# save,
+    call( reg_param=>(dx,ax),
+          reg_saved=>(dx,ax,bx,cx,si,di,es,ds,st1,st2),
+          inline=>on )
+*)
+INLINE PROCEDURE Out (p:CARDINAL;v:SHORTCARD)=A1(0EEH);
+(*# restore *)
+
+END Graph.
+
+
+

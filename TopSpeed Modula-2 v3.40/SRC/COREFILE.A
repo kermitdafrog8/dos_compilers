@@ -1,0 +1,48 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREFILE.A - file control memory                                        *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+OPEN_MAX = 20
+
+module files
+
+section
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+public __open_max: dw OPEN_MAX
+
+section
+segment _BSS(BSS, 28H)
+
+public __iob: org OPEN_MAX * _iobSize
+
+public __openfd: org OPEN_MAX * 2
+
+segment _BSS(BSS, 28H)
+
+public _BufInf :  org OPEN_MAX * DataPtrSize
+
+section
+segment _BSS(BSS, 28H)
+
+select _BSS
+public __tmpfiles: org OPEN_MAX * DataPtrSize
+
+section
+segment _BSS(BSS, 28H)
+
+select _BSS
+public __tmpfptrs: org OPEN_MAX * DataPtrSize
+
+end
+

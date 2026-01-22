@@ -1,0 +1,79 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INITDLL.A - startup code for DLLs                                       *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module initdll
+
+segment INITCODE(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment INIT_DATA(FAR_DATA,28H)
+segment C_ORDER(FCODE,28H)
+segment D_ORDER(BSS,68H)
+segment EMU_STATE(DATA,28H)
+segment CONST(CONST,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+
+group DGROUP(EMU_STATE,CONST,_CONST,_DATA,BSS_START,_BSS,BSS_END)
+
+select INIT_DATA
+
+InitRec: dw 0, 0, 0, _INIT
+
+select BSS_START
+public __bss_start:
+public _edata:
+
+select BSS_END
+public __bss_end:
+public _end:
+
+select D_ORDER
+buffer: org 8
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+extrn __InitLink
+
+select INITCODE
+
+  mov bx, InitRec
+  mov ax, INIT_DATA
+  call far __InitLink
+  mov ax, -1
+  ret far 0
+
+dw EMU_STATE
+dw CONST
+dw _CONST
+dw _DATA
+dw BSS_START
+dw _BSS
+dw BSS_END (* establishs order ! *)
+dw 0
+
+end *
+

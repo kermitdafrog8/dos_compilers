@@ -1,0 +1,171 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREGRAP.DEF - Modula-2 interface to COREGRAP.A                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size => off,
+         o_a_copy=>off,
+         c_conv=>on,
+         result_optional=>on) *)
+(*# module(implementation=>off, init_code => off) *)
+
+(*# name(prefix => c) *)
+
+DEFINITION MODULE CoreGraph;
+
+TYPE
+  FillMaskType = ARRAY [0..7] OF SHORTCARD;
+
+  VideoConfig = RECORD
+     numxpixels: CARDINAL;       (* number of pixels on X axis *)
+     numypixels: CARDINAL;       (* number of pixels on Y axis *)
+     numtextcols: CARDINAL;      (* number of text columns available *)
+     numtextrows: CARDINAL;      (* number of text rows available *)
+     numcolors: CARDINAL;        (* number of actual colors *)
+     bitsperpixel: CARDINAL;     (* number of bits per pixel *)
+     numvideopages: CARDINAL;    (* number of available video pages *)
+     mode: CARDINAL;             (* current video mode *)
+     adapter: CARDINAL;          (* active display adapter *)
+     monitor: CARDINAL;          (* active display monitor *)
+     memory: CARDINAL;           (* adapter video memory in K bytes *)
+   END;
+
+   GraphCoords = RECORD
+       xcoord, ycoord: INTEGER;
+   END;
+
+   TextCoords = RECORD
+       row, col: INTEGER;
+   END;
+
+   FillMaskPtr  = POINTER TO FillMaskType;
+   VideoType = RECORD
+      sys0, dis0, sys1, dis1: SHORTCARD;
+   END;
+
+   FloodStart = RECORD
+       best_quad, quad_type: INTEGER;
+       flag: INTEGER;
+   END;
+
+
+VAR
+  _text_br: TextCoords;
+  _fill_mask: FillMaskType;
+  _fstart: FloodStart;
+  _current_linestyle: CARDINAL;
+  _EGAStartPlane: CARDINAL;
+  _EGAPlaneShift: CARDINAL;
+  _EGAtranslate: CARDINAL;
+
+  _defaultmode: CARDINAL;
+  _lastmode:  CARDINAL;
+
+  _depth:  CARDINAL;
+  _width:  CARDINAL;
+
+  _clip_tl: GraphCoords;
+  _clip_br: GraphCoords;
+  _text_tl: TextCoords;
+  _current_graph: GraphCoords;
+  _current_text:  TextCoords;
+  _current_video: VideoConfig;
+  _active_page: CARDINAL;
+  _visual_page: CARDINAL;
+  _page_size:   CARDINAL;
+  _bkcolor: LONGCARD;
+  _fgcolor: INTEGER;
+  _txcolor: INTEGER;
+  _EGA64K:  BOOLEAN;
+  _cursor_lock: INTEGER;
+  _cursor_state: BOOLEAN;
+  _wrap_state: BOOLEAN;
+  _display_state: BOOLEAN;
+  _scr_attr: CARDINAL;
+  _current_mask: FillMaskPtr;
+
+(*# save *)
+(*%T _fcall *)
+(*# call(seg_name => Graphics) *)
+(*%E *)
+(*# call(c_conv=>on, reg_param => (), reg_saved=>(ds, di, si,st1,st2)) *)
+
+VAR
+    _get: PROCEDURE(FarADDRESS, INTEGER, INTEGER, INTEGER, INTEGER);
+    _put: PROCEDURE(INTEGER, INTEGER, FarADDRESS, INTEGER);
+
+PROCEDURE _getvideomode(): INTEGER;
+PROCEDURE _txt_out(ch: INTEGER);
+PROCEDURE _gr_out(ch: INTEGER);
+PROCEDURE _setbiosmode(mode: INTEGER);
+PROCEDURE _setlimits(V: VideoConfig);
+PROCEDURE _getsystem(VAR vid: VideoType);
+PROCEDURE _getmemory(): CARDINAL;
+PROCEDURE _clear_Herc();
+PROCEDURE _clear_CGA();
+PROCEDURE _resetEGA();
+PROCEDURE _CGA320Get(image: FarADDRESS; x1, y1, x2, y2: INTEGER);
+PROCEDURE _CGA320Put(x, y: INTEGER; image: FarADDRESS; action: INTEGER);
+PROCEDURE _CGA640Get(image: FarADDRESS; x1, y1, x2, y2: INTEGER);
+PROCEDURE _CGA640Put(x, y: INTEGER; image: FarADDRESS; action: INTEGER);
+PROCEDURE _EGAGet(image: FarADDRESS; x1, y1, x2, y2: INTEGER);
+PROCEDURE _EGAPut(x, y: INTEGER; image: FarADDRESS; action: INTEGER);
+PROCEDURE _VGAGet(image: FarADDRESS; x1, y1, x2, y2: INTEGER);
+PROCEDURE _VGAPut(x, y: INTEGER; image: FarADDRESS; action: INTEGER);
+PROCEDURE _HercGet(image: FarADDRESS; x1, y1, x2, y2: INTEGER);
+PROCEDURE _HercPut(x, y: INTEGER; image: FarADDRESS; action: INTEGER);
+(*# restore *)
+
+(*# save *)
+(*%T _fcall *)
+(*# call(seg_name => Graphics) *)
+(*%E *)
+(*# call(reg_param => (ax,bx,cx,dx,st0,st6,st5,st4,st3), reg_saved=>(ds, di, si,st1,st2), c_conv=>off) *)
+
+VAR
+    _hscan: PROCEDURE(VAR INTEGER, VAR INTEGER, INTEGER, INTEGER);
+    _plot: PROCEDURE (INTEGER, INTEGER, INTEGER);
+    _point: PROCEDURE(INTEGER, INTEGER): INTEGER;
+    _hline: PROCEDURE(INTEGER, INTEGER, INTEGER, INTEGER);
+    _line: PROCEDURE(INTEGER, INTEGER, INTEGER, INTEGER, CARDINAL);
+
+PROCEDURE _CGA320Line (x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _CGA320HLine(x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _CGA640Line (x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _CGA640HLine(x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _EGAPlot(x, y, c: INTEGER);
+PROCEDURE _EGA2Plot(x, y, c: INTEGER);
+PROCEDURE _EGAPlot1(x, y, c: INTEGER);
+PROCEDURE  _EGAPoint(x, y: INTEGER): INTEGER;
+PROCEDURE  _EGA2Point(x, y: INTEGER): INTEGER;
+PROCEDURE _EGAHLine (x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _EGA2HLine(x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _EGALine(x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _EGA2Line(x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _EGAHScan(VAR xl, xr: INTEGER; y, border: INTEGER);
+PROCEDURE  _VGAPoint(x, y: INTEGER): INTEGER;
+PROCEDURE _VGAPlot(x, y, c: INTEGER);
+PROCEDURE _VGAHLine(x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _VGALine(x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _HercLine(x1, y1, x2, y2: INTEGER; fmask: CARDINAL);
+PROCEDURE _HercHLine(x, y, x2: INTEGER; FillCol: INTEGER);
+PROCEDURE _gcur(state, x, y, page: INTEGER);
+PROCEDURE _setcur(r, c, p: INTEGER);
+PROCEDURE  _clear_blink();
+PROCEDURE  _CGA320leftscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _CGA320rightscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _CGA640leftscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _CGA640rightscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _EGAleftscan(ptr: FarADDRESS; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _EGArightscan(ptr: FarADDRESS; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _VGAleftscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _VGArightscan(ptr: CARDINAL; border, lim, left: INTEGER): INTEGER;
+PROCEDURE  _EGAxlat(c: INTEGER): INTEGER;
+(*# restore *)
+
+END CoreGraph.

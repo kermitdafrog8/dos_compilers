@@ -1,0 +1,54 @@
+!!Topspeed configuration file (OS2 ALL) V3
+
+!!------- Conditional settings -------------
+
+!set os2
+!set asm
+!!set mod
+!!set pas
+!!set C
+!!set cpp
+
+!set smallmodel
+!set compactmodel
+!set mediummodel
+!set largemodel
+!set xlargemodel
+!set mthreadmodel
+!!set overlaymodel
+!!set dynalinkmodel
+!!set extendedmodel
+!!set extendmtmodel
+!! Remove the following line to disable MASM support for .ASM files.
+!set masm
+
+
+!!------- Includes--------------------------
+
+! Include 'tsmain.txt'
+! Include 'tsmake.txt'
+! Include 'tsprj.txt'
+
+!if mod
+! Include 'tsmod.txt'
+!end
+
+!if asm
+! Include 'tsasm.txt'
+!end
+
+!if C
+! Include 'tsc.txt'
+!end
+
+!if cpp
+! Include 'tscpp.txt'
+!end
+
+!if pas
+! Include 'tspas.txt'
+!end
+
+! Include 'tsisl.txt'
+
+

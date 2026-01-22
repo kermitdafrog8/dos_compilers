@@ -1,0 +1,26 @@
+(* Copyright (C) 1987 Jensen & Partners International *)
+(* This module can be used to change the ordering of segments and
+   classes. This version causes the program entry point to be at
+   zero which is useful for GEM.
+
+   To use it, use the batch command:
+
+   m2 /l order+prog,prog
+
+   where prog is the name of your program.
+*)
+
+module order
+
+segment ENTERCODE(CODE,28H)
+segment INITCODE(CODE,28H)
+segment C_ORDER(FCODE,68H)
+segment _DATA(BSS,68H)
+segment DATASTART(DUMMY,68H)
+segment _BSS(BSS,68H)
+segment D_ORDER(M_DATA,68H)
+segment STACK(STACK,68H)
+segment HEAP(HEAP,68H)
+
+end
+

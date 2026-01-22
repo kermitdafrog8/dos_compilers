@@ -1,0 +1,565 @@
+(* Copyright (C) 1987 Jensen & Partners International *)
+(* This assembler module is mainly concerned with implementing
+   the multi-processing features of Modula-2 such as
+   NEWPROCESS, TRANSFER and IOTRANSFER.
+   There are some hardware dependencies, such as the interrupt
+   controller port address. A dynamic check is performed to identify
+   AT compatibles, otherwise a standard PC compatible is assumed.
+   If you are programming non-standard peripherals on a new IBM
+   machine such as the PS/2 model 50,60,80 some changes may be necessary.
+*)
+
+(*
+   The "ROM" string denotes those sections requiring modification when
+   creating ROMmable code.
+*)
+
+(*ROM
+   A number of these routines make use of the Int 8 timer tick - they are
+   marked with an "(*INT8*)" string.  If the target machine does not provide
+   a user timer tick via Int 8, then 1) don't use any of the facilities that
+   need it; or 2) implement an Int 8.
+*)
+
+(*ROM
+   These two values are used when sending an end-of-interrupt to the interrupt
+   controller.
+*)
+
+eoiport = 20H       (* the port to write EOI value to *)
+eoiportB = 0A0H     (* the port to write EOI valkue to for AT and high int *)
+eoivalue = 20H      (* the EOI value which will be written *)
+
+(*ROM
+   These two values are used for accessing the interrupt controller.
+*)
+
+icport1 = 21H  (* port for lower 8 bits of priority mask *)
+icport2 = 0A1H (* port for upper 8 bits of priority mask on AT *)
+
+(* Process descriptor offsets *)
+NextProcess     = 0   (* Next in chain (-1 = end) *)
+                      (* of waiting processes *)
+LongCall        = 2   (* Long call used to point interrupts *)
+LongCallIP      = 4   (* at interrupt handler *)
+LongCallCS      = 6
+ProcessSP       = 8
+ProcessSS       = 10
+ProcessPriority = 12
+ProcessFloat    = 14
+ProcessRecordSize = 94 + ProcessFloat
+
+ProcessRecSize      = 1    (* paragraphs *)
+ProcessRecSizeFloat = 7    (* paragraphs *)
+
+module SYSTEM
+
+segment INITCODE(CODE,28H);
+segment C_CODE(CODE,28H);
+group G_CODE(INITCODE,C_CODE)
+segment MP_DATA(M_DATA,68H)
+
+select C_CODE
+
+extrn @D_DATA
+extrn @MachineId
+extrn @CurrentProcess
+extrn @PrtAddrAbort
+extrn @Save8087
+
+@GetPri: (* read interrupt controller mask *)
+  (* on entry, ds = [@D_DATA] *)
+  xor ah,ah
+  cmp byte [@MachineId],0FCH (*an AT ? *)
+  jne @GetPri2
+  in  al,icport2
+  mov ah,al
+@GetPri2:
+  in  al,icport1
+  ret 0
+
+@SetPri: (* write interrupt controller mask *)
+  (* on entry, ds = [@D_DATA] *)
+  out icport1,al
+  cmp byte [@MachineId],0FCH (*an AT ? *)
+  jne @SetPri2
+  xchg al,ah
+  out icport2,al
+@SetPri2:
+  ret 0
+
+public @NewPrio : (* compiler generated call *)
+  pop bx
+  push cs
+  push bx
+public $NewPrio : (* compiler generated call *)
+  push ax
+  push dx
+  push ds
+  mov ds, cs:[@D_DATA]
+  call @GetPri
+  mov bx,ax
+  mov ax,cx
+  call @SetPri
+  mov  cx,bx
+  pop ds
+  pop dx
+  pop ax
+  ret far 0
+
+public @NewPri2 : (* compiler generated call *)
+  pop bx
+  push cs
+  push bx
+public $NewPri2 : (* compiler generated call *)
+  push ax
+  push dx
+  push ds
+  mov ds, cs:[@D_DATA]
+  call @GetPri
+  mov bx, ax
+  or ax, cx
+  call @SetPri
+  mov cx, bx
+  pop ds
+  pop dx
+  pop ax
+  ret far 0
+
+public SYSTEM$Listen : Mask = 6
+  push bp; mov bp,sp; push ds
+  mov ds, cs:[@D_DATA]
+  call @GetPri
+  mov bx,ax
+  mov cx,[bp][Mask]
+  not cx
+  and ax,cx
+  call @SetPri
+  mov ax,bx
+  call @SetPri
+  pop ds; pop bp; ret far 2
+
+extrn FIERQQ
+extrn FIDRQQ
+
+SwapStack :
+(* Procedure used to change stack *)
+(* Inputs: ds = segment of new process record *)
+(* Out:    cx = New priority *)
+(* NB Interrupts must be off *)
+(* The following registers are corrupted AX,CX,SI,DI,ES *)
+(* Out:    es = Old (swapped) process *)
+
+  mov es, cs:[@D_DATA]
+  cmp byte es:[@Save8087], 0
+  mov es, es:[@CurrentProcess]
+  jne $dosave
+
+  call @Swap
+$exitswap:
+  call far $NewPrio
+  ret 0
+
+$dosave: (* swap 8087 registers *)
+  fsave es:[ProcessFloat]
+  call @Swap
+  frstor ds:[ProcessFloat]
+  jmp $exitswap
+
+@Swap:
+(* local procedure to do the stack swap *)
+(* NB The first time a process gets swapped to, this routine returns to StartProcess *)
+
+  cmp word ds:[LongCall],9A90H (* check word *)
+  jne $CorruptProcess
+  mov bx, ds
+  mov ds, cs:[@D_DATA]
+  mov [@CurrentProcess],bx
+  mov di,ProcessSP
+  mov ax,sp
+  stosw
+  mov ax,ss
+  stosw
+
+  call @GetPri
+  mov ds, bx
+  stosw
+  mov si,ProcessSP
+  lodsw
+  mov sp,ax
+  lodsw
+  mov ss,ax
+  lodsw
+  mov cx,ax
+  ret 0
+
+SwapStack2:   (* Same as SwapStack but doesnt call $NewPrio *)
+
+  mov es, cs:[@D_DATA]
+  cmp byte es:[@Save8087], 0
+  mov es, es:[@CurrentProcess]
+  jne $dosave
+
+  call @Swap
+  jmp $exitswap2
+$dosave2:
+  fsave es:[ProcessFloat]
+  call @Swap
+  frstor ds:[ProcessFloat]
+$exitswap2:
+  xchg ax,cx
+  push ds
+  mov ds, cs:[@D_DATA]
+  call @SetPri
+  pop ds
+  xchg ax,cx
+  ret 0
+
+$CorruptProcess:
+  sti
+  mov dx,ipdmsg
+  call @PrtAddrAbort
+
+ipdmsg : db "] Invalid process descriptor$"
+
+
+public SYSTEM$TRANSFER : p1seg=12; p1off=10; p2seg=8; p2off=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  cli
+
+  mov ds, cs:[@D_DATA]
+  mov ax,[@CurrentProcess]
+(* Take copy of p2 *)
+  lds bx, [bp][p2off]
+  mov ds, [bx][2]
+(* Return result *)
+  les bx, [bp][p1off]
+  mov word es:[bx], 0
+  mov word es:[bx][2],ax
+
+  push bp
+  call SwapStack
+  pop bp
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 8
+
+public SYSTEM$IOTRANSFER : p1seg=14; p1off=12; p2seg=10; p2off=8; IntNo=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  cli
+
+(* Return first result *)
+  mov ds, cs:[@D_DATA]
+  mov ax, [@CurrentProcess]
+(* Take copy of p2 *)
+  lds bx, [bp][p2off]
+  mov di, [bx][2]
+  lds bx, [bp][p1off]
+  mov word [bx],0
+  mov [bx][2],ax
+
+(* Save old interrupt vector and set up new one *)
+  sub bx, bx
+  mov ds, bx
+  mov bx, [bp][IntNo]
+  shl bx, 1
+  shl bx, 1
+  push [bx]
+  push [bx][2]
+  mov [bx][2], ax     (* current process *)
+  mov word [bx],LongCall
+  push ds
+  push bx
+  mov ds,di
+  push bp
+  call SwapStack
+  pop bp
+  pop bx
+  pop ds
+
+(* Restore old interrupt vector *)
+  pop [bx][2]
+  pop [bx]
+
+(* issue EOI to interrupt controller *)
+  cmp bx,20H
+  jb  skipa0
+  cmp bx,40H
+  mov al,eoivalue
+  jae skip20
+  out eoiport,al
+  jmp skipa0
+skip20:
+  cmp bx,1C0H
+  jb  skipa0
+  cmp bx,1E0H
+  jae skipa0
+  out eoiportB,al       (* assuming it's an AT *)
+  out eoiport,al        (* fix by Greg O'Nielsen *)
+skipa0:
+
+
+(* return second result *)
+  lds bx, [bp][p2off]
+  mov word [bx], 0
+  mov [bx][2], es
+
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 10
+
+SYSTEM$IntHandler:
+(* On entry the stack has *)
+(* flags *)
+(* cs *)
+(* ip *)
+(* segment of task record of interrupting task ( used to save ax ) *)
+(* offset  of ditto                            ( used to save bx ) *)
+(* Then registers saved in Registers record order *)
+
+
+              (* flags = 16 *)
+              (* CS    = 14 *)
+              (* IP    = 12 *)
+              (* 10   (flags copy) *)
+              (* 8    (es) *)
+  push ds     (* 6 *)
+  push di     (* 4 *)
+  push si     (* 2 *)
+  push bp     (* 0 *)
+  mov bp, sp
+  push dx
+  push cx
+  push bx
+  push ax
+  pushf
+  cld
+  mov ds,ss:[bp][10]  (* load ds with new process rec *)
+  pop ss:[bp][10]
+  mov [bp][8],es
+
+$preempt:
+  call SwapStack2
+$exit:
+  pop ax
+  pop bx
+  pop cx
+  pop dx
+  pop bp
+  pop si
+  pop di
+  pop ds
+  pop es
+  add sp,2     (* flags are be restored by iret *)
+  iret
+
+
+public SYSTEM$NEWPROCESS : pseg=18; poff=16; aseg=14; aoff=12; wspsize=10; p1seg=8; p1off=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  les di,[bp][aoff]       (* address of process workspace *)
+  mov bx,[bp][wspsize]
+  mov ax,di
+  and di,0FH              (* amount lost due to normalizing *)
+  jz $NoLoss
+  sub di,16
+  add bx,di
+$NoLoss:
+  lds si,[bp][p1off]      (* result *)
+  add ax,15
+  shr ax,1
+  shr ax,1
+  shr ax,1
+  shr ax,1
+  mov di,es
+  add ax,di
+  mov word ds:[si],0
+  mov ds:[si][2],ax
+  mov ds,ax
+  push es
+  mov es, cs:[@D_DATA]
+  cmp byte es:[@Save8087],0
+  pop es
+  je $NoSave8087
+  add ax,6       (* 94/16 *)
+  sub bx,96
+  and bx,0FFFEH  (* put stack on even boundrary *)
+$NoSave8087:
+  inc ax         (* size of process record *)
+  sub bx,16+12   (* 1 para + return addresses etc *)
+
+(* initialize record *)
+  mov word ds:[NextProcess],-1
+  mov word ds:[LongCall],09A90H
+  mov word ds:[LongCallIP],SYSTEM$IntHandler
+  mov ds:[LongCallCS],cs
+  mov ds:[ProcessSS],ax
+  mov ds:[ProcessSP],bx
+  mov es,ax
+  push ds
+  mov ds, cs:[@D_DATA]
+  call @GetPri
+  pop ds
+  mov ds:[ProcessPriority],ax
+(* initialize return stack frame *)
+  mov di,bx
+  mov ax,StartProcess
+  stosw
+  mov ax,[bp][poff]
+  stosw
+  mov ax,[bp][pseg]
+  stosw
+  mov ax,StopProcess
+  stosw
+  mov ax,cs
+  stosw
+
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 14
+
+extrn @Abort
+
+FatalError :
+  sti
+  pop dx
+  push cs
+  pop ds
+  mov ah, 9
+  int 21H
+  jmp @Abort
+
+StopProcess:
+  call FatalError
+  db "Fatal error: Return from process",7,13,10, "$"
+
+StartProcess:
+(* This is arrived at by first SwapStack *)
+(* IN cx = priority (from SwapStack) *)
+
+(* Initialize rounding control *)
+  push ds
+  mov ds, cs:[@D_DATA]
+  cmp byte [@Save8087], 0
+  pop ds
+  je $No8087
+  fstcw ds:[ProcessFloat]
+  fwait
+  or  word ds:[ProcessFloat],0C00H
+  fldcw ds:[ProcessFloat]
+$No8087:
+(*Initialise bp to zero, enable interrupts and set priority *)
+  sub bp,bp
+  cld
+  call far $NewPrio
+  sti
+  ret far 0
+
+(* Utility procedures *)
+
+public SYSTEM$NewPriority :
+  pop bx
+  pop dx
+  pop cx
+  push dx
+  push bx
+  jmp far $NewPrio
+
+
+public SYSTEM$CurrentPriority :
+  push ds
+  mov ds, cs:[@D_DATA]
+  call @GetPri
+  pop ds; ret far 0
+
+public SYSTEM$InterruptRegisters : pseg=8; pofs=6
+  push bp; mov bp,sp
+  push ds
+
+(* called to find the registers of an interrupted process *)
+(* after an IOtransfer *)
+
+  mov ds,[bp][pseg]
+  mov dx,ds:[ProcessSS]
+  mov ax,ds:[ProcessSP]
+  add ax,4
+
+  pop ds
+  pop bp; ret far 4
+
+select MP_DATA
+
+MainProcess : org ProcessRecordSize
+
+extrn @D_DATA
+
+select INITCODE
+
+  mov ax, MP_DATA
+  mov ds, ax
+  mov word [MainProcess], -1
+  mov word [MainProcess][2], 9A90H
+  mov word [MainProcess][4], SYSTEM$IntHandler
+  mov word [MainProcess][6], C_CODE
+  mov ds, cs:[@D_DATA]
+  mov word [@CurrentProcess], MP_DATA
+
+section;
+
+segment C_CODE(CODE,28H); group G_CODE(C_CODE)
+select C_CODE
+
+extrn @D_DATA
+extrn @CurrentProcess
+
+public SYSTEM$CurrentProcess :
+(* returns the current process in DX:AX *)
+   push ds
+   mov ds, cs:[@D_DATA]
+   mov dx, [@CurrentProcess]
+   pop ds
+   sub ax,ax
+   ret far 0
+
+section;
+
+segment INITCODE(CODE,28H);
+group G_CODE(INITCODE)
+segment D_DATA(M_DATA,28H);
+segment HEAP(HEAP,68H);
+
+select D_DATA
+
+public @MachineId      : org 1
+public @CurrentProcess : org 2
+public SYSTEM@HeapBase : org 2
+public @Save8087       : org 2   (* must be non zero *)
+                                 (* if floating point context save required *)
+
+select INITCODE
+
+extrn @D_DATA
+
+public SYSTEM@:
+  mov ds, cs:[@D_DATA]
+  mov word ds:[SYSTEM@HeapBase],HEAP
+  mov word [@Save8087], 0
+  mov word [@CurrentProcess], 0
+(*ROM
+   Get the machine ID byte.  A 0FCH identifies an AT - this value is used
+   to determine whether the interrupt controller mask is 8-bit (PC) or 16-bit
+   (AT).
+*)
+  mov ax,0F000H
+  mov es,ax
+  mov al,es:[0FFFEH]
+  mov [@MachineId],al
+
+end
+

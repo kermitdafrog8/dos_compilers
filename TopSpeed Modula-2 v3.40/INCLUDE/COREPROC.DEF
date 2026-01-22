@@ -1,0 +1,91 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREPROC.DEF - Modula-2 interface to COREPROC.A                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size => off,
+         o_a_copy=>off,
+         c_conv=>on,
+         result_optional=>on) *)
+(*# module(implementation=>off, init_code => off) *)
+
+(*# name(prefix => c) *)
+
+DEFINITION MODULE CoreProc;
+
+IMPORT SYSTEM;
+
+TYPE
+  StackHandle = CARDINAL;
+  StackHandlePtr =  POINTER TO StackHandle;
+
+  Task = POINTER TO TaskDescriptor;
+  TaskDescriptor = RECORD
+                     next     : Task; (* queue of waiting Process *)
+                     priority : CARDINAL; (* NB = actual priority+1 *)
+                     cor      : SYSTEM.PROCESS;
+                     due      : CARDINAL;
+                     wsp      : ADDRESS;
+                     wspsize  : CARDINAL;
+                     nextdue  : Task;
+                   END;
+(*# save *)
+(*# call(near_call=>off) *)
+  ThreadProc = PROCEDURE(FarADDRESS);
+(*# restore *)
+
+(*# save *)
+(*# call(near_call=>off, c_conv=>off) *)
+  ProcessProcType   = PROCEDURE;
+(*# restore *)
+
+  DelayProcType   = PROCEDURE(CARDINAL);
+
+CONST
+  MaxProcess = 32;
+
+VAR
+(*# save *)
+(*# data(volatile => on) *)
+  _ProcIds  : ARRAY [0..MaxProcess] OF CARDINAL;
+  _LastProc : [0..MaxProcess];
+  _Started  : BOOLEAN;
+  _LockSem  : LONGCARD;
+  _LockCount : CARDINAL;
+  _LockedThread : CARDINAL;
+
+  _core_lock   : ProcessProcType;
+  _core_unlock : ProcessProcType;
+  _core_delay  : DelayProcType;
+  _exit_proc   : ProcessProcType;
+  _SchedProc   : SYSTEM.PROCESS;
+  _Continue    : ProcessProcType;
+  _proc_init   : BOOLEAN;
+  Stop         : BOOLEAN;
+  _LockNestMonster : CARDINAL;
+  _SchedTime   : CARDINAL;
+  _NextThread  : CARDINAL;
+  _cp: Task;                     (* currently active task + ready queue *)
+  _dq: Task;                     (* queue of delayed tasks *)
+  _wq: Task;                     (* queue of tasks that have reached thier delay time
+                                     but haven't been placed on the ready queue *)
+  _SchedStack: ADDRESS;
+(*# restore *)
+
+PROCEDURE _beginthread(P: ThreadProc; Stack: FarADDRESS; Size: CARDINAL;
+                       Arg: FarADDRESS);
+PROCEDURE _endthread();
+PROCEDURE _getTID(): CARDINAL;
+PROCEDURE getpid(): CARDINAL;
+
+PROCEDURE _dosbeginthread(P: PROC; Stlen: CARDINAL; Stkvar: StackHandlePtr): CARDINAL;
+PROCEDURE _dosendthread();
+PROCEDURE _dosfreestack(Stack: StackHandle);
+
+END CoreProc.
+

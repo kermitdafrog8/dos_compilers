@@ -1,0 +1,7759 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  ASMLIB.A - Modula-2 assembly language implementations                   *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module AsmLib
+
+(* Common Procedures *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Terminate.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Procedure appended to terminate chain.
+
+   IN PARAMETERS -  P (PROC), next link (VAR PROC).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn standard@haltChain
+extrn __core_lock
+extrn __core_unlock
+
+(*%F RegParam *)
+(*%F NearCall *)
+(*%F NearPtr *)
+a_ptrH = 6+frame
+a_ptrL = 4+frame
+c_ptrH = 2+frame
+c_ptrL = frame
+
+RetSize = 8
+(*%E *)
+(*%T NearPtr *)
+a_ptrH = 4+frame
+a_ptrL = 2+frame
+c_ptrL = frame
+
+RetSize = 6
+(*%E *)
+(*%E *)
+(*%T NearCall *)
+(*%T NearPtr *)
+a_ptrL = 2+frame
+c_ptrL = frame
+
+RetSize = 4
+(*%E *)
+(*%F NearPtr *)
+a_ptrL = 4+frame
+c_ptrH = 2+frame
+c_ptrL = frame
+
+RetSize = 6
+(*%E *)
+(*%E *)
+public Lib$Terminate :
+
+
+
+  push bp
+  mov bp,sp
+  push ds
+(*%F SameDS *)
+  mov  ax, seg standard@haltChain
+  mov  ds, ax
+(*%E *)
+(*%T MThread *)
+(*%F _DLL *)
+  call far  [__core_lock]
+(*%E *)
+(*%T _DLL *)
+  mov  ax, seg __core_lock
+  mov  es, ax
+  call far  es:[__core_lock]
+(*%E *)
+(*%E *)
+  mov     ax,[bp][a_ptrL]
+  xchg    ax,[standard@haltChain]
+(*%F NearCall *)
+  mov     dx, [bp][a_ptrH]
+  xchg    dx,[standard@haltChain][2]
+(*%E *)
+(*%F NearPtr *)
+  lds     bx,[bp][c_ptrL]
+(*%E *)
+(*%T NearPtr *)
+  mov     bx,[bp][c_ptrL]
+(*%E *)
+  mov     [bx],ax
+(*%F NearCall *)
+  mov     [bx][2],dx
+(*%E *)
+(*%T MThread *)
+  mov  bx, seg __core_unlock
+  mov  es, bx
+  call far  es:[__core_unlock]
+(*%E *)
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+public Lib$Terminate :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push si
+(*%F NearPtr *)
+  push ds
+(*%E *)
+(*%F SameDS *)
+  mov  si, seg standard@haltChain
+  mov  ds, si
+(*%E *)
+(*%T MThread *)
+(*%F _DLL *)
+  call far  [__core_lock]
+(*%E *)
+(*%T _DLL *)
+  mov  si, seg __core_lock
+  mov  es, si
+  call far  es:[__core_lock]
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+  xchg    ax,[standard@haltChain]
+  xchg    bx,[standard@haltChain][2]
+(*%F NearPtr *)
+  mov     ds, dx
+(*%E *)
+  mov     si, cx
+  mov     [si],ax
+  mov     [si][2],bx
+(*%E *)
+
+(*%T NearCall *)
+  xchg    ax,[standard@haltChain]
+(*%F NearPtr *)
+  mov     ds, cx
+(*%E *)
+  mov     [bx],ax
+(*%E *)
+
+(*%T MThread *)
+  mov  bx, seg __core_unlock
+  mov  es, bx
+  call far  es:[__core_unlock]
+(*%E *)
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+  pop si
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.HashString.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  string (ARRAY OF CHAR), hash range (CARDINAL).
+
+   OUT PARAMETERS - Returns hash value (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+
+
+(*%F RegParam *)
+(*%F NearPtr *)
+ssize   = 6+frame
+segm    = 4+frame
+offs    = 2+frame
+modulus = frame
+
+RetSize = 8
+(*%E *)
+(*%T NearPtr *)
+ssize   = 4+frame
+offs    = 2+frame
+modulus = frame
+
+RetSize = 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+modulus = -2
+locals  =  2
+
+RetSize = 0
+(*%E *)
+
+public Lib$HashString :
+
+
+  push  bp
+  mov   bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%T NearPtr *)
+  push dx
+(*%E *)
+(*%E *)
+(*%F NearPtr *)
+  push  ds
+(*%E *)
+  push  si
+  push  di
+(*%F RegParam *)
+  mov   cx,[bp][ssize]
+  jcxz  $Exit
+(*%F NearPtr *)
+  mov   ds,[bp][segm]
+(*%E *)
+  mov   si,[bp][offs]
+  mov   di,[bp][ssize]
+(*%E *)
+(*%T RegParam *)
+  or    ax, ax
+  jz    $Exit
+(*%F NearPtr *)
+  mov   ds, cx
+  mov   si, bx
+  mov   [bp][modulus], dx
+(*%E *)
+(*%T NearPtr *)
+  mov   si, bx
+  mov   [bp][modulus], cx
+(*%E *)
+  mov   cx, ax
+  mov   di, ax
+(*%E *)
+  sub   bx,bx
+  sub   dx,dx
+  sub   ax,ax
+$loop:
+  lodsb
+  or    al, al
+  jz    $EndLoop
+  xor   dl, al
+  rol   dx, 1
+  rol   dx, 1
+  rol   dx, 1
+  add   dx, di
+  sub   dx, cx
+  loop  $loop
+$EndLoop:
+  mov  ax, dx
+  sub  dx, dx
+  div  word [bp][modulus]
+$Exit:
+  mov  ax, dx
+  pop di
+  pop si
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+  pop  dx
+(*%E *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Fill.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - block of bytes set tp specified value.
+
+   IN PARAMETERS -  destination (ADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$Fill :
+
+  push bp
+  mov  bp, sp
+  push di
+  mov  cx, [bp][len]
+(*%F NearPtr *)
+  les  di, [bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  di, [bp][d_ofs]
+  push ds
+  pop es
+(*%E *)
+  mov  ax, [bp][val]
+  mov  ah, al
+  shr  cx, 1
+rep ; stosw
+  jnc $Exit
+  stosb
+$Exit:
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$Fill :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+(*%F NearPtr *)
+  mov  di, ax
+  mov  es, bx
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+  mov  ah, al
+  shr  cx, 1
+rep ; stosw
+  jnc $Exit
+  stosb
+$Exit:
+  pop di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.FarFill.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - block of bytes set tp specified value.
+
+   IN PARAMETERS -  destination (FarADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Takes 32 pointer parameter.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+public Lib$FarFill :
+
+  push bp
+  mov  bp, sp
+  push di
+  mov  cx, [bp][len]
+  les  di, [bp][d_ofs]
+  mov  ax, [bp][val]
+  mov  ah, al
+  shr  cx, 1
+rep ; stosw
+  jnc $Exit
+  stosb
+$Exit:
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$FarFill :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  mov  di, ax
+  mov  es, bx
+  mov  ax, dx
+  mov  ah, al
+  shr  cx, 1
+rep ; stosw
+  jnc $Exit
+  stosb
+$Exit:
+  pop di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.WordFill.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - block of words set to specified value.
+
+   IN PARAMETERS -  destination (FarADDRESS), word count (CARDINAL),
+                    word value (WORD).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$WordFill :
+
+  push bp
+  mov  bp, sp
+  push di
+  mov  cx, [bp][len]
+(*%F NearPtr *)
+  les  di, [bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  di, [bp][d_ofs]
+  push ds
+  pop es
+(*%E *)
+  mov  ax, [bp][val]
+rep ; stosw
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$WordFill :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+(*%F NearPtr *)
+  mov  di, ax
+  mov  es, bx
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+rep ; stosw
+  pop di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.FarWordFill.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - block of words set to specified value.
+
+   IN PARAMETERS -  destination (FarADDRESS), word count (CARDINAL),
+                    word value (WORD).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Takes 32 pointer parameter.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+public Lib$FarWordFill :
+
+  push bp
+  mov  bp, sp
+  push di
+  mov  cx, [bp][len]
+  les  di, [bp][d_ofs]
+  mov  ax, [bp][val]
+rep ; stosw
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$FarWordFill :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  mov  di, ax
+  mov  es, bx
+  mov  ax, dx
+rep ; stosw
+  pop di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.ScanR.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  destination (ADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - position of value, count if not found (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Scans for byte from low address.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$ScanR :
+
+  push bp
+  mov bp,sp
+  push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+(*%F NearPtr *)
+  les di,[bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][d_ofs]
+  push ds
+  pop  es
+(*%E *)
+  mov ax,[bp][val]
+  repne
+  scasb
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$ScanR :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  push si
+(*%F NearPtr *)
+  mov  si, cx
+  mov  es, bx
+  mov  di, ax
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  si, bx
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+  jcxz ExitScan
+  repne
+  scasb
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax, si
+  sub ax, cx
+  pop  si
+  pop  di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.ScanL.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  destination (ADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - position of value, count if not found (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Scans for byte from high address.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$ScanL :
+
+  push bp
+  mov bp,sp
+  push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+(*%F NearPtr *)
+  les di,[bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][d_ofs]
+  push ds
+  pop  es
+(*%E *)
+  mov ax,[bp][val]
+  std
+  repne
+  scasb
+  cld
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$ScanL :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  push si
+(*%F NearPtr *)
+  mov  si, cx
+  mov  es, bx
+  mov  di, ax
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  si, bx
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+  jcxz ExitScan
+  std
+  repne
+  scasb
+  cld
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax, si
+  sub ax, cx
+  pop  si
+  pop  di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.ScanNeR.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  destination (ADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - position of first byte difering value,
+                    count if none found (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Scans for byte from low address.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$ScanNeR :
+
+  push bp
+  mov bp,sp
+  push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+(*%F NearPtr *)
+  les di,[bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][d_ofs]
+  push ds
+  pop  es
+(*%E *)
+  mov ax,[bp][val]
+  repe
+  scasb
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$ScanNeR :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  push si
+(*%F NearPtr *)
+  mov  si, cx
+  mov  es, bx
+  mov  di, ax
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  si, bx
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+  jcxz ExitScan
+  repe
+  scasb
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax, si
+  sub ax, cx
+  pop  si
+  pop  di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.ScanNeL.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  destination (ADDRESS), byte count (CARDINAL),
+                    byte value (BYTE).
+
+   OUT PARAMETERS - position of first byte differing from value,
+                    count if none found (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Scans for byte from high address.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+d_seg = 6+frame
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 8
+(*%E *)
+
+(*%T NearPtr *)
+d_ofs = 4+frame
+len   = 2+frame
+val   = frame
+
+RetSize = 6
+(*%E *)
+public Lib$ScanNeL :
+
+  push bp
+  mov bp,sp
+  push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+(*%F NearPtr *)
+  les di,[bp][d_ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][d_ofs]
+  push ds
+  pop  es
+(*%E *)
+  mov ax,[bp][val]
+  std
+  repe
+  scasb
+  cld
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+RetSize = 0
+public Lib$ScanNeL :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push di
+  push si
+(*%F NearPtr *)
+mov  si, cx
+  mov  es, bx
+  mov  di, ax
+  mov  ax, dx
+(*%E *)
+(*%T NearPtr *)
+  mov  si, bx
+  mov  di, ax
+  mov  ax, cx
+  mov  cx, bx
+  push ds
+  pop  es
+(*%E *)
+  jcxz ExitScan
+  std
+  repe
+  scasb
+  cld
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax, si
+  sub ax, cx
+  pop  si
+  pop  di
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Compare.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source, destination (ADDRESS), byte count (CARDINAL).
+
+   OUT PARAMETERS - position of first differing byte,
+                    count if blocks equal (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Scans for byte from high address.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$Compare :
+
+(*%F RegParam *)
+num   = frame
+(*%T NearPtr *)
+s2    = 2+frame
+s1    = 4+frame
+
+RetSize = 6
+(*%E *)
+(*%F NearPtr *)
+s2    = 2+frame
+s1    = 6+frame
+
+RetSize = 10
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F NearPtr *)
+    push ds
+    lds  si, [bp][s1]
+    les  di, [bp][s2]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][s1]
+    mov  di, [bp][s2]
+    push ds
+    pop  es
+(*%E *)
+    mov  cx, [bp][num]
+    mov  ax, cx
+    jcxz exitScan
+repe ; cmpsb
+    je   exitScan
+    inc  cx
+exitScan:
+    sub  ax, cx
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+(*%E *)
+
+
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+
+(*%F NearPtr *)
+num    = frame
+(*%E *)
+
+
+(*%F NearPtr *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    push si
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+    mov  si, ax
+    mov  di, cx
+    mov  es, dx
+    mov  cx, [bp][num]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, ax
+    mov  di, bx
+    push ds
+    pop  es
+(*%E *)
+    mov  ax, cx
+    jcxz exitScan
+repe ; cmpsb
+    je   exitScan
+    inc  cx
+exitScan:
+    sub  ax, cx
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+
+(*%F NearPtr *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Caps.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - String characters set to upper case.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+
+(*%F NearPtr *)
+Slen = 4+frame
+Sseg = 2+frame
+Sofs = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+Slen = 2+frame
+Sofs = frame
+
+RetSize = 4
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public Str$Caps :
+
+(*%F RegParam *)
+  push bp
+  mov  bp,sp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+  push cx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+(*%F RegParam *)
+(*%F NearPtr *)
+  lds  si, [bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  si, [bp][Sofs]
+(*%E *)
+  mov cx,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  ds, cx
+(*%E *)
+  mov  cx, ax
+  mov  si, bx
+(*%E *)
+$loop:
+  lodsb
+  cmp al,97 (* 'a' *)
+  jb $notSmall
+  cmp al,122 (* 'z' *)
+  ja $notSmall
+  sub al,32
+  mov [si][-1],al
+  loop $loop
+  jmp  $$Done
+$notSmall:
+  or al,al
+  loopnz $loop
+$$Done:
+  pop si
+  pop ds
+(*%T RegParam *)
+(*%T NearPtr *)
+  pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Lows.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - String characters set to lower case.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+
+(*%F NearPtr *)
+Slen = 4+frame
+Sseg = 2+frame
+Sofs = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+Slen = 2+frame
+Sofs = frame
+
+RetSize = 4
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public Str$Lows :
+
+
+(*%F RegParam *)
+  push bp
+  mov  bp,sp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+  push cx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+(*%F RegParam *)
+(*%F NearPtr *)
+  lds  si, [bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  si, [bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  si, bx
+  mov  ds, cx
+  mov  cx, ax
+(*%E *)
+(*%T NearPtr *)
+  mov  cx, ax
+  mov  si, bx
+  push ds
+  pop  es
+(*%E *)
+(*%E *)
+$loop:
+  lodsb
+  cmp al, 'A'
+  jb $notSmall
+  cmp al, 'Z'
+  ja $notSmall
+  add al,32
+  mov [si][-1],al
+$notSmall:
+  or al,al
+  loopnz $loop
+
+  pop si
+  pop ds
+(*%T RegParam *)
+(*%T NearPtr *)
+  pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Length.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - Length of string (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+Slen = 4+frame
+Sseg = 2+frame
+Sofs = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+Slen = 2+frame
+Sofs = frame
+
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public Str$Length :
+
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+  push cx
+(*%E *)
+  push dx
+(*%E *)
+  push di
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  les di, [bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  di, [bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx, [bp][Slen]
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  di, bx
+  mov  es, cx
+  mov  cx, ax
+  mov  dx, ax
+(*%E *)
+(*%T NearPtr *)
+  mov  cx, ax
+  mov  dx, ax
+  mov  di, bx
+  push ds
+  pop  es
+(*%E *)
+(*%E *)
+  sub al, al
+  repne
+  scasb
+  jne ExitLength
+  inc cx
+ExitLength:
+(*%F RegParam *)
+  mov ax,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+  mov  ax, dx
+(*%E *)
+  sub ax,cx
+  pop di
+(*%T RegParam *)
+  pop  dx
+(*%T NearPtr *)
+  pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+(*%T _WINDOWS *)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Caps.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - String characters set to upper case.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard + far pointer.
+
+   NOTES -  None.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+(*%F RegParam *)
+Slen = 4+frame
+Sseg = 2+frame
+Sofs = frame
+
+RetSize = 6
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public WinStr$Caps :
+
+(*%F RegParam *)
+  push bp
+  mov  bp,sp
+(*%E *)
+  push ds
+  push si
+(*%F RegParam *)
+  lds  si, [bp][Sofs]
+  mov cx,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+  mov  si, bx
+  mov  ds, cx
+  mov  cx, ax
+(*%E *)
+$loop:
+  lodsb
+  cmp al,97 (* 'a' *)
+  jb $notSmall
+  cmp al,122 (* 'z' *)
+  ja $notSmall
+  sub al,32
+  mov [si][-1],al
+$notSmall:
+  or al,al
+  loopnz $loop
+
+  pop si
+  pop ds
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Lows.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - String characters set to lower case.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+(*%F RegParam *)
+Slen = 4+frame
+Sseg = 2+frame
+Sofs = frame
+
+RetSize = 6
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public WinStr$Lows :
+
+(*%F RegParam *)
+  push bp
+  mov  bp,sp
+(*%E *)
+  push ds
+  push si
+(*%F RegParam *)
+  lds  si, [bp][Sofs]
+  mov cx,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+  mov  si, bx
+  mov  ds, cx
+  mov  cx, ax
+(*%E *)
+$loop:
+  lodsb
+  cmp al, 'A'
+  jb $notSmall
+  cmp al, 'Z'
+  ja $notSmall
+  add al,32
+  mov [si][-1],al
+$notSmall:
+  or al,al
+  loopnz $loop
+
+  pop si
+  pop ds
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Slice.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains section of source, starting at position with
+                    a maximum size of length.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), source (ARRAY OF CHAR),
+                    position, length (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+(*%F RegParam *)
+NSlen = 14+frame
+NSseg = 12+frame
+NSofs = 10+frame
+Slen  =  8+frame
+Sseg  =  6+frame
+Sofs  =  4+frame
+P     =  2+frame
+L     =  frame
+
+RetSize = 16
+(*%E *)
+
+(*%T RegParam *)
+NSlen = -2
+NSseg = -4
+NSofs = -6
+Slen  = -8
+Sseg  =  6+frame
+Sofs  =  4+frame
+P     =  2+frame
+L     =  frame
+
+RetSize = 8
+locals = 8
+(*%E *)
+public WinStr$Slice :
+
+  push bp
+  mov bp, sp
+(*%T RegParam *)
+  sub  sp, locals
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][Slen], dx
+(*%E *)
+  push ds
+  push si
+  push di
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax, [bp][Slen]
+  sub ax,cx
+
+  mov bx, [bp][P]
+  sub ax,bx
+  ja NotBeyondEnd
+  sub ax,ax
+NotBeyondEnd:
+  cmp ax, [bp][L]
+  jb OffEnd
+  mov ax, [bp][L]
+OffEnd:
+  lds si, [bp][Sofs]
+  add si,[bp][P]
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+  les di,[bp][NSofs]
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.CharPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), ch (CHAR).
+
+   OUT PARAMETERS - returns offset of ch in source CARDINAL),
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard + Far Pointers.
+
+   NOTES -  None.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+public WinStr$CharPos :
+
+(*%T RegParam *)
+
+RetSize = 0
+
+    push di
+    mov  es, cx
+    mov  di, bx
+    mov  cx, ax
+    mov  ax, dx
+    mov  dx, cx
+    push ax
+    sub  al, al
+repne ; scasb
+    jne  lCalc
+    inc  cx
+lCalc:
+    sub  dx, cx
+    xchg dx, cx
+    mov  di, bx
+    pop  ax
+repne; scasb
+    jnz   notFound
+    dec  di
+    sub  di, bx
+    mov  ax, di
+chrDone:
+    pop  di
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(*%F RegParam *)
+slen = 6+frame
+s    = 2+frame
+chk  = frame
+RetSize = 8
+
+    push bp
+    mov  bp, sp
+    push di
+    les  di, [bp][s]
+    mov  cx, [bp][slen]
+    mov  dx, [bp][slen]
+    sub  al, al
+repne ; scasb
+    jne lCalc
+    inc  cx
+lCalc:
+    sub  dx, cx
+    xchg dx, cx
+    mov  di, [bp][s]
+    mov  al, [bp][chk]
+repne; scasb
+    jnz   notFound
+    dec  di
+    sub  di, [bp][s]
+    mov  ax, di
+chrDone:
+    pop  di
+    pop  bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.RCharPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), ch (CHAR).
+
+   OUT PARAMETERS - returns offset of ch in source CARDINAL),
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  Starts search from last member of string.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+public WinStr$RCharPos :
+
+(*%T RegParam *)
+
+RetSize = 0
+
+    push di
+    mov  es, cx
+    mov  di, bx
+    mov  cx, ax
+    mov  ax, dx
+    mov  dx, cx
+    push ax
+    sub  al, al
+repne ; scasb
+    jne  lCalc
+    dec  di
+lCalc:
+    dec  di
+    sub  dx, cx
+    mov  cx, dx
+    std
+    pop  ax
+repne; scasb
+    cld
+    jnz   notFound
+    inc  di
+    sub  di, bx
+    mov  ax, di
+chrDone:
+    pop  di
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(*%F RegParam *)
+slen = 6+frame
+s    = 2+frame
+chk  = frame
+RetSize = 8
+
+    push bp
+    mov  bp, sp
+    push di
+    les  di, [bp][s]
+    mov  cx, [bp][slen]
+    mov  dx, [bp][slen]
+    sub  al, al
+repne ; scasb
+    jne lCalc
+    dec  di
+lCalc:
+    dec  di
+    mov  al, [bp][chk]
+    sub  dx, cx
+    mov  cx, dx
+    std
+repne; scasb
+    cld
+    jnz   notFound
+    inc  di
+    sub  di, [bp][s]
+    mov  ax, di
+chrDone:
+    pop  di
+    pop  bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+(***************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Length.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  string (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - Length of string (CARDINAL).
+
+   CALLING CONVENTION - Standard + far pointer.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+(*%F RegParam *)
+Slen = 4+lframe
+Sseg = 2+lframe
+Sofs = lframe
+
+RetSize = 6
+(*%E *)
+
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+
+public WinStr$Length :
+
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+(*%E *)
+(*%T RegParam *)
+  push dx
+(*%E *)
+  push di
+
+(*%F RegParam *)
+  les di, [bp][Sofs]
+  mov cx, [bp][Slen]
+(*%E *)
+(*%T RegParam *)
+  mov  di, bx
+  mov  es, cx
+  mov  cx, ax
+  mov  dx, ax
+(*%E *)
+  sub al, al
+  repne
+  scasb
+  jne ExitLength
+  inc cx
+ExitLength:
+(*%F RegParam *)
+  mov ax,[bp][Slen]
+(*%E *)
+(*%T RegParam *)
+  mov  ax, dx
+(*%E *)
+  sub ax,cx
+  pop di
+(*%T RegParam *)
+  pop  dx
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*%E *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Compare.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  string1, string2 (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns difference of strings (INTEGER).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+S1len = 10+frame
+S1seg =  8+frame
+S1ofs =  6+frame
+S2len =  4+frame
+S2seg =  2+frame
+S2ofs =  frame
+
+RetSize = 12
+(*%E *)
+(*%T NearPtr *)
+S1len =  6+frame
+S1ofs =  4+frame
+S2len =  2+frame
+S2ofs =  frame
+
+RetSize = 8
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+S2seg = 2+frame
+S2ofs = frame
+
+RetSize =4
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+public Str$Compare :
+
+
+
+  push bp
+  mov bp,sp
+  push ds
+  push si
+  push di
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  lds si,[bp][S1ofs]
+  les di,[bp][S2ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][S1ofs]
+  mov di,[bp][S2ofs]
+  push ds
+  pop  es
+(*%E *)
+  mov bx,[bp][S1len]
+  mov dx,[bp][S2len]
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  si, bx
+  mov  ds, cx
+  les  di,[bp][S2ofs]
+  mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+  mov si, bx
+  mov di, dx
+  mov bx, ax
+  mov dx, cx
+  push ds
+  pop  es
+(*%E *)
+(*%E *)
+  mov cx,bx
+  cmp cx,dx
+  jb CompareLoop
+  mov cx,dx
+CompareLoop:
+  lodsb
+  scasb
+  jne NotEqual
+  or al,al
+  loopne CompareLoop
+  je Equal
+  cmp bx,dx
+  je Equal
+  ja CheckSi
+  cmp byte es:[di],0
+  je Equal
+Less:
+  mov ax,-1
+  jmp Return
+CheckSi:
+  cmp byte [si],0
+  je Equal
+Greater:
+  mov ax,1
+  jmp Return
+NotEqual:
+  cmp al,es:[di][-1]
+  jb Less
+  jmp Greater
+Equal:
+  sub ax,ax
+Return:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+(*%T _WINDOWS *)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Compare.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  string1, string2 (VAR ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns difference of strings (INTEGER).
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+(*%F RegParam *)
+S1len = 10+lframe
+S1seg =  8+lframe
+S1ofs =  6+lframe
+S2len =  4+lframe
+S2seg =  2+lframe
+S2ofs =  lframe
+
+RetSize = 12
+(*%E *)
+
+(*%T RegParam *)
+S2seg = 2+lframe
+S2ofs = lframe
+
+RetSize =4
+(*%E *)
+
+public WinStr$Compare :
+  push bp
+  mov bp,sp
+  push ds
+  push si
+  push di
+
+(*%F RegParam *)
+  lds si,[bp][S1ofs]
+  les di,[bp][S2ofs]
+  mov bx,[bp][S1len]
+  mov dx,[bp][S2len]
+(*%E *)
+(*%T RegParam *)
+  mov  si, bx
+  mov  ds, cx
+  les  di,[bp][S2ofs]
+  mov  bx, ax
+(*%E *)
+  mov cx,bx
+  cmp cx,dx
+  jb CompareLoop
+  mov cx,dx
+CompareLoop:
+  lodsb
+  scasb
+  jne NotEqual
+  or al,al
+  loopne CompareLoop
+  je Equal
+  cmp bx,dx
+  je Equal
+  ja CheckSi
+  cmp byte es:[di],0
+  je Equal
+Less:
+  mov ax,-1
+  jmp Return
+CheckSi:
+  cmp byte [si],0
+  je Equal
+Greater:
+  mov ax,1
+  jmp Return
+NotEqual:
+  cmp al,es:[di][-1]
+  jb Less
+  jmp Greater
+Equal:
+  sub ax,ax
+Return:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*%E *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Concat.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains string1+string2.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), string1, string2 (ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns difference of strings (INTEGER).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+NSlen = 16+frame
+NSseg = 14+frame
+NSofs = 12+frame
+S1len = 10+frame
+S1seg =  8+frame
+S1ofs =  6+frame
+S2len =  4+frame
+S2seg =  2+frame
+S2ofs =  frame
+
+RetSize = 18
+(*%E *)
+(*%T NearPtr *)
+NSlen = 10+frame
+NSofs =  8+frame
+S1len =  6+frame
+S1ofs =  4+frame
+S2len =  2+frame
+S2ofs =  frame
+
+RetSize = 12
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+S1seg =  8+frame
+S1ofs =  6+frame
+S2len =  4+frame
+S2seg =  2+frame
+S2ofs =  frame
+
+NSlen = -2
+NSseg = -4
+NSofs = -6
+S1len = -8
+
+locals = 8
+RetSize = 10
+(*%E *)
+(*%T NearPtr *)
+S2len =  2+frame
+S2ofs =  frame
+
+NSlen = -2
+NSofs = -4
+S1len = -6
+S1ofs = -8
+
+locals = 8
+RetSize = 4
+(*%E *)
+(*%E *)
+public Str$Concat :
+
+  push bp
+  mov  bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%F NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][S1len], dx
+(*%E *)
+(*%T NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][S1len], cx
+  mov  [bp][S1ofs], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+
+  mov cx,[bp][S2len]
+  sub sp,cx
+(*%F NearPtr *)
+  lds si,[bp][S2ofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][S2ofs]
+(*%E *)
+  push ss
+  pop es
+  mov di,sp
+  rep
+  movsb
+
+(*%F NearPtr *)
+  lds si,[bp][S1ofs]
+  les di,[bp][NSofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][S1ofs]
+  mov di,[bp][NSofs]
+  push ds
+  pop  es
+(*%E *)
+  mov bx,[bp][NSlen]
+  mov cx,[bp][S1len]
+(*%E *)
+
+CopyLoop1:
+  lodsb
+  or al,al
+  jz Finished1
+  stosb
+  dec bx
+  loopnz CopyLoop1
+  jz Exit
+Finished1:
+  push ss
+  pop ds
+  mov si,sp
+  mov cx,[bp][S2len]
+CopyLoop2:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop2
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  add  sp, [bp][S2len]
+  pop di
+  pop si
+  pop ds
+  mov sp, bp
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*****************************************************************************)
+(*%T _WINDOWS *)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Concat.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains string1+string2.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), string1, string2 (ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns difference of strings (INTEGER).
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+(*%F RegParam *)
+NSlen = 16+lframe
+NSseg = 14+lframe
+NSofs = 12+lframe
+S1len = 10+lframe
+S1seg =  8+lframe
+S1ofs =  6+lframe
+S2len =  4+lframe
+S2seg =  2+lframe
+S2ofs =  lframe
+
+RetSize = 18
+(*%E *)
+
+(*%T RegParam *)
+S1seg =  8+lframe
+S1ofs =  6+lframe
+S2len =  4+lframe
+S2seg =  2+lframe
+S2ofs =  lframe
+
+NSlen = -2
+NSseg = -4
+NSofs = -6
+S1len = -8
+
+locals = 8
+RetSize = 10
+(*%E *)
+
+public WinStr$Concat :
+  push bp
+  mov  bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][S1len], dx
+(*%E *)
+  push ds
+  push si
+  push di
+
+  mov cx,[bp][S2len]
+  sub sp,cx
+  lds si,[bp][S2ofs]
+  push ss
+  pop es
+  mov di,sp
+  rep
+  movsb
+
+  lds si,[bp][S1ofs]
+  les di,[bp][NSofs]
+  mov bx,[bp][NSlen]
+  mov cx,[bp][S1len]
+
+CopyLoop1:
+  lodsb
+  or al,al
+  jz Finished1
+  stosb
+  dec bx
+  loopnz CopyLoop1
+  jz Exit
+Finished1:
+  push ss
+  pop ds
+  mov si,sp
+  mov cx,[bp][S2len]
+CopyLoop2:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop2
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  add  sp, [bp][S2len]
+  pop di
+  pop si
+  pop ds
+  mov sp, bp
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*%E *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Append.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains dest+string.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), string (ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+NSlen = 10+frame
+NSseg =  8+frame
+NSofs =  6+frame
+Slen  =  4+frame
+Sseg  =  2+frame
+Sofs  =  frame
+
+RetSize = 12
+(*%E *)
+(*%T NearPtr *)
+NSlen = 6+frame
+NSofs = 4+frame
+Slen  = 2+frame
+Sofs  = frame
+
+RetSize = 8
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Sseg  =  2+frame
+Sofs  =  frame
+
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+public Str$Append :
+
+  push bp
+  mov  bp, sp
+  push ds
+  push si
+  push di
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  les di,[bp][NSofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  di,[bp][NSofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][NSlen]
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  es, cx
+  mov  di, bx
+  mov  cx, ax
+  push dx
+(*%E *)
+(*%T NearPtr *)
+  mov  di, bx
+  push ds
+  pop  es
+  push cx
+  mov  cx, ax
+(*%E *)
+(*%E *)
+
+  sub al,al
+  repne
+  scasb
+(*%T RegParam *)
+  jne FullString
+(*%E *)
+(*%F RegParam *)
+  jne Exit
+(*%E *)
+  dec di
+  mov bx,cx
+  inc bx
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  lds si,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][Sofs]
+(*%E *)
+  mov cx,[bp][Slen]
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  lds si,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si, dx
+(*%E *)
+  pop  cx
+(*%E *)
+
+CopyLoop:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+FullString:
+  pop  cx
+  jmp  Exit
+
+(*****************************************************************************)
+(*%T _WINDOWS *)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Append.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains dest+string.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), string (ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+(*%F RegParam *)
+NSlen = 10+lframe
+NSseg =  8+lframe
+NSofs =  6+lframe
+Slen  =  4+lframe
+Sseg  =  2+lframe
+Sofs  =  lframe
+
+RetSize = 12
+(*%E *)
+
+(*%T RegParam *)
+Sseg  =  2+lframe
+Sofs  =  lframe
+
+RetSize = 4
+(*%E *)
+
+public WinStr$Append :
+  push bp
+  mov  bp, sp
+  push ds
+  push si
+  push di
+
+(*%F RegParam *)
+  les di,[bp][NSofs]
+  mov cx,[bp][NSlen]
+(*%E *)
+
+(*%T RegParam *)
+  mov  es, cx
+  mov  di, bx
+  mov  cx, ax
+  push dx
+(*%E *)
+
+  sub al,al
+  repne
+  scasb
+(*%T RegParam *)
+  jne FullString
+(*%E *)
+(*%F RegParam *)
+  jne Exit
+(*%E *)
+  dec di
+  mov bx,cx
+  inc bx
+
+(*%F RegParam *)
+  lds si,[bp][Sofs]
+  mov cx,[bp][Slen]
+(*%E *)
+
+(*%T RegParam *)
+  lds si,[bp][Sofs]
+  pop  cx
+(*%E *)
+
+CopyLoop:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+FullString:
+  pop  cx
+  jmp  Exit
+
+(*%E *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Copy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains source.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), source (ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+NSlen = 10+frame
+NSseg =  8+frame
+NSofs =  6+frame
+Slen  =  4+frame
+Sseg  =  2+frame
+Sofs  =  frame
+
+RetSize = 12
+(*%E *)
+(*%T NearPtr *)
+NSlen =  6+frame
+NSofs =  4+frame
+Slen  =  2+frame
+Sofs  =  frame
+
+RetSize = 8
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+NSlen = -2
+NSseg = -4
+NSofs = -6
+Slen  = -8
+Sseg  =  2+frame
+Sofs  =  frame
+
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+NSlen =  -2
+NSofs =  -4
+Slen  =  -6
+Sofs  =  -8
+
+RetSize = 0
+(*%E *)
+locals = 8
+(*%E *)
+public Str$Copy :
+
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%F NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][Slen], dx
+(*%E *)
+(*%T NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][Slen], cx
+  mov  [bp][Sofs], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+
+
+(*%F NearPtr *)
+  les di,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov  di,[bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax,[bp][Slen]
+  sub ax,cx
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+(*%F NearPtr *)
+  lds si,[bp][ Sofs]
+  les di,[bp][NSofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][ Sofs]
+  mov di,[bp][NSofs]
+(*%E *)
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+(*%T _WINDOWS *)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Copy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains source.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), source (ARRAY OF CHAR).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard + far pointers.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+(*%F RegParam *)
+NSlen = 10+lframe
+NSseg =  8+lframe
+NSofs =  6+lframe
+Slen  =  4+lframe
+Sseg  =  2+lframe
+Sofs  =  lframe
+
+RetSize = 12
+(*%E *)
+
+(*%T RegParam *)
+NSlen = -2
+NSseg = -4
+NSofs = -6
+Slen  = -8
+Sseg  =  2+lframe
+Sofs  =  lframe
+
+RetSize = 4
+locals = 8
+(*%E *)
+
+public WinStr$Copy :
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][Slen], dx
+(*%E *)
+  push ds
+  push si
+  push di
+
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax,[bp][Slen]
+  sub ax,cx
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+  lds si,[bp][ Sofs]
+  les di,[bp][NSofs]
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%T _fcall *)
+    ret far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*%E *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Slice.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - dest contains section of source, starting at position with
+                    a maximum size of length.
+
+   IN PARAMETERS -  dest (VAR ARRAY OF CHAR), source (ARRAY OF CHAR),
+                    position, length (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+NSlen = 14+frame
+NSseg = 12+frame
+NSofs = 10+frame
+Slen  =  8+frame
+Sseg  =  6+frame
+Sofs  =  4+frame
+P     =  2+frame
+L     =  frame
+
+RetSize = 16
+(*%E *)
+(*%T NearPtr *)
+NSlen = 10+frame
+NSofs =  8+frame
+Slen  =  6+frame
+Sofs  =  4+frame
+P     =  2+frame
+L     =  frame
+
+RetSize = 12
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+NSlen = -2
+NSseg = -4
+NSofs = -6
+Slen  = -8
+Sseg  =  6+frame
+Sofs  =  4+frame
+P     =  2+frame
+L     =  frame
+
+RetSize = 8
+(*%E *)
+(*%T NearPtr *)
+NSlen = -2
+NSofs = -4
+Slen  = -6
+Sofs  = -8
+P     =  2+frame
+L     =  frame
+
+RetSize = 4
+(*%E *)
+locals = 8
+(*%E *)
+public Str$Slice :
+
+  push bp
+  mov bp, sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%F NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][NSseg], cx
+  mov  [bp][Slen], dx
+(*%E *)
+(*%T NearPtr *)
+  mov  [bp][NSlen], ax
+  mov  [bp][NSofs], bx
+  mov  [bp][Slen], cx
+  mov  [bp][Sofs], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+(*%F NearPtr *)
+  les di,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax, [bp][Slen]
+  sub ax,cx
+
+  mov bx, [bp][P]
+  sub ax,bx
+  ja NotBeyondEnd
+  sub ax,ax
+NotBeyondEnd:
+  cmp ax, [bp][L]
+  jb OffEnd
+  mov ax, [bp][L]
+OffEnd:
+(*%F NearPtr *)
+  lds si, [bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov si, [bp][Sofs]
+(*%E *)
+  add si,[bp][P]
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+(*%F NearPtr *)
+  les di,[bp][NSofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][NSofs]
+(*%E *)
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.Pos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), target (ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns offset of target in source CARDINAL).
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+Slen = 10+frame
+Sseg =  8+frame
+Sofs =  6+frame
+Plen =  4+frame
+Pseg =  2+frame
+Pofs =  frame
+
+RetSize = 12
+(*%E *)
+(*%T NearPtr *)
+Slen =  6+frame
+Sofs =  4+frame
+Plen =  2+frame
+Pofs =  frame
+
+RetSize = 8
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Slen = -2
+Sseg = -4
+Sofs = -6
+Plen = -8
+Pseg =  2+frame
+Pofs =  frame
+
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+Slen =  -2
+Sofs =  -4
+Plen =  -6
+Pofs =  -8
+
+RetSize = 0
+(*%E *)
+locals = 8
+(*%E *)
+public Str$Pos :
+
+
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%F NearPtr *)
+  mov [bp][Slen], ax
+  mov [bp][Sofs], bx
+  mov [bp][Sseg], cx
+  mov [bp][Plen], dx
+(*%E *)
+(*%T NearPtr *)
+  mov [bp][Slen], ax
+  mov [bp][Sofs], bx
+  mov [bp][Plen], cx
+  mov [bp][Pofs], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+(*%F NearPtr *)
+  les di,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Slen]
+  mov bx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc1
+  inc cx
+LengthCalc1:
+  sub bx,cx
+(*%F NearPtr *)
+  les di,[bp][Pofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][Pofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Plen]
+  mov dx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc2
+  inc cx
+LengthCalc2:
+  sub dx,cx
+  sub bx,dx
+  jb NotFound
+(*%F NearPtr *)
+  mov ds,[bp][Sseg]
+(*%E *)
+  sub ax,ax
+SearchLoop:
+  mov si,[bp][Sofs]
+  add si,ax
+  mov di,[bp][Pofs]
+  mov cx,dx
+  repe
+  cmpsb
+  je Found
+  inc ax
+  cmp ax,bx
+  jbe SearchLoop
+NotFound:
+  mov ax,0FFFFH
+Found:
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+section
+(*%T _WINDOWS *)
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.Pos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), target (ARRAY OF CHAR).
+
+   OUT PARAMETERS - returns offset of target in source CARDINAL).
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard + Far Pointers.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+Slen = 10+frame
+Sseg =  8+frame
+Sofs =  6+frame
+Plen =  4+frame
+Pseg =  2+frame
+Pofs =  frame
+
+RetSize = 12
+(*%E *)
+
+(*%T RegParam *)
+Slen = -2
+Sseg = -4
+Sofs = -6
+Plen = -8
+Pseg =  2+frame
+Pofs =  frame
+
+RetSize = 4
+
+locals = 8
+(*%E *)
+
+public WinStr$Pos :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][Slen], ax
+    mov  [bp][Sofs], bx
+    mov  [bp][Sseg], cx
+    mov  [bp][Plen], dx
+(*%E *)
+    push ds
+    push si
+    push di
+    les  di, [bp][Sofs]
+    mov  cx, [bp][Slen]
+    mov  bx, cx
+    sub  al, al
+    repne; scasb
+    jne  $$LengthCalc1
+    inc  cx
+$$LengthCalc1:
+    sub  bx, cx
+    les  di, [bp][Pofs]
+    mov  cx, [bp][Plen]
+    mov  dx, cx
+    sub  al, al
+    repne; scasb
+    jne  $$LengthCalc2
+    inc  cx
+$$LengthCalc2:
+    sub  dx, cx
+    sub  bx, dx
+    jb   $$NotFound
+    mov  ds, [bp][Sseg]
+    sub  ax, ax
+$$SearchLoop:
+    mov  si, [bp][Sofs]
+    add  si, ax
+    mov  di, [bp][Pofs]
+    mov  cx, dx
+    repe; cmpsb
+    je   $$Found
+    inc  ax
+    cmp  ax, bx
+    jbe  $$SearchLoop
+$$NotFound:
+    mov  ax, 0FFFFH
+$$Found:
+    pop  di
+    pop  si
+    pop  ds
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+(*%E _WINDOWS *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.NextPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), target (ARRAY OF CHAR),
+                    place (CARDINAL).
+
+   OUT PARAMETERS - returns offset of target in source CARDINAL), starting
+                    from member place. Returns MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+Slen = 12+frame
+Sseg = 10+frame
+Sofs =  8+frame
+Plen =  6+frame
+Pseg =  4+frame
+Pofs =  2+frame
+Shift = frame
+
+RetSize = 14
+(*%E *)
+(*%T NearPtr *)
+Slen =  8+frame
+Sofs =  6+frame
+Plen =  4+frame
+Pofs =  2+frame
+Shift = frame
+
+RetSize = 10
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Slen = -2
+Sseg = -4
+Sofs = -6
+Plen = -8
+Pseg =  4+frame
+Pofs =  2+frame
+Shift = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+Slen =  -2
+Sofs =  -4
+Plen =  -6
+Pofs =  -8
+Shift = frame
+
+RetSize = 2
+(*%E *)
+locals = 8
+(*%E *)
+public Str$NextPos :
+
+
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%F NearPtr *)
+  mov [bp][Slen], ax
+  mov [bp][Sofs], bx
+  mov [bp][Sseg], cx
+  mov [bp][Plen], dx
+(*%E *)
+(*%T NearPtr *)
+  mov [bp][Slen], ax
+  mov [bp][Sofs], bx
+  mov [bp][Plen], cx
+  mov [bp][Pofs], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+  mov  ax, [bp][Shift]
+  cmp  ax, [bp][Slen]
+  jae  NotFound
+  add  [bp][Sofs], ax
+(*%F NearPtr *)
+  les di,[bp][Sofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][Sofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Slen]
+  mov bx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc1
+  inc cx
+LengthCalc1:
+  sub bx,cx
+(*%F NearPtr *)
+  les di,[bp][Pofs]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][Pofs]
+  push ds
+  pop  es
+(*%E *)
+  mov cx,[bp][Plen]
+  mov dx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc2
+  inc cx
+LengthCalc2:
+  sub dx,cx
+  sub bx,dx
+  jb NotFound
+(*%F NearPtr *)
+  mov ds,[bp][Sseg]
+(*%E *)
+  sub ax,ax
+SearchLoop:
+  mov si,[bp][Sofs]
+  add si,ax
+  mov di,[bp][Pofs]
+  mov cx,dx
+  repe
+  cmpsb
+  je Found
+  inc ax
+  cmp ax,bx
+  jbe SearchLoop
+NotFound:
+  mov ax,0FFFFH
+  jmp  Exit
+Found:
+  add  ax, [bp][Shift]
+Exit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+section
+(*%T _WINDOWS *)
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - WinStr.NextPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), target (ARRAY OF CHAR),
+                    place (CARDINAL).
+
+   OUT PARAMETERS - returns offset of target in source CARDINAL), starting
+                    from member place. Returns MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard + Far Call.
+
+   NOTES -  None.
+
+   VERSION - Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+
+(*%F RegParam *)
+Slen = 12+frame
+Sseg = 10+frame
+Sofs =  8+frame
+Plen =  6+frame
+Pseg =  4+frame
+Pofs =  2+frame
+Shift = frame
+
+RetSize = 14
+(*%E *)
+
+(*%T RegParam *)
+Slen = -2
+Sseg = -4
+Sofs = -6
+Plen = -8
+Pseg =  4+frame
+Pofs =  2+frame
+Shift = frame
+
+RetSize = 6
+locals = 8
+(*%E *)
+
+public WinStr$NextPos :
+    push bp
+    mov  bp,sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][Slen], ax
+    mov  [bp][Sofs], bx
+    mov  [bp][Sseg], cx
+    mov  [bp][Plen], dx
+(*%E *)
+    push ds
+    push si
+    push di
+    mov  ax, [bp][Shift]
+    cmp  ax, [bp][Slen]
+    jae  $$NotFound
+    add  [bp][Sofs], ax
+    les  di, [bp][Sofs]
+    mov  cx, [bp][Slen]
+    mov  bx, cx
+    sub  al, al
+    repne; scasb
+    jne  $$LengthCalc1
+    inc  cx
+$$LengthCalc1:
+    sub  bx, cx
+    les  di, [bp][Pofs]
+    mov  cx, [bp][Plen]
+    mov  dx, cx
+    sub  al, al
+    repne; scasb
+    jne  $$LengthCalc2
+    inc  cx
+$$LengthCalc2:
+    sub  dx, cx
+    sub  bx, dx
+    jb   $$NotFound
+    mov  ds, [bp][Sseg]
+    sub  ax, ax
+$$SearchLoop:
+    mov  si, [bp][Sofs]
+    add  si, ax
+    mov  di, [bp][Pofs]
+    mov  cx, dx
+    repe; cmpsb
+    je   $$Found
+    inc  ax
+    cmp  ax, bx
+    jbe  $$SearchLoop
+$$NotFound:
+    mov  ax, 0FFFFH
+    jmp  $$Exit
+$$Found:
+    add  ax, [bp][Shift]
+$$Exit:
+    pop  di
+    pop  si
+    pop  ds
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+(*%E _WINDOWS *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.CharPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), ch (CHAR).
+
+   OUT PARAMETERS - returns offset of ch in source CARDINAL),
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+public Str$CharPos :
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    push di
+(*%F NearPtr *)
+    mov  es, cx
+    mov  di, bx
+    mov  cx, ax
+    mov  ax, dx
+    mov  dx, cx
+(*%E *)
+(*%T NearPtr *)
+    mov  di, bx
+    mov  dx, ax
+    mov  ax, cx
+    mov  cx, dx
+    push ds
+    pop  es
+(*%E *)
+    push ax
+    sub  al, al
+repne ; scasb
+    jne  lCalc
+    inc  cx
+lCalc:
+    sub  dx, cx
+    xchg dx, cx
+    mov  di, bx
+    pop  ax
+repne; scasb
+    jnz   notFound
+    dec  di
+    sub  di, bx
+    mov  ax, di
+chrDone:
+    pop  di
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far   0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(*%F RegParam *)
+(*%T NearPtr *)
+slen = 4+frame
+s    = 2+frame
+chk  = frame
+RetSize = 6
+(*%E *)
+(*%F NearPtr *)
+slen = 6+frame
+s    = 2+frame
+chk  = frame
+RetSize = 8
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push di
+(*%F NearPtr *)
+    les  di, [bp][s]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][s]
+    push ds
+    pop  es
+(*%E *)
+    mov  cx, [bp][slen]
+    mov  dx, [bp][slen]
+    sub  al, al
+repne ; scasb
+    jne lCalc
+    inc  cx
+lCalc:
+    sub  dx, cx
+    xchg dx, cx
+    mov  di, [bp][s]
+    mov  al, [bp][chk]
+repne; scasb
+    jnz   notFound
+    dec  di
+    sub  di, [bp][s]
+    mov  ax, di
+chrDone:
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Str.RCharPos.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  source (ARRAY OF CHAR), ch (CHAR).
+
+   OUT PARAMETERS - returns offset of ch in source CARDINAL),
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Starts search from last member of string.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment STR_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment STRDLL_TEXT(CODE,28H)
+(*%E *)
+public  Str$RCharPos :
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    push di
+(*%F NearPtr *)
+    mov  es, cx
+    mov  di, bx
+    mov  cx, ax
+    mov  ax, dx
+    mov  dx, cx
+(*%E *)
+(*%T NearPtr *)
+    mov  di, bx
+    mov  dx, ax
+    mov  ax, cx
+    mov  cx, dx
+    push ds
+    pop  es
+(*%E *)
+    push ax
+    sub  al, al
+repne ; scasb
+    jne  lCalc
+    dec  di
+lCalc:
+    dec  di
+    sub  dx, cx
+    mov  cx, dx
+    std
+    pop  ax
+repne; scasb
+    cld
+    jnz   notFound
+    inc  di
+    sub  di, bx
+    mov  ax, di
+chrDone:
+    pop  di
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far   0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(*%F RegParam *)
+(*%T NearPtr *)
+slen = 4+frame
+s    = 2+frame
+chk  = frame
+RetSize = 6
+(*%E *)
+(*%F NearPtr *)
+slen = 6+frame
+s    = 2+frame
+chk  = frame
+RetSize = 8
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push di
+(*%F NearPtr *)
+    les  di, [bp][s]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][s]
+    push ds
+    pop  es
+(*%E *)
+    mov  cx, [bp][slen]
+    mov  dx, [bp][slen]
+    sub  al, al
+repne ; scasb
+    jne lCalc
+    dec  di
+lCalc:
+    dec  di
+    mov  al, [bp][chk]
+    sub  dx, cx
+    mov  cx, dx
+    std
+repne; scasb
+    cld
+    jnz   notFound
+    inc  di
+    sub  di, [bp][s]
+    mov  ax, di
+chrDone:
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+notFound:
+    mov  ax, -1
+    jmp  chrDone
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - STANDARD.NULLPROC.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Process terminated.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - returns offset of ch in source CARDINAL),
+                    MAX(CARDINAL) if not found.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Null procedure variables should point to this procedure .
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+
+public Standard$NULLPROC :
+
+   call far __FatalErrorPos
+   mov  cx, 22H
+   push cx
+   push dx
+   push ax
+   call far __FatalError
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SetReturnCode.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Process exit code set.
+
+   IN PARAMETERS -  code (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Only LSB used.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @ExitCode
+
+retcode = frame
+
+public Lib$SetReturnCode :
+
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+(*%F SameDS *)
+  push ds
+  mov  ax, seg @ExitCode
+  mov  ds, ax
+(*%E *)
+  mov ax,[bp][retcode]
+  mov [@ExitCode],al
+(*%F SameDS *)
+  pop  ds
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far 2
+(*%E *)
+(*%T NearCall *)
+  ret 2
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+  push bx
+  push ds
+  mov  bx, seg @ExitCode
+  mov  ds, bx
+(*%E *)
+  mov [@ExitCode],al
+(*%F SameDS *)
+  pop  ds
+  pop  bx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Standard.HALT.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Process terminated.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn @ExitCode
+extrn _exit
+
+select _TEXT
+
+public Standard$HALT:
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+  mov   ax, seg @ExitCode
+  mov   ds, ax
+(*%E *)
+  mov   al, [@ExitCode]
+  sub   ah, ah
+(*%F RegParam *)
+  push  ax
+(*%E *)
+(*%F NearCall *)
+  call  far _exit
+(*%E *)
+(*%T NearCall *)
+  call  _exit
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - MATHLIB.InternalBcdToLong.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  BCD ARRAY.
+
+   OUT PARAMETERS - conversion to real number (LONGREAL).
+
+   CALLING CONVENTION - Stack frame.
+
+   NOTES -  Called by BcdToLong.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment MATHLIB_TEXT(CODE,28H)
+(*%E *)
+
+public MATHLIB$InternalBcdToLong :
+
+Bcd = frame
+
+retSize = 10
+
+  push bp
+  mov  bp, sp
+  fbld st(0), [bp][Bcd]
+  fstp st(1), st(0)
+  pop  bp
+(*%F NearCall *)
+  ret far retSize
+(*%E *)
+(*%T NearCall *)
+  ret retSize
+(*%E *)
+
+(***************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - MATHLIB.ClearExceptions.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - 087 exceptions cleared.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment MATHLIB_TEXT(CODE,28H)
+(*%E *)
+public MATHLIB$ClearExceptions :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  fclex
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(***************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - MATHLIB.LoadControlWord.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - 097 control word set to parameter (BITSET).
+
+   IN PARAMETERS -  new value (BITSET).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment MATHLIB_TEXT(CODE,28H)
+(*%E *)
+
+public  MATHLIB$LoadControlWord :
+
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+  fldcw [bp][frame]
+  pop  bp
+(*%F NearCall *)
+  ret far 2
+(*%E *)
+(*%T NearCall *)
+  ret 2
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push bx
+  push ax
+  mov  bx, sp
+  fldcw ss:[bx]
+  pop  ax
+  pop  bx
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(***************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - MATHLIB.StoreControlWord.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  dest (VAR BITSET).
+
+   OUT PARAMETERS - returns value of 087 control word (BITSET).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment MATHLIB_TEXT(CODE,28H)
+(*%E *)
+
+public  MATHLIB$StoreControlWord :
+
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push  ax
+  mov   bx, sp
+  fstcw ss:[bx]
+  fwait
+  pop   ax
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(***************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - MATHLIB.StoreEnvironment.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - 087 state stored in buffer record.
+
+   IN PARAMETERS -  buffer (VAR Environment).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment MATHLIB_TEXT(CODE,28H)
+(*%E *)
+
+public  MATHLIB$StoreEnvironment :
+
+
+_res = frame
+
+(*%T RegParam *)
+  retSize = 0
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  retSize = 4
+(*%E *)
+(*%T NearPtr *)
+  retSize = 2
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F NearPtr *)
+  mov  dx, ds
+  mov  ds, bx
+(*%E *)
+  mov  bx, ax
+  fstenv  [bx]
+  fwait
+(*%F NearPtr *)
+  mov  ds, dx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+(*%F NearPtr *)
+  mov  dx, ds
+  lds  bx, [bp][_res]
+(*%E *)
+(*%T NearPtr *)
+  mov  bx, [bp][_res]
+(*%E *)
+  fstenv  [bx]
+  fwait
+(*%F NearPtr *)
+  mov  ds, dx
+(*%E *)
+  pop  bp
+(*%E *)
+
+(*%F NearCall *)
+  ret far retSize
+(*%E *)
+(*%T NearCall *)
+  ret retSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.LongJmp.
+
+   PRECONDITIONS - Label initialised by call to SetJmp.
+
+   POSTCONDITIONS - Program execution continues after call to SetJmp.
+
+   IN PARAMETERS -  label (VAR LongLabel).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn _longjmp2
+extrn __setjmp2
+
+public Lib$LongJmp :
+
+task_state = 2+frame
+val        = frame
+
+  push bp
+  mov  bp, sp
+
+(*%F RegParam *)
+  mov  ax, [bp][val]
+  mov  cx, [bp][task_state]
+(*%F NearPtr *)
+  mov  dx, [bp][task_state][2]
+  mov  [bp][frame][0], cx
+  mov  [bp][frame][2], dx
+  mov  [bp][frame][4], ax
+(*%E *)
+(*%T NearPtr *)
+  mov  [bp][frame][0], cx
+  mov  [bp][frame][2], ax
+(*%E *)
+(*%E *)
+
+  jmp  far _longjmp2
+
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SetJmp.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - label initialized for subsequent non-local goto.
+
+   IN PARAMETERS -  label (VAR LongLabel).
+
+   OUT PARAMETERS - code (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+public Lib$SetJmp :
+
+  push bp
+  mov  bp, sp
+  jmp  far __setjmp2
+
+
+(*****************************************************************************)
+
+
+(*%F _OS2 *)  (* MSDOS Specific Procedures *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.InternalDelay.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  microseconds delay (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Suspend execution of process. Internal library function called
+            by Lib.Delay.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn _delay
+
+msecs = frame
+public Lib$InternalDelay :
+
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+  push [bp][msecs]
+(*%F NearCall *)
+  call far _delay
+(*%E *)
+(*%T NearCall *)
+  call _delay
+(*%E *)
+  add  sp, 2
+  pop  bp
+(*%F NearCall *)
+  ret  far 2
+(*%E *)
+(*%T NearCall *)
+  ret  2
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F NearCall *)
+  call far _delay
+(*%E *)
+(*%T NearCall *)
+  call _delay
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.InternalEnableBreakCheck.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Ctl C/Break checking enabled.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Internal procedure, calls procedure in CoreSig.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @SetBreakInterrupt
+public Lib$InternalEnableBreakCheck :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  call far @SetBreakInterrupt
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.InternalDisableBreakCheck.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Ctl C/Break checking disabled.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Internal procedure, calls procedure in CoreSig.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+
+extrn @ResetBreakInterrupt
+public Lib$InternalDisableBreakCheck :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push ax
+  push ds
+  call far @ResetBreakInterrupt
+  sub ax,ax
+  mov ds,ax
+  pushf
+  cli
+  mov word ds:[23H*4], DummyBreak
+  mov word ds:[23H*4][2],cs
+  popf
+  pop ds
+  pop ax
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+DummyBreak :
+  iret
+
+section
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.DosExec.
+
+   PRECONDITIONS - Memory space allocated.
+
+   POSTCONDITIONS - Process executed.
+
+   IN PARAMETERS -  Name (ARRAY OF CHAR), param block (FarADDRESS).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Far Call, Reg params off.
+
+   NOTES -  Called by Lib.Execute.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+SaveSS : dw 0
+SaveSP : dw 0
+
+public Lib$DosExec :
+(*%F NearPtr *)
+NameLen=14; NameSeg=12; NameOfs=10; ParamSeg=8; ParamOfs=6
+RetSize = 10
+(*%E *)
+(*%T NearPtr *)
+NameLen=12; NameOfs=10; ParamSeg=8; ParamOfs=6
+RetSize = 8
+(*%E *)
+
+
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  mov ax,4B00H
+(*%F NearPtr *)
+  mov ds,[bp][NameSeg]
+(*%E *)
+  mov dx,[bp][NameOfs]
+  mov es,[bp][ParamSeg]
+  mov bx,[bp][ParamOfs]
+  push bp
+  push ss:[2EH]            (* where DOS doth tread *)
+  push ss:[30H]
+  push cs:[SaveSS]                (* to restore code seg *)
+  push cs:[SaveSP]
+  mov cs:[SaveSS],ss
+  mov cs:[SaveSP],sp
+  int 21H
+  mov ss,cs:[SaveSS]
+  mov sp,cs:[SaveSP]
+  pop cs:[SaveSP]
+  pop cs:[SaveSS]
+  pop ss:[30H]
+  pop ss:[2EH]
+  pop bp
+  jc ExitExec
+  sub ax,ax
+ExitExec:
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far RetSize
+
+(*****************************************************************************)
+(*%F _WINDOWS *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.CpuId.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  Record (VAR CpuRec).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Determines types processor and co-processor.
+
+   VERSION - MSDOS (Not windows).
+
+   ------------------------------------------------------------------------ *)
+section
+segment _DATA(DATA,28H)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+ndp_cw:   dw	0
+ndp_stat: dw      0	
+temp87:   dw 0
+CpuXlat:  db 1,2,0,0,0,0,0,7,3,4,5,6,0,0,0,7,8
+
+
+public Lib$CpuId:
+(*%F RegParam *)
+cpurec = frame
+ndp_save = -100
+locals = 100
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+cpurec   = -4
+ndp_save = -104
+locals = 104
+RetSize = 0
+(*%E *)
+
+        push bp
+        mov bp,sp
+        sub sp, locals
+(*%T RegParam *)
+        mov  [bp][cpurec], ax
+(*%F NearPtr *)
+        mov  [bp][cpurec][2], bx
+(*%E *)
+(*%T NearPtr *)
+        push bx
+(*%E *)
+        push cx
+        push dx
+(*%E *)
+        push ds
+        push es
+        push si
+        push di
+        push cs
+        pop ds
+foption 0
+        fsave [bp][ndp_save]
+        fwait
+	xor	dx,dx
+        sub     si,si
+        mov es,si
+	mov	cx,0FFFFH
+	sti
+	db 0F3H                     (* rep *)
+	db 026H                     (* es: *)
+	lodsb
+	jcxz	a1
+	or	dh,08H			(* if CPU is Intel *)
+a1:
+	push	sp
+	pop	ax
+	cmp	ax,sp
+	jne	a2
+	or	dh,04H			(* if cpu is 8028x *)
+a2:
+	mov	cl,21H
+	mov	al,0FFH
+	shl	al,cl
+	jz	a3
+	or	dh,02H			(* if cpu is 8018x or 8028x *)
+a3:
+	mov	ch,0
+	cli
+        db 0EBH,00H                      (* jmp     $+2 : empty queue *)
+	mov	byte [a4],0
+	db	0B1H			(* MOV	CL,... *)
+a4:	db	1			(* ...1 *)
+	sti
+	jcxz	a5
+	or	dh,01H			(* if PIQ length=6 (80x86) *)
+a5:
+	mov	byte [a4],1             (* reset for next time *)
+        cmp dh,7
+        jne Not386
+        pushf
+        pop ax
+        or ah,0F0H
+        push ax
+        popf
+        pushf
+        pop ax
+        and ah,0F0H
+        jz Not386
+        or dh,10H
+Not386:
+foption 2	
+        mov word ds:[temp87], -1
+	finit
+        call wait
+	fstsw	ds:[temp87]
+        call wait
+	mov	al,0
+        cmp byte ds:[temp87],al
+	jne	a6
+	fstcw	ds:[ndp_cw]
+        call wait
+	and	byte [ndp_cw],7FH
+	fldcw	ds:[ndp_cw]
+        call wait
+	db 09BH,0DBH,0E1H               (* fdisi *)
+        call wait
+	fstcw	ds:[ndp_cw]            (* Test for 87/287 *)
+        call wait
+                                       (* Test for 387 *)
+        fld1 st(0)
+        fldz st(0)
+        fdivp st(1),st(0)
+        fld st(0),st(0)
+        fchs st(0)
+        fcompp st(0),st(1)
+        fstsw [ndp_stat]
+        call wait
+        mov ax,[ndp_stat]
+        pushf
+        sahf
+        je is_87_287
+        popf
+        mov al,3                       (* 387 *)
+        jmp a6
+is_87_287:
+        popf
+	cmp	word ds:[ndp_cw],3FFH  (* was test byte 80H *)
+	mov	al,1                   (* 87 *)
+	jz	a6
+	mov	al,2                   (* 287 *)
+a6:
+foption 0
+        frstor [bp][ndp_save]
+        call wait
+        mov bl,dh
+        sub bh,bh
+        cmp bl,15
+        jbe a7
+        mov bl,16
+a7:
+        mov ah,al
+        mov al,cs:[CpuXlat][bx]
+(*%F NearPtr *)
+        les di,[bp][cpurec]
+(*%E *)
+(*%T NearPtr *)
+        mov di,[bp][cpurec]
+        mov bx, ss
+        mov es, bx
+(*%E *)
+        stosw
+        pop di
+        pop si
+        pop es
+        pop ds
+(*%T RegParam *)
+        pop  dx
+        pop  cx
+(*%T NearPtr *)
+        pop  bx
+(*%E *)
+(*%E *)
+        mov sp,bp
+        pop bp
+(*%F NearCall *)
+	ret far RetSize
+(*%E *)	
+(*%T NearCall *)
+	ret RetSize
+(*%E *)	
+
+wait:   mov cx,400H
+wloop:  loop wloop
+        ret 0
+
+(*%E *)
+
+(*%E *)  (* End Of DOS (not extender) *)
+
+(*%T _XTDDOS *)  (* DOS and extender routines, but not OS2 *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.UserBreak.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Process terminated.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Calls procedure in CoreSig.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @UserBreak
+
+public Lib$UserBreak :
+
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    call far @UserBreak
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Sound.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Noise.
+
+   IN PARAMETERS -  Frequency (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+FreqHz = frame
+
+(*%F RegParam *)
+RetSize =2
+(*%E *)
+(*%T RegParam *)
+RetSize =0
+(*%E *)
+public Lib$Sound :
+
+
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+  mov bx,[bp][FreqHz]
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push bx
+  push dx
+  mov bx, ax
+(*%E *)
+  mov ax,34DDH  (* 1.193181 MHz *)
+  mov dx,0012H
+  cmp dx,bx
+  jnb SOU9
+  div bx
+  mov bx,ax
+  in al,PPIport+1
+  test al,03H
+  jnz SOU1
+  or al,03H
+  out PPIport+1,al
+                (* 10              11       011     0   *)
+  mov al,0B6H  (* Select timer 2, LSB,MSB, mode 3, bin *)
+  out Timer+3,al
+SOU1:
+  mov al,bl
+  out Timer+2,al
+  mov al,bh
+  out Timer+2,al
+SOU9:
+(*%T RegParam *)
+  pop  dx
+  pop  bx
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.NoSound.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Silence.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$NoSound :
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push ax
+  in al,PPIport+1
+  and al,0FCH
+  out PPIport+1,al
+  pop  ax
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+section
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - @LoadRegisters.
+
+   PRECONDITIONS - Called by Intr, Dos.
+
+   POSTCONDITIONS - Registers loaded prior to software interrupt.
+
+   IN PARAMETERS -  DS:SI points to register record.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+
+axr=0;  bxr=2;  cxr=4;  dxr=6;  bpr=8;
+sir=10; dir=12; dsr=14; esr=16; flags=18
+
+_XTDWIN       = _XTD | _WINDOWS
+
+public @LoadRegisters :
+(* loads register in register pack pointed to by DS:SI *)
+(*%T _WINDOWS*)
+  (* validate segment registers *)
+    push sp
+    pop  ax
+    cmp  ax, sp
+    jne  $$RealMode
+    db   00FH, 001H, 0E0H              (*I smsw ax *)
+    test al, 1
+    jz   $$RealMode
+(*%E *)
+(*%T _XTDWIN *)
+  (* check for invalid selectors *)
+    mov  dx, [si][dsr]
+    db   00FH, 000H, 0E2H              (*I verr dx *)
+    jz   $$DSOk
+    sub  dx, dx
+$$DSOk:
+    push dx
+    mov  dx, [si][esr]
+    db   00FH, 000H, 0E2H              (*I verr dx *)
+    jz   $$ESOk
+    sub  dx, dx
+$$ESOk:
+    mov  es, dx
+(*%E _XTDWIN*)
+(*%T _WINDOWS *)
+    jmp  $$RegsValidated
+$$RealMode:
+(*%E _WINDOWS*)
+(*%F _XTD*)
+    mov  es, [si][esr]
+    push [si][dsr]
+(*%E _XTD*)
+$$RegsValidated:
+    mov  ax, [si][axr]
+    mov  bx, [si][bxr]
+    mov  cx, [si][cxr]
+    mov  dx, [si][dxr]
+    mov  di, [si][dir]
+    mov  bp, [si][bpr]
+    mov  si, [si][sir]
+    pop  ds
+    ret  near 0
+
+(* ------------------------------------------------------------------------
+   PROCEDURE - @SaveRegisters.
+
+   PRECONDITIONS - Called by Intr, Dos.
+
+   POSTCONDITIONS - Registers loaded prior after software interrupt.
+
+   IN PARAMETERS -  far pointer on stack points to register record.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+
+public @SaveRegisters :
+(* saves register in register pack pointed to by pointer on stack *)
+  push ds
+  push si
+  mov  si, sp
+  lds  si, ss:[si][6]
+  pushf
+  pop  [si][flags]
+  pop  [si][sir]
+  pop  [si][dsr]
+  mov  [si][axr],ax
+  mov  [si][bxr],bx
+  mov  [si][cxr],cx
+  mov  [si][dxr],dx
+  mov  [si][dir],di
+  mov  [si][bpr],bp
+  mov  [si][esr],es
+  ret  near 4
+
+section
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Dos.
+
+   PRECONDITIONS - Regsiters record initialized.
+
+   POSTCONDITIONS - Interrupt 21H issued.
+
+   IN PARAMETERS -  register record (VAR Registers).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+
+extrn @LoadRegisters
+extrn @SaveRegisters
+extrn @InProgramFlag
+extrn @StopProgramFlag
+extrn __FatalErrorPos
+extrn __FatalError
+
+(*%F RegParam *)
+p_seg = 2+frame
+p_off = frame
+
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+p_seg  = -2
+p_off  = -4
+locals =  4
+
+RetSize = 0
+(*%E *)
+public Lib$Dos :
+
+  push bp
+  mov  bp, sp
+(*%T RegParam *)
+  sub  sp, locals
+(*%T NearPtr *)
+  push bx
+(*%E *)
+  push cx
+  push dx
+  mov  [bp][p_off], ax
+(*%F NearPtr *)
+  mov  [bp][p_seg], bx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+  pushf
+(*%F _XTD *)
+(*%F _WINDOWS *)
+(*%F _DLL *)
+  cmp byte cs:[@InProgramFlag], 1
+(*%E *)
+(*%T _DLL *)
+  mov  dx, seg @InProgramFlag
+  mov  es, dx
+  cmp byte es:[@InProgramFlag], 1
+(*%E *)
+  je ok
+  cld
+  call far __FatalErrorPos
+  mov  cx, 13H
+  push cx
+  push dx
+  push ax
+  call far __FatalError
+ok:
+(*%F _DLL *)
+  cmp byte cs:[@StopProgramFlag], 1
+  je Stop                     (* wait for timer to stop us *)
+  mov byte cs:[@InProgramFlag], 0
+(*%E *)
+(*%T _DLL *)
+  cmp byte es:[@StopProgramFlag], 1
+  je Stop                     (* wait for timer to stop us *)
+  mov byte es:[@InProgramFlag], 0
+(*%E *)
+(*%E _WINDOWS*)
+(*%E _XTD*)
+(*%F NearPtr *)
+  lds  si,[bp][p_off]
+(*%E *)
+(*%T NearPtr *)
+  mov  si,[bp][p_off]
+  push ds
+  pop  es
+(*%E *)
+  push ds                     (* save register pointer *)
+  push si
+  call @LoadRegisters
+  int  21H
+  call @SaveRegisters
+(*%F _XTD *)
+(*%F _WINDOWS *)
+ (*%F _DLL *)
+  mov byte cs:[@InProgramFlag], 1
+ (*%E *)
+ (*%T _DLL *)
+  mov  dx, seg @InProgramFlag
+  mov  es, dx
+  mov byte es:[@InProgramFlag], 1
+ (*%E *)
+(*%E _WINDOWS *)
+(*%E _XTD *)
+  popf
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  pop  dx
+  pop  cx
+(*%T NearPtr *)
+  pop  bx
+(*%E *)
+  add  sp, locals
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+Stop:
+  sti
+  jmp Stop
+
+section
+(*****************************************************************************)
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.Intr.
+
+   PRECONDITIONS - Regsiters record initialized.
+
+   POSTCONDITIONS - Specified Interrupt issued.
+
+   IN PARAMETERS -  register record (VAR Registers), interupt no (CARDINAL).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and Windows and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+
+extrn @LoadRegisters
+extrn $SWInt
+extrn @SaveRegisters
+
+(*%F _jpicall *)
+  p_num                 = frame
+  p_off                 = 2+frame
+
+  RetSize               = 2 + DataPtrSize
+(*%E *)
+
+(*%T _jpicall *)
+  RetSize               = 0
+(*%E *)
+
+public Lib$Intr :
+    push bp
+(*%F _jpicall *)
+    mov  bp, sp
+(*%E *)
+(*%T _jpicall *)
+ (*%F _fptr *)
+    push cx
+ (*%E *)
+    push dx
+(*%E *)
+    push ds
+    push si
+    push di
+    pushf
+
+(*%T _jpicall *)
+ (*%T _fptr *)
+    mov  ds, bx
+ (*%E *)
+    mov  si, ax
+(*%E *)
+(*%F _jpicall *)
+ (*%T _fptr *)
+    lds  si, [bp][p_off]
+ (*%E *)
+ (*%F _fptr *)
+    mov  si, [bp][p_off]
+ (*%E *)
+(*%E *)
+    push ds                            (* save register pointer *)
+    push si
+(*%T _jpicall *)
+ (*%T _fptr *)
+    push cx                            (* Push Interrupt Number *)
+ (*%E *)
+ (*%F _fptr *)
+    push bx                            (* Push Interrupt Number *)
+ (*%E *)
+(*%E *)
+(*%F _jpicall *)
+    push [bp][p_num]                   (* Push Interrupt Number *)
+(*%E *)
+    call @LoadRegisters
+(*%T _fcall *)
+    call far $SWInt
+(*%E *)
+(*%F _fcall *)
+    call $SWInt
+(*%E *)
+    call @SaveRegisters
+    popf
+    pop  di
+    pop  si
+    pop  ds
+(*%T _jpicall *)
+    pop  dx
+(*%F _fptr *)
+    pop  cx
+(*%E *)
+(*%E *)
+    pop bp
+(*%T _fcall *)
+    ret  far RetSize
+(*%E *)
+(*%F _fcall *)
+    ret  RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SetInProgramFlag.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - @InProgramFlag set.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Allows entry to MSDOS.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+
+extrn @InProgramFlag
+
+(*%F RegParam *)
+on = frame
+
+RetSize = 2
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public Lib$SetInProgramFlag :
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+  mov al, [bp][on]
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%E *)
+(*%F _DLL *)
+  mov cs:[@InProgramFlag], al
+(*%E *)
+(*%T _DLL *)
+  push bx
+  mov  bx, seg @InProgramFlag
+  mov  es, bx
+  mov  es:[@InProgramFlag], al
+  pop  bx
+(*%E *)
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.GetInProgramFlag.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - State of @InProgramFlag (BOOLEAN).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS and extender.
+
+   ------------------------------------------------------------------------ *)
+
+public Lib$GetInProgramFlag :
+
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  sub ah,ah
+(*%F _DLL *)
+  mov al,cs:[@InProgramFlag]
+(*%E *)
+(*%T _DLL *)
+  push bx
+  mov  bx, seg @InProgramFlag
+  mov  es, bx
+  mov  al, es:[@InProgramFlag]
+  pop  bx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+
+
+(*%E *)  (* End Of DOS/extender) *)
+
+(*%T _OS2 *)  (* OS/2 Specific Procedures *)
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SelectorLimit.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  Segment (CARDINAL).
+
+   OUT PARAMETERS - Limit (CARDINAL).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Returns size of segment.
+
+   VERSION - OS2.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn __osmode
+(*%F RegParam *)
+public Lib$SelectorLimit : Sel=frame
+  push bp; mov bp,sp;
+  push ds
+  mov ax,seg __osmode
+  mov ds,ax
+  cmp byte [__osmode],0
+  jz slmax
+  mov dx,[bp][Sel]
+  db 0FH;db 03H;db 0C2H       (*I lsl ax,dx *)
+  jz slok
+  sub ax,ax
+slok:
+  pop ds
+  pop bp;
+(*%F NearCall *)
+  ret far 2
+(*%E *)
+(*%T NearCall *)
+  ret 2
+(*%E *)
+slmax:
+  mov ax,0FFFFH
+  jmp slok
+(*%E *)
+
+(*%T RegParam *)
+public Lib$SelectorLimit :
+  push bx
+  push dx
+  push ds
+  mov bx,seg __osmode
+  mov ds,bx
+  cmp byte [__osmode],0
+  jz slmax
+  mov dx,ax
+  db 0FH;db 03H;db 0C2H       (*I lsl ax,dx *)
+  jz slok
+  sub ax,ax
+slok:
+  pop ds
+  pop dx
+  pop bx
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+slmax:
+  mov ax,0FFFFH
+  jmp slok
+(*%E *)
+
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.AddressOK.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  address (ADDRESS).
+
+   OUT PARAMETERS - State (BOOLEAN).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Returns validity of segment.
+
+   VERSION - OS2.
+
+   ------------------------------------------------------------------------ *)
+
+(*%F RegParam *)
+public Lib$AddressOK: Ofs=6; Sel=8
+  push bp; mov bp,sp;
+  push ds
+  mov dx,[bp][Sel]
+  mov ax,seg __osmode
+  mov ds,ax
+  cmp byte [__osmode],0
+  jz aook
+  db 0FH;db 03H;db 0C2H       (*I lsl ax,dx *)
+  jnz aofail
+  cmp ax,[bp][Ofs]
+  jb aofail
+aook:
+  mov ax,1
+  jmp aoexit
+aofail:
+  sub ax,ax
+aoexit:
+  pop ds
+  pop bp;
+(*%F NearCall *)
+  ret far 4
+(*%E *)
+(*%T NearCall *)
+  ret 4
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+public Lib$AddressOK :
+  push cx
+  push dx
+  push ds
+  mov dx, bx
+  mov cx, ax
+  mov ax,seg __osmode
+  mov ds,ax
+  cmp byte [__osmode],0
+  jz aook
+  db 0FH;db 03H;db 0C2H       (*I lsl ax,dx *)
+  jnz aofail
+  cmp ax, cx
+  jb aofail
+aook:
+  mov ax,1
+  jmp aoexit
+aofail:
+  sub ax,ax
+aoexit:
+  pop ds
+  pop dx
+  pop cx
+(*%F NearCall *)
+  ret far 4
+(*%E *)
+(*%T NearCall *)
+  ret 4
+(*%E *)
+(*%E *)
+
+(*****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.ProtectedMode.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  address (ADDRESS).
+
+   OUT PARAMETERS - Proctected mode  (BOOLEAN).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Returns True if process running under protected mode.
+
+   VERSION - OS2.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn __osmode
+
+public Lib$ProtectedMode :
+  push ds
+  mov ax,seg __osmode
+  mov ds,ax
+  mov al,[__osmode]
+  mov ah,0
+  pop ds
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*%E *)
+
+(*%F ProtMode *) (* Procedures for real mode *)
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - $NormPtr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Far pointer normalised.
+
+   IN PARAMETERS -  pointer (FarADDRESS) dx:ax.
+
+   OUT PARAMETERS - pointer return (FarADDRESS).
+
+   CALLING CONVENTION - NearCall.
+
+   NOTES -  None.
+
+   VERSION - MSDOS real mode.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public @NormPtr :
+  mov cx,ax
+  and ax,000FH
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  add dx,cx
+  ret 0
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.AddFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (FarADDRESS).
+
+   OUT PARAMETERS - pointer return (FarADDRESS).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS real mode.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @NormPtr
+
+public Lib$AddFarAddr :
+
+(*%F RegParam *)
+a_H   = 4+frame
+a_L   = 2+frame
+c_val = frame
+
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  add ax,[bp][c_val]
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  pop bp;
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  mov dx,bx
+  add ax,cx
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call @NormPtr
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SubFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (FarADDRESS).
+
+   OUT PARAMETERS - pointer return (FarADDRESS).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS real mode.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @NormPtr
+
+public Lib$SubFarAddr :
+
+(*%F RegParam *)
+
+a_H   = 4+frame
+a_L   = 2+frame
+c_val = frame
+
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  sub ax,[bp][c_val]
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  pop bp;
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  mov dx,bx
+  sub ax,cx
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call @NormPtr
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.IncFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (VAR FarADDRESS).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS real mode.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @NormPtr
+
+public Lib$IncFarAddr :
+
+(*%F RegParam *)
+
+(*%F NearPtr *)
+a_ptrH = 4+frame
+a_ptrL = 2+frame
+incr   = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+a_ptrL = 2+frame
+incr   = frame
+
+RetSize = 4
+(*%E *)
+
+  push bp; mov bp,sp
+(*%F NearPtr *)
+  push ds
+  lds bx,[bp][a_ptrL]
+(*%E *)
+(*%T NearPtr *)
+  mov bx,[bp][a_ptrL]
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  add ax,[bp][incr]
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+  pop bp;
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F NearPtr *)
+  push dx
+  push ds
+  mov  ds, bx
+  mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+  push cx
+  push dx
+  mov  cx, bx
+  mov  bx, ax
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  add ax,cx
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+  pop dx
+(*%E *)
+(*%T NearPtr *)
+  pop dx
+  pop cx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.DecFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (VAR FarADDRESS).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - MSDOS real mode.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+extrn @NormPtr
+
+public Lib$DecFarAddr :
+
+(*%F RegParam *)
+
+(*%F NearPtr *)
+a_ptrH = 4+frame
+a_ptrL = 2+frame
+decr   = frame
+(*%E *)
+(*%T NearPtr *)
+a_ptrL = 2+frame
+decr   = frame
+(*%E *)
+
+  push bp; mov bp,sp
+(*%F NearPtr *)
+  push ds
+  lds bx,[bp][a_ptrL]
+(*%E *)
+(*%T NearPtr *)
+  mov bx,[bp][a_ptrL]
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  sub ax,[bp][decr]
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+  pop  bp
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+(*%F NearPtr *)
+  push dx
+  push ds
+  mov  ds, bx
+  mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+  push cx
+  push dx
+  mov  cx, bx
+  mov  bx, ax
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  sub ax,cx
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+  pop dx
+(*%E *)
+(*%T NearPtr *)
+  pop dx
+  pop cx
+(*%E *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(*%E *)
+
+(*%T ProtMode *) (* Protected mode procedures *)
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.AddFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (FarADDRESS).
+
+   OUT PARAMETERS - incremented pointer(FarADDRESS).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$AddFarAddr :
+
+(*%F RegParam *)
+a_H   = 4+frame
+a_L   = 2+frame
+c_val = frame
+
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  add ax,[bp][c_val]
+  pop bp;
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+  mov dx,bx
+  add ax,cx
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.SubFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (FarADDRESS).
+
+   OUT PARAMETERS - decremented pointer(FarADDRESS).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$SubFarAddr :
+
+(*%F RegParam *)
+
+a_H   = 4+frame
+a_L   = 2+frame
+c_val = frame
+
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  sub ax,[bp][c_val]
+  pop bp;
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+  mov dx,bx
+  sub ax,cx
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.IncFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (VAR FarADDRESS).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$IncFarAddr :
+
+(*%F RegParam *)
+
+(*%F NearPtr *)
+a_ptrH = 4+frame
+a_ptrL = 2+frame
+incr   = frame
+
+RetSize = 6
+(*%E *)
+(*%T NearPtr *)
+a_ptrL = 2+frame
+incr   = frame
+
+RetSize = 4
+(*%E *)
+
+  push bp; mov bp,sp
+(*%F NearPtr *)
+  push ds
+  lds bx,[bp][a_ptrL]
+(*%E *)
+(*%T NearPtr *)
+  mov bx,[bp][a_ptrL]
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  add ax,[bp][incr]
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+  pop bp;
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%F NearPtr *)
+  push dx
+  push ds
+  mov  ds, bx
+  mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+  push cx
+  push dx
+  mov  cx, bx
+  mov  bx, ax
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  add ax,cx
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+  pop dx
+(*%E *)
+(*%T NearPtr *)
+  pop dx
+  pop cx
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(**************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - Lib.DecFarAddr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  pointer (VAR FarADDRESS).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and Windows.
+
+   ------------------------------------------------------------------------ *)
+(*%F _DLL *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+
+public Lib$DecFarAddr :
+
+(*%F RegParam *)
+
+(*%F NearPtr *)
+a_ptrH = 4+frame
+a_ptrL = 2+frame
+decr   = frame
+(*%E *)
+(*%T NearPtr *)
+a_ptrL = 2+frame
+decr   = frame
+(*%E *)
+
+  push bp; mov bp,sp
+(*%F NearPtr *)
+  push ds
+  lds bx,[bp][a_ptrL]
+(*%E *)
+(*%T NearPtr *)
+  mov bx,[bp][a_ptrL]
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  sub ax,[bp][decr]
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+  pop  bp
+(*%F NearCall *)
+  ret far 6
+(*%E *)
+(*%T NearCall *)
+  ret 6
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+
+(*%F NearPtr *)
+  push ds
+  mov  ds, bx
+  mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+  push cx
+  mov  cx, bx
+  mov  bx, ax
+(*%E *)
+  mov ax,[bx]
+  mov dx,[bx][2]
+  sub ax,cx
+  mov [bx],ax
+  mov [bx][2],dx
+(*%F NearPtr *)
+  pop ds
+(*%E *)
+(*%T NearPtr *)
+  pop cx
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+(*%E *)
+
+(*%E ProtMode*)
+
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+
+(* PROCEDURE FastMove(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:2 | Dest:2 | Count:2 *)
+
+(*%T NearPtr *)
+public Lib$FastMove :
+(*%E *)
+public Lib$NearFastMove :
+(*%T RegParam *)
+  Return = 0
+(*%E *)
+(*%F RegParam *)
+  Count  = frame
+  Dest   = frame + 2
+  Source = frame + 4
+  Return = 6
+(*%E *)
+
+(*%T RegParam *)
+  jcxz @FastMoveExit
+(*%E *)
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+  push ax
+  push bx
+  push cx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  di, bx
+(*%E *)
+(*%F RegParam *)
+  mov  si, [bp][Source]
+  mov  di, [bp][Dest]
+  mov  cx, [bp][Count]
+  jcxz @FastMoveDone
+(*%E *)
+  mov  ax, ds
+  mov  es, ax
+  test bl, 1
+  jz   @FastMoveEven
+  movsb
+  dec  cx
+@FastMoveEven:
+  shr  cx, 1
+  rep; movsw
+  adc  cx, cx
+  rep; movsb
+@FastMoveDone:
+  pop  di
+  pop  si
+(*%F RegParam*)
+  pop  cx
+  pop  bx
+  pop  ax
+  pop  bp
+(*%E *)
+@FastMoveExit:
+(*%T NearCall *)
+  ret  0
+(*%E *)
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%E SameDS *)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+(*%F _DLL *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+
+(* PROCEDURE FastMove(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:4 | Dest:4 | Count:2 *)
+
+(*%F NearPtr *)
+public Lib$FastMove :
+(*%E *)
+public Lib$FarFastMove :
+  Count  = frame
+(*%T RegParam *)
+  Return = 2
+(*%E *)
+(*%F RegParam *)
+  Dest   = frame + 2
+  Source = frame + 6
+  Return = 10
+(*%E *)
+
+  push bp
+  mov  bp, sp
+  push ds
+(*%F RegParam *)
+  push ax
+  push bx
+  push cx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  ds, bx
+  mov  di, cx
+  mov  es, dx
+(*%E *)
+(*%F RegParam *)
+  lds  si, [bp][Source]
+  les  di, [bp][Dest]
+(*%E *)
+  mov  cx, [bp][Count]
+  jcxz @FastMoveExit
+  test di, 1
+  jz   @FastMoveEven
+  movsb
+  dec  cx
+@FastMoveEven:
+  shr  cx, 1
+  rep; movsw
+  adc  cx, cx
+  rep; movsb
+@FastMoveExit:
+  pop  di
+  pop  si
+(*%F RegParam *)
+  pop  cx
+  pop  bx
+  pop  ax
+(*%E *)
+  pop  ds
+  pop  bp
+(*%T NearCall *)
+  ret  Return
+(*%E *)
+(*%F NearCall *)
+  ret  far Return
+(*%E *)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+
+(* PROCEDURE Move(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:2 | Dest:2 | Count:2 *)
+
+(*%T NearPtr *)
+public Lib$Move :
+(*%E *)
+public Lib$NearMove :
+(*%T RegParam *)
+  Return = 0
+(*%E *)
+(*%F RegParam *)
+  Count  = frame
+  Dest   = frame + 2
+  Source = frame + 4
+  Return = 6
+(*%E *)
+
+(*%T RegParam *)
+  jcxz @MoveExit
+(*%E *)
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+  push ax
+  push bx
+  push cx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  di, bx
+(*%E *)
+(*%F RegParam *)
+  mov  si, [bp][Source]
+  mov  di, [bp][Dest]
+  mov  cx, [bp][Count]
+  jcxz @MoveDone
+(*%E *)
+  mov  ax, ds
+  mov  es, ax
+  xor  bx, bx
+  cmp  di, si
+  jb   @MoveDown
+  je   @MoveDone
+  std
+  inc  bx
+  add  si, cx
+  dec  si
+  add  di, cx
+  dec  di
+  test di, 1
+  jz   @MoveEven
+  movsb
+  dec  cx
+  jmp  @MoveEven
+@MoveDown:
+  test di, 1
+  jz   @MoveEven
+  movsb
+  dec  cx
+@MoveEven:
+  sub  si, bx
+  sub  di, bx
+  shr  cx, 1
+  rep; movsw
+  jnc  @MoveDone
+  add  si, bx
+  add  di, bx
+  movsb
+@MoveDone:
+  cld
+  pop  di
+  pop  si
+(*%F RegParam *)
+  pop  cx
+  pop  bx
+  pop  ax
+  pop  bp
+(*%E *)
+@MoveExit:
+(*%T NearCall *)
+  ret  Return
+(*%E *)
+(*%F NearCall *)
+  ret  far Return
+(*%E *)
+(*%E SameDS *)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+(*%F _DLL *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+
+(* PROCEDURE Move(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:4 | Dest:4 | Count:2 *)
+
+(*%F NearPtr *)
+public Lib$Move :
+(*%E *)
+public Lib$FarMove :
+  Count  = frame
+(*%T RegParam *)
+  Return = 2
+(*%E *)
+(*%F RegParam *)
+  Dest   = frame + 2
+  Source = frame + 6
+  Return = 10
+(*%E *)
+
+  push bp
+  mov  bp, sp
+  push ds
+(*%F RegParam *)
+  push ax
+  push bx
+  push cx
+  push dx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  ds, bx
+  mov  di, cx
+  mov  es, dx
+(*%E *)
+(*%F RegParam *)
+  lds  si, [bp][Source]
+  les  di, [bp][Dest]
+(*%E *)
+(*%F ProtMode*)
+  mov  ax, ds                          (* Normalize Source Pointer *)
+  mov  dx, 16
+  mul  dx
+  add  ax, si
+  adc  dx, 0
+  mov  bx, ax                          (* Save Source Low in  bx *)
+  mov  cx, dx                          (* Save Source High in cx *)
+  mov  ax, es                          (* Normalize Destination Pointer *)
+  mov  dx, 16
+  mul  dx
+  add  ax, di
+  adc  dx, 0
+  cmp  dx, cx                          (* Choose Move Direction *)
+  ja   @MoveUp
+  jb   @MoveDown
+  cmp  ax, bx                          (* IF same segment, check offsets *)
+  jb   @MoveDown
+  je   @MoveExit
+(*%E*)
+(*%T ProtMode*)
+  cmp si,di
+  ja   @MoveDown
+(*%E*)
+@MoveUp:
+  mov  cx, [bp][Count]
+  jcxz @MoveExit
+  std
+  mov  bx, 1
+  add  si, cx
+  dec  si
+  add  di, cx
+  dec  di
+  jmp  @MoveStart
+@MoveDown:
+  mov  cx, [bp][Count]
+  jcxz @MoveExit
+  xor  bx, bx
+@MoveStart:
+  test di, 1
+  jz   @MoveEven
+  movsb
+  dec  cx
+@MoveEven:
+  sub  si, bx
+  sub  di, bx
+  shr  cx, 1
+  rep; movsw
+  jnc  @MoveExit
+  add  si, bx
+  add  di, bx
+  movsb
+@MoveExit:
+  cld
+  pop  di
+  pop  si
+(*%F RegParam *)
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+(*%E *)
+  pop  ds
+  pop  bp
+(*%T NearCall *)
+  ret  Return
+(*%E *)
+(*%F NearCall *)
+  ret  far Return
+(*%E *)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+
+(* PROCEDURE WordMove(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:2 | Dest:2 | Count:2 *)
+
+(*%T NearPtr *)
+public Lib$WordMove :
+(*%E *)
+public Lib$NearWordMove :
+(*%T RegParam *)
+  Return = 0
+(*%E *)
+(*%F RegParam *)
+  Count  = frame
+  Dest   = frame + 2
+  Source = frame + 4
+  Return = 6
+(*%E *)
+
+(*%T RegParam *)
+  jcxz @WordMoveExit
+(*%E *)
+(*%F RegParam *)
+  push bp
+  mov  bp, sp
+  push ax
+  push bx
+  push cx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  di, bx
+(*%E *)
+(*%F RegParam *)
+  mov  si, [bp][Source]
+  mov  di, [bp][Dest]
+  mov  cx, [bp][Count]
+  jcxz @WordMoveDone
+(*%E *)
+  mov  ax, ds
+  mov  es, ax
+  cmp  di, si
+  jb   @WordMoveDown
+  je   @WordMoveDone
+  std
+  mov  bx, cx
+  dec  bx
+  shl  bx, 1
+  add  si, bx
+  add  di, bx
+@WordMoveDown:
+  rep; movsw
+  cld
+@WordMoveDone:
+  pop  di
+  pop  si
+(*%F RegParam *)
+  pop  cx
+  pop  bx
+  pop  ax
+  pop  bp
+(*%E *)
+@WordMoveExit:
+(*%T NearCall *)
+  ret  Return
+(*%E *)
+(*%F NearCall *)
+  ret  far Return
+(*%E *)
+(*%E SameDS *)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+(*%F _DLL *)
+segment Lib_TEXT(CODE,28H)
+(*%E *)
+(*%T _DLL *)
+segment LibDLL_TEXT(CODE,28H)
+(*%E *)
+(*%E *)
+
+(* PROCEDURE WordMove(Source,Dest:ADDRESS;Count:CARDINAL); *)
+(* Source:4 | Dest:4 | Count:2 *)
+
+(*%F NearPtr *)
+public Lib$WordMove :
+(*%E *)
+public Lib$FarWordMove :
+  Count  = frame
+(*%T RegParam *)
+  Return = 2
+(*%E *)
+(*%F RegParam *)
+  Dest   = frame + 2
+  Source = frame + 6
+  Return = 10
+(*%E *)
+
+  push bp
+  mov  bp, sp
+  push ds
+(*%F RegParam *)
+  push ax
+  push bx
+  push cx
+  push dx
+(*%E *)
+  push si
+  push di
+(*%T RegParam *)
+  mov  si, ax
+  mov  ds, bx
+  mov  di, cx
+  mov  es, dx
+(*%E *)
+(*%F RegParam *)
+  lds  si, [bp][Source]
+  les  di, [bp][Dest]
+(*%E *)
+(*%F ProtMode *)
+  mov  ax, ds                          (* Normalize Source Pointer *)
+  mov  dx, 16
+  mul  dx
+  add  ax, si
+  adc  dx, 0
+  mov  bx, ax                          (* Save Source Low in  bx *)
+  mov  cx, dx                          (* Save Source High in cx *)
+  mov  ax, es                          (* Normalize Destination Pointer *)
+  mov  dx, 16
+  mul  dx
+  add  ax, di
+  adc  dx, 0
+  cmp  dx, cx                          (* Choose WordMove Direction *)
+  ja   @WordMoveUp
+  jb   @WordMoveDown
+  cmp  ax, bx                          (* IF same segment, check offsets *)
+  jb   @WordMoveDown
+  je   @WordMoveExit
+(*%E*)
+(*%T ProtMode*)
+  cmp si,di
+  ja   @WordMoveDown
+(*%E*)
+@WordMoveUp:
+  mov  cx, [bp][Count]
+  jcxz @WordMoveExit
+  std
+  mov  bx, cx
+  dec  bx
+  shl  bx, 1
+  add  si, bx
+  add  di, bx
+  jmp  @WordMoveStart
+@WordMoveDown:
+  mov  cx, [bp][Count]
+  jcxz @WordMoveExit
+@WordMoveStart:
+  rep; movsw
+  cld
+@WordMoveExit:
+  pop  di
+  pop  si
+(*%F RegParam *)
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+(*%E *)
+  pop  ds
+  pop  bp
+(*%T NearCall *)
+  ret  Return
+(*%E *)
+(*%F NearCall *)
+  ret  far Return
+(*%E *)
+
+end
+

@@ -1,0 +1,8 @@
+DEFINITION MODULE Ovl117;
+PROCEDURE Load( n:CARDINAL );
+PROCEDURE UnLoad( n:CARDINAL );
+VAR
+  Path : ARRAY [1..40] OF CHAR; (* Base name of overlay files *)
+  Seg  : ARRAY [0..9] OF CARDINAL;
+  Size : ARRAY [0..9] OF CARDINAL;
+END Ovl117.

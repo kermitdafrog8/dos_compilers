@@ -1,0 +1,142 @@
+TopSpeed DOS Environment            Release Notes version 3.10
+========================            ==========================
+
+
+This document contains information on the following:
+
+    1.  KNOWN PROBLEMS IN TOPSPEED RELEASE 3.10
+    2.  DIFFERENCES FROM TOPSPEED VERSION 2.00
+    3.  DIFFERENCES FROM TOPSPEED VERSION 3.00
+    4.  ERRATA AND ADDENDA
+
+ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+
+1.  KNOWN PROBLEMS IN TOPSPEED RELEASE 3.10
+===========================================
+
+ş   Run time errors in dynalink model will not have line number
+    information in the report.
+
+ş   A program containing floating point, compiled with the
+    emulator option and being debugged on a machine with a
+    co-processor may exhibit erratic behaviour.
+
+
+2.  DIFFERENCES FROM TOPSPEED VERSION 2.00
+==========================================
+
+The TopSpeed Environment for Release 3.10 is different in
+appearance, but essentially the same in operation, to that
+supplied with Release 2 of TopSpeed Modula-2 and TopSpeed C,
+with the following exceptions.
+
+ş   A number of new facilities have been introduced, such as the
+    Locate File utility, and a command history in every data-
+    entry field using the Tab key.
+
+ş   The project system has been introduced in place of the
+    previous make system. This is discussed further below.
+
+ş   The TopSpeed system now supports four TopSpeed languages
+    (Pascal, Modula-2, C and C++) rather than two.
+
+ş   The TopSpeed system now supports more memory models,
+    including an automatic code and data overlaying model.
+
+
+3.  DIFFERENCES FROM TOPSPEED VERSION 3.00
+==========================================
+
+ş   SmartMethod Linking. Starting with release 3.01 the
+    TopSpeed linker is able to smart-link out virtual
+    procedures that cannot be called during the execution of
+    a program. An option to control SmartMethod linking is on
+    the Project Options menu. Note that SmartMethod linking
+    will not work if SmartLinking is specified as off.
+    The consistency of these options is not yet checked.
+
+ş   Commoning up of identical constants. The TopSpeed linker is
+    now capable of assigning identical constants and procedure
+    bodies to the same location in memory. This can result in
+    size savings on large projects but can also alter the
+    semantics of pointer comparisons on constant objects. See the
+    help text for further information. This option defaults to
+    off.
+
+4. ERRATA AND ADDENDA
+======================
+
+The Developer's Guide p 19:
+
+    The second example for the #implib command should read as
+    follows:
+
+        #implib <libfile> <expfile>
+
+The Developer's Guide p 32  lines 33 and 34:
+
+    These lines should read as follows:
+
+        #set opath = c:\ts\include\io.def
+        #set cpath = d:\test\io.def
+
+The Developer's Guide p56:
+
+    The description of the following call pragma is missing
+    from the manual:
+
+        alloca=>on
+
+            This pragma is only used for internal library
+            routines. The purpose of this pragma is to modify
+            the stack frame of the calling function. When using
+            the alloca function you must include the header
+            file alloc.h. This pragma cannot be used in a
+            project file.
+
+The Developer's Guide p72:
+
+    The name pragma prefix => string cannot be used in project
+    files.
+
+The Developer's Guide p91:
+
+    The following link_option pragmas are missing from the
+    manual:
+
+        pragma link_option(smart_method => on | off)
+
+            This pragma controls whether the linker will
+            eliminate unused virtual methods from the
+            executable file. This process, known as Smart
+            Method linking, typically results in a significant
+            reduction in the executable file size.
+
+            Smart Method linking can only operate when the
+            optimize(smart_link) pragma is also specified.
+
+            This option defaults to on, except when a
+            dynamic link library is being produced. The
+            Project Project options SmartMethod linking
+            menu command may be used to specify this option.
+
+        pragma link_option(share_const => on | off)
+
+            This pragma controls whether the linker allocates
+            the same memory for identical constant values, or
+            whether constants are allocated distinct addresses
+            even when they are identical. Sharing identical
+            constants reduces the size of executable files,
+            but may cause semantic changes in the operation
+            of a program if it compares the values of pointers
+            to these constants, for example. Identical virtual
+            method tables are always shared, regardless of the
+            setting of this pragma.
+
+            This pragma defaults to off. The Project Project
+            options (H) Share identical constants menu command
+            may be used to specify this option.
+
+
+

@@ -1,0 +1,30 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  FLOATEXC.DEF - Modula-2 floatin-point exception handling                *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# module(implementation=>off,init_code=>on)*)
+DEFINITION MODULE FloatExc;
+
+CONST
+  FPE_INVALID         = 81H;
+  FPE_DENORMAL        = 82H;
+  FPE_ZERODIVIDE      = 83H;
+  FPE_OVERFLOW        = 84H;
+  FPE_UNDERFLOW       = 85H;
+  FPE_INEXACT         = 86H;
+
+TYPE
+  FloatErrHandler = PROCEDURE(INTEGER, INTEGER);
+
+PROCEDURE EnableExceptionHandling;
+PROCEDURE DisableExceptionHandling;
+PROCEDURE InstallHandler(H: FloatErrHandler);
+
+END FloatExc.
+

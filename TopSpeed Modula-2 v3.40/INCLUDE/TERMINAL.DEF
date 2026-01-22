@@ -1,0 +1,25 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  TERMINAL.DEF - Modula-2 core library                                    *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE Terminal ;
+
+PROCEDURE Read ( VAR v : CHAR ) ;
+PROCEDURE ReadAgain ;
+
+PROCEDURE Write    ( v : CHAR ) ;
+PROCEDURE WriteLn ;
+PROCEDURE WriteString ( s : ARRAY OF CHAR ) ;
+
+PROCEDURE ReadString  ( VAR v : ARRAY OF CHAR ) ;
+VAR
+  termCH : CHAR ;
+END Terminal.
+
+

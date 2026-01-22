@@ -1,0 +1,167 @@
+!!------- Menu definition for M2 Version 1.0  ------------------
+
+! PopUp [ TopSpeed M2  <F10>       |               <F10>
+  {F} - Files                             <AltF> |               <AltF>
+
+    {L} - Load file         <F3>   | Load file     <F3>
+    {P} - Pick file       <AltF3>| Pick file     <AltF3>
+    {S} - Save file        <F2>   | Save file     <F2>
+    {A} - All save               | Save all files
+    {M} - Main Module                <AltP> | Main module   <AltP>
+    {C} - Change dir                  | Change dir
+    {F} - Files dir                 | Directory
+    {D} - Dos shell <AltD> | DOS shell     <AltD>
+    {E} - Ex괹ut          | Execute
+    {Q} - Quit                  <AltX>  | Quit          <AltX>
+
+  {E} - Edit                            <AltE>  | Editor        <AltE>
+
+  {C} - Compile                          <AltC>  | Compiler      <AltC>
+
+  {M} - Make                             <AltM>  | Make          <AltM>
+
+  {L} - Link                 <AltL>  | Linker        <AltL>
+
+  {R} - Run               <AltR>  | Run program   <AltR>
+
+  {O} - Options                          <AltO>  |               <AltO>
+
+    {C} Compiler                 |
+
+      {E} - Stop on first error  : ___  | Comp Opt E
+      {F} - Filename check    : ___  | Comp Opt F
+      {N} - Line numbers    : ___  | Comp Opt N
+      {V} - Volatile variables          : ___  | Comp Opt V
+      {D} - Generate debug info : ___  | Comp Opt D
+      {B} - Runtime checks default       : ___  | Comp Opt B
+      {J} - Suppression libraries   : ___  | Comp Opt J
+
+    {L} Linker options
+
+      {M} - Map file                : ___ | Link Opt M
+      {I} - Initialise segments     : ___ | Link Opt I
+      {S} - Detailed segment map   : ___ | Link Opt S
+      {C} - Case sensitive link      : ___ | Link Opt C
+      {W} - Suppress  warnings    : ___ | Link Opt W
+
+    {R} Run options
+      {C} - Commande line                           | Command Line
+      {A} - Auto make              : ___         | Run Opt A
+      {T} - Timed run                      : ___         | Run Opt T
+      {F} - Find error               | Find Error
+
+    {E} Editor options                           |
+
+      {A} - Auto save files      : ___ | Auto Save Files
+      {F} - Default file names       | Default Filenames
+      {E} - Default extensions         | Default Extensions
+      {N} - Number of backups           : ___ | No Of Backups
+      {T} - Top scrolling zone     : ___ | Top Scroll Zone
+      {B} - Bottom scrolling zone     : ___ | Bottom Scroll Zone
+
+    {S} Environment Options                            |
+
+      {C} - CGA snow check    : ___ | Env Opt S
+      {B} - Bios Scrolling        : ___ | Env Opt B
+      {H} - High background     : ___ | Env Opt H
+      {X} - Solid cursor        : ___ | Env Opt C
+      컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴
+      {R} - Load redirection file | Load Red File
+      {L} - Load options/windows      | Load Config File
+      {S} - Save options/windows       | Save Config File
+
+    {M} Make all                         | Make All
+
+  {I} - Info      <AltI>  | Info          <AltI>
+
+  {A} - Assemble                       <AltA>  | 'M2Asm %M'     <AltA>
+
+
+! key                                  | Edit1         <Alt1>
+! key                                  | Edit2         <Alt2>
+! key                                  | Edit3         <Alt3>
+! key                                  | Edit4         <Alt4>
+! key                                  | Edit0         <Alt0>
+! key                                  | Zoom Window   <F5>
+! key                                  | Cycle Windows <F6>
+! key                                  | Review Screen <AltF5>
+! helpline [ {F1}-Help  {F10}-Main Menu                            {Esc}-Close  {Alt-X}-Quit]
+
+
+!!------------ Menu Editeur et touches de fonction--------------------
+! Editor
+! Pop Up [ Editor Menu ]              |                     <F9>
+  {L} - Load new file      | Ed Load File        <F3>
+  {S} - Save file               | Save File
+  {W} - Write to ... | Ed Write File
+  {Q} - Quick Menu              |                     <CtrlQ>
+    ! [ Quick Menu]
+    {F} - find                       | Ed Find             <CtrlQ F>
+    {A} - replace                     | Ed Replace          <CtrlQ A>
+    {E} - top of window         | Ed Start Scyyreen     <CtrlQ E> <CtrlHome>
+    {X} - bottom of window              | Ed End Screen       <CtrlQ X> <CtrlEnd>
+    {R} - top of file             | Ed Start File       <CtrlQ R> <CtrlPageUp>
+    {C} - bottom of file               | Ed End File         <CtrlQ C> <CtrlPageDown>
+    {S} - start of line               | Ed Start Line       <CtrlQ S> <Home>
+    {D} - end of line                 | Ed End Line         <CtrlQ D> <End>
+    {B} - beginning of block               | Ed Goto Begin Block <CtrlQ B>
+    {K} - end of block                  | Ed Goto End Block   <CtrlQ K>
+    {P} - previous position          | Ed Prev Position    <CtrlQ P>
+    {Y} - delete to end of line| Ed Del End Line     <CtrlQ Y>
+    {L} - restore line| Ed Restore Line     <CtrlQ L>
+    {G} - goto line      | Ed Goto Line        <CtrlQ G>
+  {K} - Block Menu              |                     <CtrlK>
+    ! [ Block Menu ]
+    {D} - save file     | Save File           <CtrlK D>
+    {B} - begin block      | Ed Begin Block      <CtrlK B>
+    {K} - end block        | Ed End Block        <CtrlK K>
+    {H} - hide block                | Ed Hide Block       <CtrlK H>
+    {T} - mark word                | Ed Mark Word        <CtrlK T>
+    {L} - mark line             | Ed Mark Line        <CtrlK L>
+    {C} - copy block                | Ed Copy Block       <CtrlK C>
+    {V} - move block             | Ed Move Block       <CtrlK V>
+    {Y} - delete block               | Ed Del Block        <CtrlK Y>
+    {R} - read block    | Ed Read Block       <CtrlK R>
+    {W} - write block     | Ed Write Block      <CtrlK W>
+    {G} - get bloc | Ed Get Block        <CtrlK G>
+    {P} - print block              | Ed Print Block      <CtrlK P>
+    {I} - indent block              | Ed Indent Block     <CtrlK I>
+    {Q} - quit file            | Ed Quit             <CtrlK Q>
+
+  {O} - editor options                 |                     <CtrlO>
+    ! [ editor options ]
+    {V} - insert mode           : ___            | Ed Insert           <CtrlO V> <CtrlV> <Ins>
+    {I} - auto indent  : ___            | Ed Opt Indent       <CtrlO I>
+    {T} - "hard" tab       : ___            | Ed Opt Hard Tabs    <CtrlO T>
+    {W} - tab width    : ___            | Ed Opt Tab Width    <CtrlO W>
+
+! key                                  | Ed Word Left        <CtrlA> <CtrlLeftArr>
+! key                                  | Ed Page Down        <CtrlC> <PageDown>
+! key                                  | Ed Move Right       <CtrlD> <RightArr>
+! key                                  | Ed Move Up          <CtrlE> <UpArr>
+! key                                  | Ed Word Right       <CtrlF> <CtrlRightArr>
+! key                                  | Ed Del Forward      <CtrlG> <Del>
+! key                                  | Ed Del Backward     <CtrlH>
+! key                                  | Ed Tab              <CtrlI>
+! key                                  | Ed Find Again       <CtrlL>
+! key                                  | Ed Ins Line         <CtrlM>
+! key                                  | Ed Ins Below        <CtrlN>
+! key                                  | Ed Prefix           <CtrlP>
+! key                                  | Ed Page Up          <CtrlR> <PageUp>
+! key                                  | Ed Move Left        <CtrlS> <LeftArr>
+! key                                  | Ed Del Word         <CtrlT>
+! key                                  | Ed Upper Case       <CtrlU>
+! key                                  | Ed Scrl Down        <CtrlW>
+! key                                  | Ed Move Down        <CtrlX> <DownArr>
+! key                                  | Ed Del Line         <CtrlY>
+! key                                  | Ed Scrl Up          <CtrlZ>
+! key                                  | Ed Next Error       <F8>
+! key                                  | Ed Prev Error       <F7>
+! key                                  | Ed Case Correct     <ShiftF7>
+! key                                  | Ed Goto M1          <CtrlQ 1>
+! key                                  | Ed Goto M2          <CtrlQ 2>
+! key                                  | Ed Set M1           <CtrlK 1>
+! key                                  | Ed Set M2           <CtrlK 2>
+! helpline [{F1}-Help {F5}-zoom {F6}-cycle {F9}-Editor Menu {F10}-Main Menu {Esc}-Close {Alt-X}-Quit]
+
+

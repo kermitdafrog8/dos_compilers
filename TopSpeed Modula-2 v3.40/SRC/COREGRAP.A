@@ -1,0 +1,7641 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREGRAP.A - low-level graphics routines                                *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+FastIO = 0    (* Set to 0 prevents words being written to adjacent ports *)
+
+module CoreGraph
+
+(*****************************************************************************)
+segment _BSS(BSS, 28H)
+
+public __fstart : org 6
+
+segment _BSS(BSS, 28H)
+public  __g_charout : org FarCodePtrSize
+public  __g_strin :   org FarCodePtrSize
+
+segment _DATA(DATA, 28H)
+
+extrn __gdummy
+
+(*%F NearCall *)
+public __get :    dd __gdummy
+public __put :    dd __gdummy
+public __hscan :  dd __gdummy
+public __plot :   dd __gdummy
+public __point :  dd __gdummy
+public __hline :  dd __gdummy
+public __line :   dd __gdummy
+(*%E *)
+(*%T NearCall *)
+public __get :    dw __gdummy
+public __put :    dw __gdummy
+public __hscan :  dw __gdummy
+public __plot :   dw __gdummy
+public __point :  dw __gdummy
+public __hline :  dw __gdummy
+public __line :   dw __gdummy
+(*%E *)
+
+segment _DATA(DATA, 28H)
+
+public __EGA_table :  db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+
+(*%T _DLL *)
+public __setvideomode_vector : org FarCodePtrSize
+public __initgraph_vector :    org FarCodePtrSize
+(*%E *)
+
+segment _BSS(BSS, 28H)
+
+
+public __lastmode :         org 2
+public __depth :            org 2
+public __width :            org 2
+public __current_video :    org VideoConfigSize
+public __origin :           org XYcoordSize
+public __clip_tl :          org XYcoordSize
+public __clip_br :          org XYcoordSize
+public __current_graph :    org XYcoordSize
+public __text_tl :          org RCcoordSize
+public __current_text :     org RCcoordSize
+
+public __active_page :   org 2
+public __visual_page :   org 2
+public __page_size :     org 2
+public __fgcolor :       org 2
+public __mode_changed :  org 2
+public __txcolor :       org 2
+public __cursor_lock :   org 2
+public __scr_attr :      org 2
+public __current_mask :  org FarDataPtrSize
+public __EGA64K :        org 1
+public __cursor_state :  org 1
+public __wrap_state :    org 1
+public __display_state : org 1
+public __EGAtranslate :  org 2
+public __bkcolor :       org 4
+
+segment _DATA(DATA, 28H)
+
+public __text_br :           dw 24, 79
+public __fill_mask :         db 0FFH, 0FFH, 0FFH, 0FFH, 0FFH, 0FFH, 0FFH, 0FFH
+public __current_linestyle : dw 0FFFFH
+public __EGAScreen :         dd 0A0000000H;
+public __EGAStartPlane :     dw 3
+public __EGAPlaneShift :     dw 1
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+
+public $OutWord :
+
+  out  byte dx, al
+  inc  dx
+  xchg ah, al
+  out  byte dx, al
+  dec  dx
+  xchg ah, al
+  ret 0
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __page_size
+extrn __active_page
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __pixeladdrEGA :
+
+BytesPerRow= -2
+
+    mov  cl, bl
+    push dx
+    mul  word [bp][BytesPerRow]
+    pop  dx
+(*%T _XTD *)
+    db   0C1H,0FBH,003H                (*I shr  bx, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  bx, 1
+    shr  bx, 1
+    shr  bx, 1
+(*%E *)
+    add  bx, ax
+    mov  ax, [__active_page]
+    mov  dx, [__page_size]
+    mul  dx
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  bx, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    and  cl, 7
+    xor  cl, 7
+    mov  ah, 1
+    ret  0
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __page_size
+extrn __active_page
+extrn __width
+
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __pixeladdrEGA2 :
+
+    mov  cl, bl
+    push dx
+    mul  word [__width]
+(*%T _XTD *)
+    db   0C1H,0FBH,003H                (*I shr  bx, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  bx, 1
+    shr  bx, 1
+    shr  bx, 1
+(*%E *)
+    add  bx, ax
+    mov  ax, [__active_page]
+    mov  dx, [__page_size]
+    mul  dx
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  bx, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    and  cl, 7
+    xor  cl, 7
+    mov  ah, 1
+    pop  dx
+    ret  0
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __active_page
+extrn __page_size
+
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __pixeladdrHerc :
+
+    mov  cl, bl
+    shr  ax, 1
+    rcr  bx, 1
+    shr  ax, 1
+    rcr  bx, 1
+    shr  bx, 1
+    mov  ah, 90
+    mul  ah
+    add  bx, ax
+    mov  ax, [__active_page]
+    mov  dx, [__page_size]
+    mul  dx
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  bx, ax
+    extrn __B000h
+    mov  ax, __B000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0B000H                    (* NB New Fix *)
+(*%E *)
+    mov  es, ax
+    and  cl, 7
+    xor  cl, 7
+    mov  ah, 1
+    ret  0
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+calcAddress:
+    shr  ax, 1
+    add  bh, al
+    sub  al, al
+    add  bx, ax
+    shr  ax, 1
+    shr  ax, 1
+    add  bx, ax
+    shr  bx, 1
+    shr  bx, 1
+(*%T _XTD *)
+    extrn __B800h
+    mov  ax, __B800h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0B800H
+(*%E*)
+    mov  es, ax
+    ret  0
+
+public __pixeladdr320x200 :
+
+    mov  cl, bl
+    xchg ah, al
+    call calcAddress
+    mov  ah, 3
+    and  cl, ah
+    xor  cl, ah
+    shl  cl, 1
+    ret  0
+
+public __pixeladdr640x200 :
+
+    mov  cl, bl
+    xchg ah, al
+    shr  bx, 1
+    call calcAddress
+    and  cl, 7
+    xor  cl, 7
+    mov  ah, 1
+    ret  0
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __clip_tl
+extrn __clip_br
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __hclip :       (* ax = x1, bx = y1, cx = x2 *)
+
+    cmp  bx, [__clip_tl][graph_ycoord]
+    jl   hclipError
+    cmp  bx, [__clip_br][graph_ycoord]
+    jg   hclipError
+    cmp  ax, cx
+    jle  noSwap
+    xchg ax, cx
+noSwap:
+    mov  di, [__clip_tl][graph_xcoord]
+    mov  si, [__clip_br][graph_xcoord]
+    cmp  cx, di
+    jl   hclipError
+    cmp  ax, si
+    jg   hclipError
+    cmp  ax, di
+    jge  leftOK
+    mov  ax, di
+leftOK:
+    cmp  cx, si
+    jle  rightOK
+    mov  cx, si
+rightOK:
+    clc
+    ret  0             (* ax = x1, bx = y1, cx = x2, cy clear *)
+
+hclipError:
+    stc
+    ret  0
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+xLtl = 1
+yLtl = 2
+xGbr = 4
+yGbr = 8
+
+extrn F$SgnDiv
+extrn N$SgnDiv
+select _DATA
+
+extrn __clip_tl
+extrn __clip_br
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __lclip :       (* ax = x1, bx = y1, cx = x2, dx = y2 *)
+
+    push bp
+    sub  si, si        (* set outcodes *)
+    mov  di, si
+    mov  bp, [__clip_tl][graph_xcoord]
+    cmp  ax, bp
+    jge  l1
+    or   di, xLtl
+l1:
+    cmp  cx, bp
+    jge  l2
+    or   si, xLtl
+l2:
+    mov  bp, [__clip_br][graph_xcoord]
+    cmp  ax, bp
+    jle  l3
+    or   di, xGbr
+l3:
+    cmp  cx, bp
+    jle  l4
+    or   si, xGbr
+l4:
+    mov  bp, [__clip_tl][graph_ycoord]
+    cmp  bx, bp
+    jge  l5
+    or   di, yLtl
+l5:
+    cmp  dx, bp
+    jge  l6
+    or   si, yLtl
+l6:
+    mov  bp, [__clip_br][graph_ycoord]
+    cmp  bx, bp
+    jle  l7
+    or   di, yGbr
+l7:
+    cmp  dx, bp
+    jle  l8
+    or   si, yGbr
+l8:
+clipLoop:
+    or   si, si
+    jnz  $NotZero
+    or   di, di
+    jz   near clipDone
+$NotZero:
+    test si, di
+    jnz  near clipNoLine
+
+    or   di, di
+    jnz  noSwap2
+    xchg ax, cx
+    xchg bx, dx
+    xchg di, si
+noSwap2:
+    push dx
+    test di, xLtl
+    jz   nC10
+    mov  bp, [__clip_tl][graph_xcoord]
+    mov  di, cx
+    sub  di, ax
+    mov  si, bp
+    sub  si, ax
+    mov  ax, dx
+    sub  ax, bx
+    imul si          (* result in ax, dx *)
+    push dx
+    push ax
+    mov  ax, di
+    cwd
+    push dx
+    push ax
+(*%F NearCall *)
+    call far F$SgnDiv
+(*%E *)
+(*%T NearCall *)
+    call N$SgnDiv
+(*%E *)
+    add  bx, ax
+    mov  ax, bp
+    jmp  near nC13
+nC10:
+    test di, yLtl
+    jz   nC11
+    mov  bp, [__clip_tl][graph_ycoord]
+    mov  di, dx
+    sub  di, bx
+    mov  si, bp
+    sub  si, bx
+    push ax
+    sub  ax, cx
+    neg  ax
+    imul si          (* result in ax, dx *)
+    push dx
+    push ax
+    mov  ax, di
+    cwd
+    push dx
+    push ax
+(*%F NearCall *)
+    call far F$SgnDiv
+(*%E *)
+(*%T NearCall *)
+    call N$SgnDiv
+(*%E *)
+    pop  dx
+    add  ax, dx
+    mov  bx, bp
+    jmp  nC13
+nC11:
+    test di, xGbr
+    jz   nC12
+    mov  bp, [__clip_br][graph_xcoord]
+    mov  di, cx
+    sub  di, ax
+    mov  si, bp
+    sub  si, ax
+    mov  ax, dx
+    sub  ax, bx
+    imul si          (* result in ax, dx *)
+    push dx
+    push ax
+    mov  ax, di
+    cwd
+    push dx
+    push ax
+(*%F NearCall *)
+    call far F$SgnDiv
+(*%E *)
+(*%T NearCall *)
+    call N$SgnDiv
+(*%E *)
+    add  bx, ax
+    mov  ax, bp
+    jmp  nC13
+nC12:
+    test di, yGbr
+    jz   nC13
+    mov  bp, [__clip_br][graph_ycoord]
+    mov  di, dx
+    sub  di, bx
+    mov  si, bp
+    sub  si, bx
+    push ax
+    sub  ax, cx
+    neg  ax
+    imul si          (* result in ax, dx *)
+    push dx
+    push ax
+    mov  ax, di
+    cwd
+    push dx
+    push ax
+(*%F NearCall *)
+    call far F$SgnDiv
+(*%E *)
+(*%T NearCall *)
+    call N$SgnDiv
+(*%E *)
+    pop  dx
+    add  ax, dx
+    mov  bx, bp
+nC13:
+    pop  dx
+    sub  si, si        (* set outcodes *)
+    sub  di, di
+    mov  bp, [__clip_tl][graph_xcoord]
+    cmp  ax, bp
+    jge  l11
+    or   di, xLtl
+l11:
+    cmp  cx, bp
+    jge  l12
+    or   si, xLtl
+l12:
+    mov  bp, [__clip_br][graph_xcoord]
+    cmp  ax, bp
+    jle  l13
+    or   di, xGbr
+l13:
+    cmp  cx, bp
+    jle  l14
+    or   si, xGbr
+l14:
+    mov  bp, [__clip_tl][graph_ycoord]
+    cmp  bx, bp
+    jge  l15
+    or   di, yLtl
+l15:
+    cmp  dx, bp
+    jge  l16
+    or   si, yLtl
+l16:
+    mov  bp, [__clip_br][graph_ycoord]
+    cmp  bx, bp
+    jle  l17
+    or   di, yGbr
+l17:
+    cmp  dx, bp
+    jle  l18
+    or   si, yGbr
+l18:
+    jmp  clipLoop
+
+clipDone:
+    cmp  ax, cx
+    jle  noSwap
+    xchg bx, dx
+    xchg ax, cx
+noSwap:
+    pop  bp
+    clc
+    ret  0
+
+clipNoLine:
+    pop  bp
+    stc
+    ret  0
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __hclip
+extrn __pixeladdr640x200
+select _DATA
+
+extrn __fgcolor
+
+select _DATA
+
+PropPix: db 0, 0FFH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+x1     = -2
+y1     = -4
+x2     = -6
+color  = -8
+locals =  8
+
+public __CGA640HLine :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   noDraw
+    mov  [bp][x1], ax
+    mov  [bp][y1], bx
+    mov  [bp][x2], cx
+    mov  [bp][color], dx
+    xchg ax, bx
+    call __pixeladdr640x200
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    mov  dl, 0FFH
+    shl  dh, cl
+    not  dh
+    mov  cx, [bp][x2]
+    and  cl, 7
+    xor  cl, 7
+    shl  dl, cl
+    mov  ax, [bp][x2]
+    mov  bx, [bp][x1]
+    mov  cl, 3
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, PropPix
+    mov  al, [bp][color]
+    xlat
+    or   dh, dh
+    js   byteAligned
+    or   cx, cx
+    jnz  multiByte
+    and  dl, dh
+    jmp  singleByte
+multiByte:
+    mov  ah, al
+    and  ah, dh
+    not  dh
+    and  es:[di], dh
+    or   es:[di], ah
+    inc  di
+    dec  cx
+byteAligned:
+rep ; stosb
+singleByte:
+    and  al, dl
+    not  dl
+    and  es:[di], dl
+    or   es:[di], al
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __hclip
+extrn __pixeladdr320x200
+select _DATA
+
+select _DATA
+
+PropPix: db 0, 55H, 0AAH, 0FFH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+x1     = -2
+y1     = -4
+x2     = -6
+color  = -8
+locals =  8
+
+public __CGA320HLine :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   noDraw
+    mov  [bp][x1], ax
+    mov  [bp][y1], bx
+    mov  [bp][x2], cx
+    mov  [bp][color], dx
+    xchg ax, bx
+    call __pixeladdr320x200
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    mov  dl, 0FFH
+    shl  dh, cl
+    not  dh
+    mov  cx, [bp][x2]
+    and  cl, 3
+    xor  cl, 3
+    shl  cl, 1
+    shl  dl, cl
+    mov  ax, [bp][x2]
+    mov  bx, [bp][x1]
+    mov  cl, 2
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, PropPix
+    mov  al, [bp][color]
+    xlat
+    or   dh, dh
+    js   byteAligned
+    or   cx, cx
+    jnz  multiByte
+    and  dl, dh
+    jmp  singleByte
+multiByte:
+    mov  ah, al
+    and  ah, dh
+    not  dh
+    and  es:[di], dh
+    or   es:[di], ah
+    inc  di
+    dec  cx
+byteAligned:
+rep ; stosb
+singleByte:
+    and  al, dl
+    not  dl
+    and  es:[di], dl
+    or   es:[di], al
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __hclip
+extrn __pixeladdrHerc
+select _DATA
+
+select _DATA
+
+PropPix: db 0, 0FFH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+x1     = -2
+y1     = -4
+x2     = -6
+color  = -8
+locals =  8
+
+public __HercHLine :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   noDraw
+    mov  [bp][x1], ax
+    mov  [bp][y1], bx
+    mov  [bp][x2], cx
+    mov  [bp][color], dx
+    xchg ax, bx
+    call __pixeladdrHerc
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    mov  dl, 0FFH
+    shl  dh, cl
+    not  dh
+    mov  cx, [bp][x2]
+    and  cl, 7
+    xor  cl, 7
+    shl  dl, cl
+    mov  ax, [bp][x2]
+    mov  bx, [bp][x1]
+    mov  cl, 3
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, PropPix
+    mov  al, [bp][color]
+    xlat
+    or   dh, dh
+    js   byteAligned
+    or   cx, cx
+    jnz  multiByte
+    and  dl, dh
+    jmp  singleByte
+multiByte:
+    mov  ah, al
+    and  ah, dh
+    not  dh
+    and  es:[di], dh
+    or   es:[di], ah
+    inc  di
+    dec  cx
+byteAligned:
+rep ; stosb
+singleByte:
+    and  al, dl
+    not  dl
+    and  es:[di], dl
+    or   es:[di], al
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __hclip
+extrn __pixeladdrEGA2
+extrn __EGAxlat
+
+select _DATA
+
+extrn __EGAtranslate
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+x1     = -2
+y1     = -4
+x2     = -6
+EGAcolor = -8
+locals   =  8
+
+public __EGAHLine :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   near noDraw
+    mov  [bp][x1], ax
+    mov  [bp][y1], bx
+    mov  [bp][x2], cx
+
+    mov  ax, dx
+    cmp  byte [__EGAtranslate], 0
+    jz   notNeeded
+    call __EGAxlat
+notNeeded:
+    mov  [bp][EGAcolor], ax
+    mov  dx, 3CEH
+    mov  ax, 5H
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ah, [bp][EGAcolor]
+    sub  al, al
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, 0FF01H
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 3
+    mov  ah, 0
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, [bp][y1]
+    mov  bx, [bp][x1]
+    call __pixeladdrEGA2
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    shl  dh, cl
+    not  dh
+    mov  cx, [bp][x2]
+    and  cl, 7
+    xor  cl, 7
+    mov  dl, 0FFH
+    shl  dl, cl
+    mov  ax, [bp][x2]
+    mov  bx, [bp][x1]
+    mov  cl, 3
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, dx
+    mov  dx, 3CEH
+    mov  al, 8
+    push es
+    pop  ds
+    mov  si, di
+    or   bh, bh
+    js   byteAligned
+    or   cx, cx
+    jnz  multiByte
+    and  bl, bh
+    jmp  singleByte
+multiByte:
+    mov  ah, bh
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    movsb
+    dec  cx
+byteAligned:
+    mov  ah, 0FFH
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+rep ; movsb
+singleByte:
+    mov  ah, bl
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    movsb
+    sub  ax, ax
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    inc  ax
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 3
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, 0FF08H
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+noDraw:
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn  __pixeladdrEGA2
+extrn  __hclip
+
+select _DATA
+
+EGA2x1      : dw 0
+EGA2y1      : dw 0
+EGA2x2      : dw 0
+EGA2color   : dw 0
+propPix     : db 0, 0FFH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGA2HLine :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   noDraw
+    mov  [EGA2x1], ax
+    mov  [EGA2y1], bx
+    mov  [EGA2x2], cx
+    mov  [EGA2color], dx
+    mov  ax, [EGA2y1]
+    mov  bx, [EGA2x1]
+    call __pixeladdrEGA2
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    mov  dl, 0FFH
+    shl  dh, cl
+    not  dh
+    mov  cx, [EGA2x2]
+    and  cl, 7
+    xor  cl, 7
+    shl  dl, cl
+    mov  ax, [EGA2x2]
+    mov  bx, [EGA2x1]
+    mov  cl, 3
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, propPix
+    mov  al, [EGA2color]
+    xlat
+    or   dh, dh
+    js   fullByte
+    or   cx, cx
+    jnz  multiByte
+    and  dl, dh
+    jmp  lastByte
+multiByte:
+    mov  ah, al
+    and  ah, dh
+    not  dh
+    and  es:[di], dh
+    or   es:[di], ah
+    inc  di
+    dec  cx
+fullByte:
+rep ; stosb
+lastByte:
+    and  al, dl
+    not  dl
+    and  es:[di], dl
+    or   es:[di], al
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __hclip
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+mask  =  frame
+
+public __VGAHLine :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __hclip
+    jc   noDraw
+    mov  di, cx
+    sub  di, ax
+    inc  di
+    push dx
+    mov  dx, 320
+    xchg bx, ax
+    mul  dx
+    add  ax, bx
+    mov  cx, di
+(*%T _XTD *)
+    extrn __A000h
+    mov  bx, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  bx, 0A000H
+(*%E *)
+    mov  es, bx
+    mov  di, ax
+    pop  ax
+rep ; stosb
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+lstyle = frame
+
+x1     = -2
+y1     = -4
+x2     = -6
+y2     = -8
+inc1   = -10
+inc2   = -12
+mask   = -14
+draw   = -16
+locals =  16
+
+verticalLine:
+    mov  ax, [bp][y1]
+    mov  bx, [bp][y2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  Ps
+    neg  cx
+    mov  ax, bx
+Ps:
+    inc  cx
+    mov  di, [bp][x1]
+    mov  dx, 320
+    mul  dx
+    add  di, ax
+    dec  si
+    mov  al, [__fgcolor]
+    mov  bx, [bp][lstyle]
+    cmp  bx, -1
+    jne  vertMask
+vertLoop:
+    stosb
+    add  di, si
+    loop vertLoop
+    jmp  lineExit
+vertMask:
+    mov  dx, [bp][mask]
+vertMLoop:
+    test dx, bx
+    jz   noStore
+    stosb
+cont:
+    add  di, si
+    rol  dx, 1
+    loop vertMLoop
+    jmp  lineExit
+noStore:
+    inc  di
+    jmp  cont
+
+VGAhoriz:
+    mov  ax, [bp][y1]
+    mov  bx, [bp][x1]
+    mov  dx, 320
+    mul  dx
+    add  ax, bx
+    mov  di, ax
+    inc  cx
+    mov  al, [__fgcolor]
+    mov  bx, [bp][lstyle]
+    mov  dx, [bp][mask]
+hLoop:
+    test bx, dx
+    jz   noStore5
+    mov  es:[di], al
+noStore5:
+    inc  di
+    rol  dx, 1
+    loop hLoop
+    jmp  lineExit
+
+lowLine:
+    test dx, [bp][lstyle]
+    jz   noStore2
+    stosb
+cont2:
+    rol  dx, 1
+    or   si, si
+    jns  lPos
+    add  si, [bp][inc1]
+    loop lowLine
+    jmp  lineExit
+noStore2:
+    inc  di
+    jmp  cont2
+lPos:
+    add  si, [bp][inc2]
+    add  di, bx
+    loop lowLine
+    jmp  lineExit
+
+highLine:
+    test dx, [bp][lstyle]
+    jz  noStore3
+    stosb
+cont3:
+    rol  dx, 1
+    add  di, bx
+    or   si, si
+    jns  hPos
+    add  si, [bp][inc1]
+    dec  di
+    loop highLine
+    jmp  lineExit
+noStore3:
+    inc  di
+    jmp  cont3
+hPos:
+    add  si, [bp][inc2]
+    loop highLine
+
+lineExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __VGALine :    (* ax = x1, bx = y1, cx = x2, dx = y2 *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   lineExit
+    mov  [bp][x1], ax
+    mov  [bp][y1], bx
+    mov  [bp][x2], cx
+    mov  [bp][y2], dx
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  es, ax
+
+    mov  si, 320
+    sub  cx, [bp][x1]
+    jz   verticalLine
+    push cx
+    mov  cx, [bp][x1]
+    and  cl, 15
+    mov  bx, 1
+    shl  bx, cl
+    mov  [bp][mask], bx
+    pop  cx
+    mov  bx, [bp][y2]
+    sub  bx, [bp][y1]
+    jz   VGAhoriz
+    jns  slopePos
+    neg  bx
+    neg  si
+slopePos:
+    push si
+    mov  word [bp][draw], lowLine
+    cmp  bx, cx
+    jle  useLowSlope
+    mov  word [bp][draw], highLine
+    xchg  bx, cx
+useLowSlope:
+    shl  bx, 1
+    mov  [bp][inc1], bx
+    sub  bx, cx
+    mov  si, bx
+    sub  bx, cx
+    mov  [bp][inc2], bx
+    mov  ax, [bp][y1]
+    mov  di, [bp][x1]
+    mov  dx, 320
+    mul  dx
+    add  di, ax
+    inc  cx
+    pop  bx
+    mov  al, [__fgcolor]
+    mov  dx, [bp][mask]
+    jmp  [bp][draw]
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __VGAleftscan :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    mov  di, ax
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    mov  al, bl
+scanLoop:
+    dec  di
+    dec  dx
+    cmp  al, es:[di]
+    je   scanDone
+    cmp  dx, cx
+    jge  scanLoop
+scanDone:
+    mov  ax, dx
+    inc  ax
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __VGArightscan :
+
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    mov  di, ax
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    mov  al, bl
+scanLoop:
+    inc  di
+    inc  dx
+    cmp  al, es:[di]
+    je   scanDone
+    cmp  dx, cx
+    jle  scanLoop
+scanDone:
+    mov  ax, dx
+    dec  ax
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdr640x200
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+
+L640x1      : dw 0
+L640y1      : dw 0
+L640x2      : dw 0
+L640y2      : dw 0
+L640inc1    : dw 0
+L640inc2    : dw 0
+L640leafinc : dw 0
+L640draw    : dw 0
+L640lstyle  : dw 0
+L640buffer  : dw 0
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+L640verticalLine:
+    mov  ax, [L640y1]
+    mov  bx, [L640y2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  L640dyPos
+    neg  cx
+    mov  ax, bx
+L640dyPos:
+    inc  cx
+    mov  bx, [L640x1]
+    push cx
+    call __pixeladdr640x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    not  ah
+    pop  cx
+    test bx, si
+    jz   L640int1
+    xchg si, di
+L640int1:
+    or   al, al
+    jz   L640pixVal0
+L640vertLoop:
+    test bp, [L640lstyle]
+    jz   L640noStore1
+    or   es:[bx], al
+L640noStore1:
+    rol  bp, 1
+    add  bx, si
+    xchg si, di
+    loop L640vertLoop
+    jmp  near L640lineExit
+L640pixVal0:
+    test bp, [L640lstyle]
+    jz   L640noStore2
+    and  es:[bx], ah
+L640noStore2:
+    rol  bp, 1
+    add  bx, si
+    xchg si, di
+    loop L640pixVal0
+    jmp  near L640lineExit
+
+L640horizLine:
+    mov  ax, [L640y1]
+    mov  bx, [L640x1]
+    call __pixeladdr640x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    mov  cx, [L640x2]
+    sub  cx, [L640x1]
+    inc  cx
+    mov  di, [L640lstyle]
+    mov  si, -1
+L640horizSlope:
+    mov  ah, es:[bx]
+L640horizLoop:
+    and  ah, dh
+    test bp, di
+    jz   L640noStore5
+    or   ah, dl
+L640noStore5:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dh, 1
+    jnc  L640maskLeft5
+    loop L640horizLoop
+    mov  es:[bx], ah
+    jmp  near L640lineExit
+L640maskLeft5:
+    mov  es:[bx], ah
+    inc  bx
+    dec  cx
+    or   si, si
+    js   notYet
+    mov  [si][L640buffer], ah
+notYet:
+    cmp  si, 1
+    jz  storeBytes
+    inc  si
+notEnough:
+    jcxz near L640lineExit
+    jmp L640horizSlope
+
+storeBytes:
+    mov  si, cx
+    and  si, 7
+    push si
+    shr  cx, 1
+    shr  cx, 1
+    shr  cx, 1
+    jcxz abort
+    sub  si, si
+sbLoop:
+    mov  ah, [si][L640buffer]
+    mov  es:[bx], ah
+    inc  si
+    inc  bx
+    and  si, 2
+    loop sbLoop
+abort:
+    pop  cx
+    jmp  notEnough
+
+L640lowSlope:
+    mov  ah, es:[bx]
+L640lowLoop:
+    and  ah, dh
+    test bp, [L640lstyle]
+    jz   L640noStore3
+    or   ah, dl
+L640noStore3:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dh, 1
+    jnc  L640maskLeft
+    or   di, di
+    jns  L640dPos
+    add  di, [L640inc1]
+    loop L640lowLoop
+    mov  es:[bx], ah
+    jmp  L640lineExit
+L640dPos:
+    add  di, [L640inc2]
+    mov  es:[bx], ah
+    add  bx, si
+    xchg si, [L640leafinc]
+    loop L640lowSlope
+    jmp  L640lineExit
+L640maskLeft:
+    mov  es:[bx], ah
+    inc  bx
+    or   di, di
+    jns  L640dPos2
+    add  di, [L640inc1]
+    loop L640lowSlope
+    jmp  L640lineExit
+L640dPos2:
+    add  di, [L640inc2]
+    add  bx, si
+    xchg si, [L640leafinc]
+    loop L640lowSlope
+    jmp  L640lineExit
+
+L640highSlope:
+    and  es:[bx], dh
+    test bp, [L640lstyle]
+    jz   L640noStore4
+    or   es:[bx], dl
+L640noStore4:
+    rol  bp, 1
+    add  bx, si
+    xchg si, [L640leafinc]
+    or   di, di
+    jns  L640dPos3
+    add  di, [L640inc1]
+    loop L640highSlope
+    jmp  L640lineExit
+L640dPos3:
+    add  di, [L640inc2]
+    ror  dl ,1
+    ror  dh, 1
+    cmc
+    adc  bx, 0
+    loop L640highSlope
+
+L640lineExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __CGA640Line :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   L640lineExit
+    mov  [L640x1], ax
+    mov  [L640y1], bx
+    mov  [L640x2], cx
+    mov  [L640y2], dx
+    mov  cx, [bp][frame]
+    mov  [L640lstyle], cx
+    mov  cx, ax
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  si, 2000H
+    mov  di, 80-2000H
+    mov  cx, [L640x2]
+    sub  cx, ax
+    jz   L640verticalLine
+    mov  bx, [L640y2]
+    sub  bx, [L640y1]
+    je   L640horizLine
+    jns  L640posInc
+    neg  bx
+    xchg si, di
+    neg  si
+    neg  di
+L640posInc:
+    mov  [L640leafinc], di
+    mov  word [L640draw], L640lowSlope
+    cmp  bx, cx
+    jle  L640useLowSlope
+    mov  word [L640draw], L640highSlope
+    xchg bx, cx
+L640useLowSlope:
+    shl  bx, 1
+    mov  [L640inc1], bx
+    sub  bx, cx
+    mov  di, bx
+    sub  bx, cx
+    mov  [L640inc2], bx
+    push cx
+    mov  bx, [L640x1]
+    mov  ax, [L640y1]
+    call __pixeladdr640x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    pop  cx
+    inc  cx
+    test bx, 2000H
+    jz   L640iLeave0
+    xchg si, [L640leafinc]
+L640iLeave0:
+    jmp  [L640draw]
+
+(**************************************************************************)
+
+section
+extrn __pixeladdr320x200
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+
+L320x1      : dw 0
+L320y1      : dw 0
+L320x2      : dw 0
+L320y2      : dw 0
+L320inc1    : dw 0
+L320inc2    : dw 0
+L320leafinc : dw 0
+L320draw    : dw 0
+L320lstyle  : dw 0
+L320buffer  : dw 0, 0
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+L320verticalLine:
+    mov  ax, [L320y1]
+    mov  bx, [L320y2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  L320dyPos
+    neg  cx
+    mov  ax, bx
+L320dyPos:
+    inc  cx
+    mov  bx, [L320x1]
+    push cx
+    call __pixeladdr320x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    not  ah
+    pop  cx
+    test bx, si
+    jz   L320vertLoop
+    xchg si, di
+L320vertLoop:
+    and  es:[bx], ah
+    test bp, [L320lstyle]
+    jz   L320noStore1
+    or   es:[bx], al
+L320noStore1:
+    rol  bp, 1
+    add  bx, si
+    xchg si, di
+    loop L320vertLoop
+    jmp  near L320lineExit
+
+L320horizLine:
+    mov  ax, [L320y1]
+    mov  bx, [L320x1]
+    call __pixeladdr320x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    mov  cx, [L320x2]
+    sub  cx, [L320x1]
+    inc  cx
+    mov  di, [L320lstyle]
+    mov  si, -1
+L320horizSlope:
+    mov  ah, es:[bx]
+L320horizLoop:
+    and  ah, dh
+    test bp, di
+    jz   L320noStore5
+    or   ah, dl
+L320noStore5:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dl, 1
+    ror  dh, 1
+    ror  dh, 1
+    jnc  L320maskLeft5
+    loop L320horizLoop
+    mov  es:[bx], ah
+    jmp  near L320lineExit
+L320maskLeft5:
+    mov  es:[bx], ah
+    inc  bx
+    dec  cx
+    or   si, si
+    js   notYet
+    mov  [si][L320buffer], ah
+notYet:
+    cmp  si, 3
+    jz  storeBytes
+    inc  si
+notEnough:
+    jcxz near L320lineExit
+    jmp L320horizSlope
+
+storeBytes:
+    mov  si, cx
+    and  si, 3
+    push si
+    shr  cx, 1
+    shr  cx, 1
+    jcxz abort
+    sub  si, si
+sbLoop:
+    mov  ah, [si][L320buffer]
+    mov  es:[bx], ah
+    inc  si
+    inc  bx
+    and  si, 3
+    loop sbLoop
+abort:
+    pop  cx
+    jmp  notEnough
+
+L320lowSlope:
+    mov  ah, es:[bx]
+L320lowLoop:
+    and  ah, dh
+    test bp, [L320lstyle]
+    jz   L320noStore3
+    or   ah, dl
+L320noStore3:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dl, 1
+    ror  dh, 1
+    ror  dh, 1
+    jnc  L320maskLeft
+    or   di, di
+    jns  L320dPos
+    add  di, [L320inc1]
+    loop L320lowLoop
+    mov  es:[bx], ah
+    jmp  L320lineExit
+L320dPos:
+    add  di, [L320inc2]
+    mov  es:[bx], ah
+    add  bx, si
+    xchg si, [L320leafinc]
+    loop L320lowSlope
+    jmp  L320lineExit
+L320maskLeft:
+    mov  es:[bx], ah
+    inc  bx
+    or   di, di
+    jns  L320dPos2
+    add  di, [L320inc1]
+    loop L320lowSlope
+    jmp  L320lineExit
+L320dPos2:
+    add  di, [L320inc2]
+    add  bx, si
+    xchg si, [L320leafinc]
+    loop L320lowSlope
+    jmp  L320lineExit
+
+L320highSlope:
+    and  es:[bx], dh
+    test bp, [L320lstyle]
+    jz   L320noStore4
+    or   es:[bx], dl
+L320noStore4:
+    rol  bp, 1
+    add  bx, si
+    xchg si, [L320leafinc]
+    or   di, di
+    jns  L320dPos3
+    add  di, [L320inc1]
+    loop L320highSlope
+    jmp  L320lineExit
+L320dPos3:
+    add  di, [L320inc2]
+    ror  dl ,1
+    ror  dl ,1
+    ror  dh, 1
+    ror  dh, 1
+    cmc
+    adc  bx, 0
+    loop L320highSlope
+
+L320lineExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __CGA320Line :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   L320lineExit
+    mov  [L320x1], ax
+    mov  [L320y1], bx
+    mov  [L320x2], cx
+    mov  [L320y2], dx
+    mov  cx, [bp][frame]
+    mov  [L320lstyle], cx
+    mov  cx, ax
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  si, 2000H
+    mov  di, 80-2000H
+    mov  cx, [L320x2]
+    sub  cx, ax
+    jz   L320verticalLine
+    mov  bx, [L320y2]
+    sub  bx, [L320y1]
+    je   L320horizLine
+    jns  L320posInc
+    neg  bx
+    xchg si, di
+    neg  si
+    neg  di
+L320posInc:
+    mov  [L320leafinc], di
+    mov  word [L320draw], L320lowSlope
+    cmp  bx, cx
+    jle  L320useLowSlope
+    mov  word [L320draw], L320highSlope
+    xchg bx, cx
+L320useLowSlope:
+    shl  bx, 1
+    mov  [L320inc1], bx
+    sub  bx, cx
+    mov  di, bx
+    sub  bx, cx
+    mov  [L320inc2], bx
+    push cx
+    mov  bx, [L320x1]
+    mov  ax, [L320y1]
+    call __pixeladdr320x200
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    pop  cx
+    inc  cx
+    test bx, 2000H
+    jz   L320iLeave0
+    xchg si, [L320leafinc]
+L320iLeave0:
+    jmp  [L320draw]
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdrHerc
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+
+Hercx1      : dw 0
+Hercy1      : dw 0
+Hercx2      : dw 0
+Hercy2      : dw 0
+Hercinc1    : dw 0
+Hercinc2    : dw 0
+Hercleafinc : dw 0
+Hercdraw    : dw 0
+Herclstyle  : dw 0
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+HERCverticalLine:
+    mov  ax, [Hercy1]
+    mov  bx, [Hercy2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  HERCdyPos
+    neg  cx
+    mov  ax, bx
+HERCdyPos:
+    inc  cx
+    mov  bx, [Hercx1]
+    push cx
+    call __pixeladdrHerc
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    not  ah
+    pop  cx
+    or   al, al
+    jz   HERCpixVal0
+HERCvertLoop:
+    test bp, [Herclstyle]
+    jz   HERCnoStore1
+    or   es:[bx], al
+HERCnoStore1:
+    rol  bp, 1
+    add  bx, si
+    jns  iLeave2
+    add  bx, di
+iLeave2:
+    loop HERCvertLoop
+    jmp  near HERClineExit
+HERCpixVal0:
+    test bp, [Herclstyle]
+    jz   HERCnoStore2
+    and  es:[bx], ah
+HERCnoStore2:
+    rol  bp, 1
+    add  bx, si
+    jns  iLeave3
+    add  bx, di
+iLeave3:
+    loop HERCpixVal0
+    jmp  near HERClineExit
+
+HERClowSlope:
+    mov  ah, es:[bx]
+HERClowLoop:
+    and  ah, dh
+    test bp, [Herclstyle]
+    jz   HERCnoStore3
+    or   ah, dl
+HERCnoStore3:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dh, 1
+    jnc  HERCmaskLeft
+    or   di, di
+    jns  HERCdPos
+    add  di, [Hercinc1]
+    loop HERClowLoop
+    mov  es:[bx], ah
+    jmp  HERClineExit
+HERCdPos:
+    add  di, [Hercinc2]
+    mov  es:[bx], ah
+    add  bx, si
+    jns  HERCnotLastInt
+    add  bx, [Hercleafinc]
+HERCnotLastInt:
+    loop HERClowSlope
+    jmp  HERClineExit
+HERCmaskLeft:
+    mov  es:[bx], ah
+    inc  bx
+    or   di, di
+    jns  HERCdPos2
+    add  di, [Hercinc1]
+    loop HERClowSlope
+    jmp  HERClineExit
+HERCdPos2:
+    add  di, [Hercinc2]
+    add  bx, si
+    jns  HERCnotLastInt2
+    add  bx, [Hercleafinc]
+HERCnotLastInt2:
+    loop HERClowSlope
+    jmp  HERClineExit
+
+HERChighSlope:
+    and  es:[bx], dh
+    test bp, [Herclstyle]
+    jz   HERCnoStore4
+    or   es:[bx], dl
+HERCnoStore4:
+    rol  bp, 1
+    add  bx, si
+    jns  HERCnotLastInt3
+    add  bx, [Hercleafinc]
+HERCnotLastInt3:
+    or   di, di
+    jns  HERCdPos3
+    add  di, [Hercinc1]
+    loop HERChighSlope
+    jmp  HERClineExit
+HERCdPos3:
+    add  di, [Hercinc2]
+    ror  dl ,1
+    ror  dh, 1
+    cmc
+    adc  bx, 0
+    loop HERChighSlope
+
+HERClineExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __HercLine :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   HERClineExit
+    mov  [Hercx1], ax
+    mov  [Hercy1], bx
+    mov  [Hercx2], cx
+    mov  [Hercy2], dx
+    mov  cx, [bp][frame]
+    mov  [Herclstyle], cx
+    mov  cx, ax
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  si, 2000H
+    mov  di, 90-8000H
+    mov  cx, [Hercx2]
+    sub  cx, ax
+    jz   HERCverticalLine
+    mov  bx, [Hercy2]
+    sub  bx, [Hercy1]
+    jns  HERCposInc
+    neg  bx
+    neg  si
+    neg  di
+HERCposInc:
+    mov  [Hercleafinc], di
+    mov  word [Hercdraw], HERClowSlope
+    cmp  bx, cx
+    jle  HERCuseLowSlope
+    mov  word [Hercdraw], HERChighSlope
+    xchg bx, cx
+HERCuseLowSlope:
+    shl  bx, 1
+    mov  [Hercinc1], bx
+    sub  bx, cx
+    mov  di, bx
+    sub  bx, cx
+    mov  [Hercinc2], bx
+    push cx
+    mov  bx, [Hercx1]
+    mov  ax, [Hercy1]
+    call __pixeladdrHerc
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    pop  cx
+    inc  cx
+    jmp  [Hercdraw]
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn  __pixeladdrEGA2
+extrn __EGAxlat
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+extrn __width
+extrn __EGAtranslate
+
+EGAx1      : dw 0
+EGAy1      : dw 0
+EGAx2      : dw 0
+EGAy2      : dw 0
+EGAinc1    : dw 0
+EGAinc2    : dw 0
+EGAvertinc1 : dw 0
+EGAdraw    : dw 0
+EGAcolor   : dw 0
+EGAlstyle  : dw 0
+EGAmaskbit : dw 0
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+    out  byte dx, ax
+
+EGAverticalLine:
+    mov  cx, [EGAx1]
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  ax, [EGAy1]
+    mov  bx, [EGAy2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  EGAdPos
+    neg  cx
+    mov  ax, bx
+EGAdPos:
+    inc  cx
+    mov  bx, [EGAx1]
+    push cx
+    call __pixeladdrEGA2
+    shl  ah, cl
+    mov  al, 8
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    pop  cx
+    mov  dx, [EGAlstyle]
+EGAvertLoop:
+    test bp, dx
+    jz   EGAnoStore1
+    or   byte es:[bx], 0FFH
+EGAnoStore1:
+    rol  bp, 1
+    add  bx, si
+    loop EGAvertLoop
+    jmp  near EGAlineExit
+
+EGAlowSlope:
+    mov  bp, [EGAinc1]
+EGAlowSlopeL:
+    sub  ah, ah
+EGAlowLoop:
+    or   ah, bl
+    ror  bl, 1
+    jc   EGAmaskLeft
+    or   si, si
+    jns  EGAdPos1
+    add  si, bp
+    loop EGAlowLoop
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    jmp  near EGAlineExit
+EGAdPos1:
+    add  si, [EGAinc2]
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    add  di, [EGAvertinc1]
+    loop EGAlowSlopeL
+    jmp  near EGAlineExit
+EGAmaskLeft:
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    inc  di
+    or   si, si
+    jns  EGAdPos2
+    add  si, bp
+    loop EGAlowSlopeL
+    jmp  near EGAlineExit
+EGAdPos2:
+    add  si, [EGAinc2]
+    add  di, [EGAvertinc1]
+    loop EGAlowSlopeL
+    jmp  near EGAlineExit
+
+EGAlowSlopeM:
+    sub  ah, ah
+EGAlowLoopM:
+    push ax
+    mov  ax, [EGAmaskbit]
+    test ax, [EGAlstyle]
+    pop  ax
+    jz   EGAnoStore3M
+    or   ah, bl
+EGAnoStore3M:
+    rol  word [EGAmaskbit], 1
+    ror  bl, 1
+    jc   EGAmaskLeftM
+    or   si, si
+    jns  EGAdPos1M
+    add  si, [EGAinc1]
+    loop EGAlowLoopM
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    jmp  near EGAlineExit
+EGAdPos1M:
+    add  si, [EGAinc2]
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    add  di, [EGAvertinc1]
+    loop EGAlowSlopeM
+    jmp  EGAlineExit
+EGAmaskLeftM:
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    inc  di
+    or   si, si
+    jns  EGAdPos2M
+    add  si, [EGAinc1]
+    loop EGAlowSlopeM
+    jmp  EGAlineExit
+EGAdPos2M:
+    add  si, [EGAinc2]
+    add  di, [EGAvertinc1]
+    loop EGAlowSlopeM
+    jmp  EGAlineExit
+
+
+EGAhighSlope:
+    mov  bp, [EGAinc1]
+    mov  bx, [EGAvertinc1]
+EGAhighLoop:
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+    add  di, bx
+    or   si, si
+    jns  EGAdPos3
+    add  si, bp
+    loop EGAhighLoop
+    jmp  EGAlineExit
+EGAdPos3:
+    add  si, [EGAinc2]
+    ror  ah, 1
+    adc  di, 0
+    loop EGAhighLoop
+    jmp  EGAlineExit
+
+EGAhighSlopeM:
+    mov  bp, [EGAinc1]
+    mov  bx, [EGAvertinc1]
+EGAhighLoopM:
+    push ax
+    mov  ax, [EGAmaskbit]
+    test ax, [EGAlstyle]
+    pop  ax
+    jz   EGAnoStore4M
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    or   byte es:[di], 0FFH
+EGAnoStore4M:
+    rol  word [EGAmaskbit], 1
+    add  di, bx
+    or   si, si
+    jns  EGAdPos3M
+    add  si, bp
+    loop EGAhighLoopM
+    jmp  EGAlineExit
+EGAdPos3M:
+    add  si, [EGAinc2]
+    ror  ah, 1
+    adc  di, 0
+    loop EGAhighLoopM
+
+EGAlineExit:
+    mov  dx, 3CEH
+    sub  ax, ax
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    inc  ax
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 3
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, 0FF08H
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+noDraw:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __EGALine :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   noDraw
+    mov  [EGAx1], ax
+    mov  [EGAy1], bx
+    mov  [EGAx2], cx
+    mov  [EGAy2], dx
+    mov  ax, [bp][frame]
+    mov  [EGAlstyle], ax
+    mov  ax, [__fgcolor]
+    cmp  byte [__EGAtranslate], 0
+    jz   notNeeded
+    call __EGAxlat
+notNeeded:
+    mov  [EGAcolor], ax
+    mov  dx, 3CEH
+    mov  ax, 5H
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ah, [EGAcolor]
+    sub  al, al
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, 0FF01H
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 3
+    mov  ah, 0
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+
+    mov  si, [__width]
+    mov  cx, [EGAx2]
+    mov  ax, [EGAx1]
+    sub  cx, ax
+    jz   EGAverticalLine
+    mov  bx, [EGAy2]
+    sub  bx, [EGAy1]
+    jns  EGAposInc
+    neg  bx
+    neg  si
+EGAposInc:
+    mov  [EGAvertinc1], si
+    cmp  bx, cx
+    jle  EGAuseLowSlope
+    mov  bp, 1
+    xchg bx, cx
+    jmp  EGAgotSlope
+EGAuseLowSlope:
+    mov  bp, 2
+EGAgotSlope:
+    shl  bx, 1
+    mov  [EGAinc1], bx
+    sub  bx, cx
+    mov  si, bx
+    sub  bx, cx
+    mov  [EGAinc2], bx
+    push cx
+    mov  bx, [EGAx1]
+    mov  ax, [EGAy1]
+    call __pixeladdrEGA2
+    mov  di, bx
+    shl  ah, cl
+    mov  bl, ah
+    mov  al, 8
+    pop  cx
+    inc  cx
+    cmp  word [EGAlstyle], -1
+    jne  EGAMaskSet
+    cmp  bp, 1
+    je   EGAhighSlope
+    jmp  EGAlowSlope
+EGAMaskSet:
+    mov  [EGAdraw], bp
+    push cx
+    mov  cx, [EGAx1]
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  [EGAmaskbit], bp
+    pop  cx
+    cmp  byte [EGAdraw], 1
+    je   EGAhighSlopeM
+    jmp  EGAlowSlopeM
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn  __pixeladdrEGA2
+extrn __lclip
+
+select _DATA
+
+extrn __fgcolor
+extrn __width
+
+EGA2x1      : dw 0
+EGA2y1      : dw 0
+EGA2x2      : dw 0
+EGA2y2      : dw 0
+EGA2inc1    : dw 0
+EGA2inc2    : dw 0
+EGA2draw    : dw 0
+EGA2lstyle  : dw 0
+propPix     : db 0, 0FFH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+rotate:
+    push cx
+    push ax
+    mov  cx, 1
+    mov  si, 8000H
+    sub  ax, ax
+rotLoop:
+    test bx, cx
+    jz   zeroBit
+    or   ax, si
+zeroBit:
+    shr  si, 1
+    shl  cx, 1
+    jc   rotDone
+    jmp  rotLoop
+rotDone:
+    mov  bx, ax
+    pop  ax
+    pop  cx
+    ret  0
+
+EGA2verticalLine:
+    mov  cx, [EGA2x1]
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    mov  ax, [EGA2y1]
+    mov  bx, [EGA2y2]
+    mov  cx, bx
+    sub  cx, ax
+    jge  EGA2dPos
+    neg  cx
+    mov  ax, bx
+EGA2dPos:
+    inc  cx
+    mov  bx, [EGA2x1]
+    push cx
+    call __pixeladdrEGA2
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    not  ah
+    pop  cx
+    mov  dx, [EGA2lstyle]
+    or   al, al
+    jz   EGA2vertLoop2
+EGA2vertLoop1:
+    test bp, dx
+    jz   EGA2noStore1
+    or   es:[bx], al
+EGA2noStore1:
+    rol  bp, 1
+    add  bx, si
+    loop EGA2vertLoop1
+    jmp  near EGA2lineExit
+EGA2vertLoop2:
+    test bp, dx
+    jz   EGA2noStore2
+    and  es:[bx], ah
+EGA2noStore2:
+    rol  bp, 1
+    add  bx, si
+    loop EGA2vertLoop2
+    jmp  near EGA2lineExit
+
+EGA2horiz:
+    mov  ax, [EGA2y1]
+    mov  bx, [EGA2x1]
+    call __pixeladdrEGA2
+    mov  di, bx
+    mov  dh, ah
+    not  dh
+    mov  dl, 0FFH
+    shl  dh, cl
+    not  dh
+    mov  cx, [EGA2x2]
+    and  cl, 7
+    xor  cl, 7
+    shl  dl, cl
+    mov  ax, [EGA2x2]
+    mov  bx, [EGA2x1]
+    mov  cl, 3
+    shr  ax, cl
+    shr  bx, cl
+    mov  cx, ax
+    sub  cx, bx
+    mov  bx, propPix
+    mov  al, [__fgcolor]
+    xlat
+    mov  bx, [EGA2lstyle]
+    call rotate
+    test di, 1
+    jz   maskSetOK
+    xchg bh, bl
+maskSetOK:
+    mov  bp, ax
+    and  al, bh
+    or   dh, dh
+    js   fullByte
+    or   cx, cx
+    jnz  multiByte
+    and  dl, dh
+    jmp  lastByte
+multiByte:
+    mov  ah, al
+    and  ah, dh
+    not  dh
+    and  es:[di], dh
+    or   es:[di], ah
+    inc  di
+    dec  cx
+fullByte:
+    mov  ax, bp
+    xchg bh, bl
+    and  al, bh
+    jcxz lastByte
+    stosb
+    loop fullByte
+lastByte:
+    and  al, dl
+    not  dl
+    and  es:[di], dl
+    or   es:[di], al
+    jmp  near EGA2lineExit
+
+
+EGA2lowSlope:
+    mov  bp, [EGA2inc1]
+EGA2lowSlopeL:
+    mov  ah, es:[bx]
+EGA2lowLoop:
+    and  ah, dh
+    or   ah, dl
+    ror  dl, 1
+    ror  dh, 1
+    jnc  EGA2maskLeft
+    or   di, di
+    jns  EGA2dPos1
+    add  di, bp
+    loop EGA2lowLoop
+    mov  es:[bx], ah
+    jmp  near EGA2lineExit
+EGA2dPos1:
+    add  di, [EGA2inc2]
+    mov  es:[bx], ah
+    add  bx, si
+    loop EGA2lowSlopeL
+    jmp  near EGA2lineExit
+EGA2maskLeft:
+    mov  es:[bx], ah
+    inc  bx
+    or   di, di
+    jns  EGA2dPos2
+    add  di, bp
+    loop EGA2lowSlopeL
+    jmp  near EGA2lineExit
+EGA2dPos2:
+    add  di, [EGA2inc2]
+    add  bx, si
+    loop EGA2lowSlopeL
+    jmp  near EGA2lineExit
+
+EGA2lowSlopeM:
+    mov  ah, es:[bx]
+EGA2lowLoopM:
+    and  ah, dh
+    test bp, [EGA2lstyle]
+    jz   EGA2noStore3
+    or   ah, dl
+EGA2noStore3:
+    rol  bp, 1
+    ror  dl, 1
+    ror  dh, 1
+    jnc  EGA2maskLeftM
+    or   di, di
+    jns  EGA2dPos1M
+    add  di, [EGA2inc1]
+    loop EGA2lowLoopM
+    mov  es:[bx], ah
+    jmp  EGA2lineExit
+EGA2dPos1M:
+    add  di, [EGA2inc2]
+    mov  es:[bx], ah
+    add  bx, si
+    loop EGA2lowSlopeM
+    jmp  EGA2lineExit
+EGA2maskLeftM:
+    mov  es:[bx], ah
+    inc  bx
+    or   di, di
+    jns  EGA2dPos2M
+    add  di, [EGA2inc1]
+    loop EGA2lowSlopeM
+    jmp  EGA2lineExit
+EGA2dPos2M:
+    add  di, [EGA2inc2]
+    add  bx, si
+    loop EGA2lowSlopeM
+    jmp  EGA2lineExit
+
+
+EGA2highSlope:
+    mov  bp, [EGA2inc1]
+EGA2highSlopeL:
+    and  es:[bx], dh
+    or   es:[bx], dl
+    add  bx, si
+    or   di, di
+    jns  EGA2dPos3
+    add  di, bp
+    loop EGA2highSlopeL
+    jmp  EGA2lineExit
+EGA2dPos3:
+    add  di, [EGA2inc2]
+    ror  dl, 1
+    ror  dh, 1
+    cmc
+    adc  bx, 0
+    loop EGA2highSlopeL
+    jmp  EGA2lineExit
+
+EGA2highSlopeM:
+    and  es:[bx], dh
+    test bp, [EGA2lstyle]
+    jz   EGA2noStore4
+    or   es:[bx], dl
+EGA2noStore4:
+    rol  bp, 1
+    add  bx, si
+    or   di, di
+    jns  EGA2dPos3M
+    add  di, [EGA2inc1]
+    loop EGA2highSlopeM
+    jmp  EGA2lineExit
+EGA2dPos3M:
+    add  di, [EGA2inc2]
+    ror  dl, 1
+    ror  dh, 1
+    cmc
+    adc  bx, 0
+    loop EGA2highSlopeM
+
+EGA2lineExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+public __EGA2Line :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    call __lclip
+    jc   EGA2lineExit
+    mov  [EGA2x1], ax
+    mov  [EGA2y1], bx
+    mov  [EGA2x2], cx
+    mov  [EGA2y2], dx
+    mov  ax, [bp][frame]
+    mov  [EGA2lstyle], ax
+    mov  si, 80
+    mov  cx, [EGA2x2]
+    mov  ax, [EGA2x1]
+    sub  cx, ax
+    jz   EGA2verticalLine
+    mov  bx, [EGA2y2]
+    sub  bx, [EGA2y1]
+    je   EGA2horiz
+    jns  EGA2posInc
+    neg  bx
+    neg  si
+EGA2posInc:
+    cmp  bx, cx
+    jle  EGA2useLowSlope
+    mov  bp, 1
+    xchg bx, cx
+    jmp  EGA2gotSlope
+EGA2useLowSlope:
+    mov  bp, 2
+EGA2gotSlope:
+    shl  bx, 1
+    mov  [EGA2inc1], bx
+    sub  bx, cx
+    mov  di, bx
+    sub  bx, cx
+    mov  [EGA2inc2], bx
+    push cx
+    mov  bx, [EGA2x1]
+    mov  ax, [EGA2y1]
+    call __pixeladdrEGA2
+    mov  al, [__fgcolor]
+    shl  ax, cl
+    mov  dx, ax
+    not  dh
+    pop  cx
+    inc  cx
+    cmp  word [EGA2lstyle], -1
+    jne  EGA2MaskSet
+    cmp  bp, 1
+    je   EGA2highSlope
+    jmp  EGA2lowSlope
+EGA2MaskSet:
+    mov  [EGA2draw], bp
+    push cx
+    mov  cx, [EGA2x1]
+    and  cl, 15
+    mov  bp, 1
+    shl  bp, cl
+    pop  cx
+    cmp  byte [EGA2draw], 1
+    je   EGA2highSlopeM
+    jmp  EGA2lowSlopeM
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __VGAPoint :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    mov  cx, ax
+    mov  ax, 320
+    mul  bx
+    add  ax, cx
+    mov  bx, ax
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    mov  al, es:[bx]
+    sub  ah, ah
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+(*
+void VGAGet(unsigned char *buffer, short x1, y1, x2, y2);
+*)
+
+buffer = frame
+x1     = 4+frame
+y1     = 6+frame
+x2     = 8+frame
+y2     = 10+frame
+len       = -2
+incr      = -4
+pixAddress= -6
+byteShift = -7
+locals    =  7
+
+public __VGAGet :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    les  di, [bp][buffer]
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  ds, ax
+    mov  ax, [bp][y1]
+    mov  dx, 320
+    mul  dx
+    add  ax, [bp][x1]
+    mov  si, ax
+
+    mov  ax, [bp][x2]        (* cols *)
+    sub  ax, [bp][x1]
+    inc  ax
+    push ax
+    mov  cl, 3
+    shl  ax, cl
+    stosw
+    mov  ax, [bp][y2]        (* rows *)
+    sub  ax, [bp][y1]
+    inc  ax
+    mov  cx, ax
+    stosw
+    mov  bx, 320
+    pop  ax
+getRowLoop:
+    push cx
+    mov  dx, si
+    mov  cx, ax
+    shr  cx, 1
+rep ; movsw
+    adc  cx, cx
+rep ; movsb
+    mov  si, dx
+    add  si, bx
+    pop  cx
+    loop getRowLoop
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+x1     = frame
+y1     = 2+frame
+buffer = 4+frame
+action = 8+frame
+len        = -2
+incr       = -4
+rows       = -6
+bitOp      = -8
+pixAddress = -10
+locals     =  10
+
+public __VGAPut :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    lds  si, [bp][buffer]
+    lodsw
+    mov  [bp][len], ax
+    mov  cl, 3
+    shr  ax, cl
+    mov  [bp][len], ax
+    lodsw
+    mov  [bp][rows], ax
+(*%T _XTD *)
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0A000H
+(*%E *)
+    mov  es, ax
+    mov  ax, [bp][y1]
+    mov  dx, 320
+    mul  dx
+    add  ax, [bp][x1]
+    mov  di, ax
+    mov  ax, [bp][action]
+    mov  cx, [bp][rows]
+    mov  bx, 320
+    or   ax, ax
+    jz   __OR
+    dec  ax
+    or   ax, ax
+    jz   __AND
+    dec  ax
+    or   ax, ax
+    jz   __RESET
+    dec  ax
+    or   ax, ax
+    jz   __SET
+    dec  ax
+    or   ax, ax
+    jz   __XOR
+
+setExit:
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+__OR:
+
+orRowLoop:
+    push cx
+    mov  dx, di
+    mov  cx, [bp][len]
+orColLoop:
+    lodsb
+    or   ax, es:[di]
+    stosb
+    loop orColLoop
+    mov  di, dx
+    add  di, bx
+    pop  cx
+    loop orRowLoop
+    jmp  setExit
+
+__AND:
+
+andRowLoop:
+    push cx
+    mov  dx, di
+    mov  cx, [bp][len]
+andColLoop:
+    lodsb
+    and  es:[di], al
+    inc  di
+    loop andColLoop
+    mov  di, dx
+    add  di, bx
+    pop  cx
+    loop andRowLoop
+    jmp  setExit
+
+__RESET:
+
+resetRowLoop:
+    push cx
+    mov  dx, di
+    mov  cx, [bp][len]
+resetColLoop:
+    lodsb
+    not  al
+    stosb
+    loop resetColLoop
+    mov  di, dx
+    add  di, bx
+    pop  cx
+    loop resetRowLoop
+    jmp  setExit
+
+__SET:
+
+setRowLoop:
+    push cx
+    mov  dx, di
+    mov  cx, [bp][len]
+rep; movsb
+    mov  di, dx
+    add  di, bx
+    pop  cx
+    loop setRowLoop
+    jmp  setExit
+
+__XOR:
+
+xorRowLoop:
+    push cx
+    mov  dx, di
+    mov  cx, [bp][len]
+xorColLoop:
+    lodsb
+    xor  es:[di], al
+    inc  di
+    loop xorColLoop
+    mov  di, dx
+    add  di, bx
+    pop  cx
+    loop xorRowLoop
+    jmp  setExit
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn  __pixeladdrEGA
+
+select _DATA
+
+extrn __width
+extrn __EGAPlaneShift
+extrn __EGAStartPlane
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+(****Move from selector for a huge selector to the next****)
+(* Input : Selector on stack *)
+(* Output : Selector on stack, all regs preserved *)
+(* Internal routine, always near called *)
+extrn __hugeshift
+public @next_seg:
+   push bp
+   mov bp,sp
+   push ax
+(*%F SameDS *)
+   push ds
+   mov  ax, seg __hugeshift
+   mov  ds, ax
+(*%E *)
+   mov  ax,[__hugeshift]
+   add  [bp][4],ax
+(*%F SameDS *)
+   pop  ds
+(*%E *)
+   pop ax
+   pop bp
+   ret 0
+
+
+(*
+void EGAGet(unsigned char *buffer, short x1, y1, x2, y2);
+*)
+
+buffer = frame
+x1     = 4+frame
+y1     = 6+frame
+x2     = 8+frame
+y2     = 10+frame
+BytesPerRow   = -2
+len           = -4
+rows          = -6
+EGAPlaneShift = -8
+EGAStartPlane = -10
+locals        =  10
+
+ByteShift   = 3
+
+public __EGAGet :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__EGAPlaneShift]
+    mov  [bp][EGAPlaneShift], ax
+    mov  ax, [__EGAStartPlane]
+    mov  [bp][EGAStartPlane], ax
+    mov  ax, [__width]
+    mov  [bp][BytesPerRow], ax
+    mov  ax, [bp][x2]
+    sub  ax, [bp][x1]
+    mov  cx, 0FF07H
+    and  cl, al
+    xor  cl, 7
+    shl  ch, cl
+    mov  cl, ch
+    push cx
+    mov  cl, ByteShift
+    shr  ax, cl
+    inc  ax
+    push ax
+
+    mov  ax, [bp][y2]
+    sub  ax, [bp][y1]
+    inc  ax
+    push ax
+                              (* setup addressing *)
+    mov  ax, [bp][y1]
+    mov  bx, [bp][x1]
+    call __pixeladdrEGA
+    xor  cl, 7
+    mov  si, es
+    mov  ds, si
+    mov  si, bx
+    les  di, [bp][buffer]
+                              (* build header *)
+    pop  ax
+    mov  [bp][rows], ax
+    stosw
+    pop  ax
+    mov  [bp][len], ax
+    stosb
+    pop  ax
+    mov  ch, al
+    stosb
+                              (* setup controller *)
+    mov  dx, 3CEH
+    mov  al, 5
+    out  byte dx, al
+    sub  al, al
+    inc  dx
+    out  byte dx, al
+    dec  dx
+    mov  al, 4H
+    out  byte dx, al
+    mov  al, [bp][EGAStartPlane]
+    mov  ah, [bp][EGAPlaneShift]
+    inc  dx
+getPlaneLoop:
+    out  byte dx, al
+    push ax
+    push [bp][rows]
+    push si
+op2:
+    mov  bx, [bp][len]
+    push si
+op3:
+    lodsw
+    dec  si
+    rol  ax, cl
+    stosb
+    or   di, di
+    jnz  inSeg
+    push es
+    call @next_seg
+    pop  es
+inSeg:
+    dec  bx
+    jnz  op3
+    and  es:[di][-1], ch
+    pop  si
+    add  si, [bp][BytesPerRow]
+    dec  word [bp][rows]
+    jnz  op2
+    pop  si
+    pop  [bp][rows]
+    pop  ax
+    sub  al, ah
+    jns  getPlaneLoop
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __EGArexlat
+
+select _DATA
+
+extrn __width
+extrn __page_size
+extrn __active_page
+extrn __EGAPlaneShift
+extrn __EGAStartPlane
+extrn __EGA64K
+extrn __EGAtranslate
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGAPoint :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  cx, ax
+    and  cx, 7
+    mov  ch, 80H
+    shr  ch, cl
+    mov  cl, ch                        (* cl = mask *)
+(*%T _XTD *)
+    db   0C1H,0F8H,003H                (*I shr  ax, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+(*%E *)
+    mov  si, ax
+    mov  ax, [__width]
+    mul  bx
+    add  si, ax                        (* offset *)
+    mov  ax, [__active_page]
+    mul  word [__page_size]
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  si, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax                        (* segment *)
+
+    mov  dx, 03CEH
+    mov  ax, 5
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 4
+    out  byte dx, al
+    inc  dx
+    cmp  byte [__EGA64K], 0
+    je   fullEGA
+    mov  ax, 1
+    and  ax, si
+    add  ax, [__EGAStartPlane]
+    jmp  gotPlane
+fullEGA:
+    mov  ax, [__EGAStartPlane]
+gotPlane:
+    mov  bl, [__EGAPlaneShift]
+readLoop:
+    out  byte dx, al
+    mov  ch, es:[si]
+    and  ch, cl
+    neg  ch
+    rcl  ah, 1
+    sub  al, bl
+    jns  readLoop
+    mov  al, ah
+    sub  ah, ah
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __width
+extrn __page_size
+extrn __active_page
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGA2Point :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  cx, ax
+    and  cl, 7
+    xor  cl, 7
+(*%T _XTD *)
+    db   0C1H,0F8H,003H                (*I shr  ax, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+(*%E *)
+    mov  si, ax
+    mov  ax, [__width]
+    mul  bx
+    add  si, ax                        (* offset *)
+    mov  ax, [__active_page]
+    mul  word [__page_size]
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  si, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax                        (* segment *)
+    mov  al, es:[si]
+    shr  al, cl
+    and  ax, 1
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __EGA64K
+EGAtable1 : db 0, 1, 4, 5
+EGAtable2 : db 0, 3, 0CH, 0FH
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGAxlat :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    cmp  byte [__EGA64K], 0
+    je   XfullEGA
+    mov  bx, EGAtable2
+    jmp  gotTable
+XfullEGA:
+    mov  bx, EGAtable1
+gotTable:
+    xlat
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __EGA64K
+EGAtable1 : db 0, 1, 0, 2, 0, 3
+EGAtable2 : db 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 4
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGArexlat :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    cmp  byte [__EGA64K], 0
+    je   XfullEGA
+    mov  bx, EGAtable2
+    jmp  gotTable
+XfullEGA:
+    mov  bx, EGAtable1
+gotTable:
+    xlat
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __EGAxlat
+
+select _DATA
+
+extrn __width
+extrn __page_size
+extrn __active_page
+extrn __EGAtranslate
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGAPlot1 :   (* doesn't translate pixel value *)
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push si
+    jmp  notNeeded
+
+
+public __EGAPlot :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    cmp  byte [__EGAtranslate], 0
+    jz   notNeeded
+    push ax
+    push bx
+    mov  ax, cx
+    call __EGAxlat
+    mov  cx, ax
+    pop  bx
+    pop  ax
+notNeeded:
+    push cx
+    mov  cx, ax
+    and  cx, 7
+    mov  ch, 80H
+    shr  ch, cl
+    mov  cl, ch              (* cl = mask *)
+(*%T _XTD *)
+    db   0C1H,0F8H,003H                (*I shr  ax, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+(*%E *)
+    mov  si, ax
+    mov  ax, [__width]
+    mul  bx
+    add  si, ax              (* offset *)
+    mov  ax, [__active_page]
+    mul  word [__page_size]
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  si, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax              (* segment *)
+    pop  bx                  (* cx = mask, bx = col *)
+    mov  dx, 03CEH
+    mov  ax, 205H
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  al, 8
+    mov  ah, cl
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    xchg bl, es:[si]
+    mov  ah, 0FFH
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    mov  ax, 5
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __EGAxlat
+
+select _DATA
+
+extrn __width
+extrn __page_size
+extrn __active_page
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGA2Plot :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  dx, cx
+    mov  cx, ax
+    and  cl, 7
+    xor  cl, 7
+    shl  dl, cl
+    mov  cl, dl
+(*%T _XTD *)
+    db   0C1H,0F8H,003H                (*I shr  ax, 3 *)
+(*%E *)
+(*%F _XTD *)
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+(*%E *)
+    mov  si, ax
+    mov  ax, [__width]
+    mul  bx
+    add  si, ax              (* offset *)
+    mov  ax, [__active_page]
+    mul  word [__page_size]
+(*%T _XTD *)
+    db   0C1H,0E0H,004H                (*I shl  ax, 4 *)
+    add  si, ax
+    extrn __A000h
+    mov  ax, __A000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0A000H
+(*%E *)
+    mov  es, ax              (* segment *)
+    or   es:[si], cl
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdrEGA
+extrn __resetEGA
+extrn __EGAPlaneShift
+extrn __EGAStartPlane
+
+select _DATA
+
+extrn __width
+actionTable : db 10H, 8H, 0H, 0H, 18H
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+x1     = frame
+y1     = 2+frame
+buffer = 4+frame
+action = 8+frame
+
+BytesPerRow   = -2
+len           = -4
+rows          = -6
+rowcount      = -8
+startmask     = -10
+endmaskL      = -12
+endmaskR      = -14
+RMWBits       = -16
+NotFlag       = -18
+EGAPlaneShift = -20
+EGAStartPlane = -22
+locals        =  22
+
+_GPRESET    =  2
+ByteShift   =  3
+
+public __EGAPut :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__EGAPlaneShift]
+    mov  [bp][EGAPlaneShift], ax
+    mov  ax, [__EGAStartPlane]
+    mov  [bp][EGAStartPlane], ax
+    mov  ax, [__width]
+    mov  [bp][BytesPerRow], ax
+    mov  al, [bp][action]
+    cmp  al, _GPRESET
+    jnz  selectMode
+    mov  byte [bp][RMWBits], 0
+    mov  byte [bp][NotFlag], 1
+    jmp  modeSelected
+selectMode:
+    mov  bx, actionTable
+    xlat
+    mov  [bp][RMWBits], ax
+    mov  byte [bp][NotFlag], 0
+modeSelected:
+    mov  ax, [bp][y1]            (* setup addressing *)
+    mov  bx, [bp][x1]
+    call __pixeladdrEGA
+    inc  cl
+    and  cl, 7
+    mov  di, bx
+    lds  si, [bp][buffer]
+                                (* get header *)
+    lodsw
+    mov  [bp][rows], ax
+    lodsb
+    sub  ah, ah
+    mov  [bp][len], ax
+    lodsb
+    mov  ch, al
+                                (* setup controller *)
+    mov  dx, 3CEH
+    mov  al, 3
+    out  byte dx, al
+    inc  dx
+    mov  al, [bp][RMWBits]
+    out  byte dx, al
+
+    dec  dx
+    mov  al, 5H
+    out  byte dx, al
+    inc  dx
+    mov  al, 8
+    out  byte dx, al
+
+    dec  dx
+    mov  al, 7H
+    out  byte dx, al
+    inc  dx
+    mov  al, 0
+    out  byte dx, al
+
+    dec  dx
+    mov  dl, 0C4H
+    mov  al, 2H
+    mov  ah, 1
+    push cx
+    mov  cl, [bp][EGAStartPlane]
+    shl  ah, cl
+    pop  cx
+    cmp  cx, 0FF00H
+    jne  op15
+                                (* byte aligned blocks *)
+    mov  cx, [bp][len]
+op10:
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    push ax
+    push di
+    mov  bx, [bp][rows]
+    mov  ah, [bp][NotFlag]
+op11:
+    push di
+    push cx
+op12:
+    lodsb
+    or   si, si
+    jnz  inSeg1
+    push ds
+    extrn @next_seg
+    call @next_seg
+    pop ds
+inSeg1:
+    or   ah, ah
+    jz   EGApStore
+    not  al
+EGApStore:
+    and  es:[di], al
+    inc  di
+    loop op12
+    pop  cx
+    pop  di
+    add  di, [bp][BytesPerRow]
+    dec  bx
+    jnz  op11
+
+    pop  di
+    pop  ax
+    push cx
+    mov  cl, [bp][EGAPlaneShift]
+    shr  ah, cl
+    pop  cx
+    jnz  op10
+    jmp  near EGAPutExit
+
+op15:                                 (* non aligned blocks *)
+    push ax
+    mov  bx, 0FFH
+    mov  al, ch
+    cbw
+    cmp  word [bp][len], 1
+    jne  op16
+    mov  bl, ch
+    mov  ah, ch
+    sub  al, al
+op16:
+    shl  ax, cl
+    shl  bx, cl
+    mov  bl, al
+    mov  al, 8
+    mov  [bp][endmaskL], ax
+    mov  ah, bl
+    mov  [bp][endmaskR], ax
+    mov  ah, bh
+    mov  [bp][startmask], ax
+    mov  bx, [bp][len]
+    pop  ax
+
+op17:
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    push ax
+    push di
+    mov  dl, 0CEH
+    mov  ax, [bp][rows]
+    mov  [bp][rowcount], ax
+
+op18:
+    push di
+    push ds
+    push si
+    push bx
+    mov  ax, [bp][startmask]
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    lodsb
+    or   si, si
+    jnz  inSeg2
+    push ds
+    call @next_seg
+    pop ds
+inSeg2:
+    mov  ah, al
+    lodsb
+    xchg ah, al
+    cmp  byte [bp][NotFlag], 0
+    je   noNot1
+    not  ax
+noNot1:
+    dec  si
+    test cl, cl
+    jnz  op19
+    dec  bx
+    jnz  op20
+    jmp  op22
+
+op19:
+    rol  ax, cl
+    and  es:[di], ah
+    inc  di
+    dec  bx
+op20:
+    push ax
+    mov  ax, 0FF08H
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    pop  ax
+    dec  bx
+    jng  op22
+
+op21:
+    and  es:[di], al
+    inc  di
+    lodsb
+    or   si, si
+    jnz  inSeg3
+    push ds
+    call @next_seg
+    pop ds
+inSeg3:
+    mov  ah, al
+    lodsb
+    xchg ah, al
+    cmp  byte [bp][NotFlag], 0
+    je   noNot2
+    not  ax
+noNot2:
+    dec  si
+    rol  ax, cl
+    dec  bx
+    jnz  op21
+
+op22:
+    mov  bx, ax
+    mov  ax, [bp][endmaskL]
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    and  es:[di], bl
+    mov  ax, [bp][endmaskR]
+(*%F FastIO *)
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    and  es:[di][1], bh
+    pop  bx
+    pop  si
+    pop  ds
+    add  si, bx
+    jnc  inSeg4
+    mov  di, ds         (*@@@ Ask Nigel *)
+    add  di, 1000H
+    mov  ds, di
+inSeg4:
+    pop  di
+    add  di, [bp][BytesPerRow]
+    dec  word [bp][rowcount]
+    jnz  op18
+    pop  di
+    pop  ax
+    mov  dl, 0C4H
+    push cx
+    mov  cl, [bp][EGAPlaneShift]
+    shr  ah, cl
+    pop  cx
+    jnz  op17
+
+EGAPutExit:
+(*%F NearCall *)
+    call far __resetEGA
+(*%E *)
+(*%T NearCall *)
+    call __resetEGA
+(*%E *)
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGAleftscan :
+
+left   = frame
+border  = frame
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+    push ds
+    std
+    mov  si, ax               (* ptr *)
+    mov  ds, bx
+    mov  di, dx               (* lim value *)
+    mov  bp, [bp][left]       (* left *)
+    mov  bx, cx               (* bl border *)
+    mov  cx, 7                (* calculate mask *)
+    and  cx, bp
+    mov  ch, 80H
+    shr  ch, cl
+    mov  cl, ch               (* cl = mask *)
+
+    mov  dx, 03CEH            (* set read mode *)
+    mov  al, 5
+    out  byte dx, al
+    mov  al, 8
+    inc  dx
+    out  byte dx, al
+    dec  dx
+    mov  al, 2
+    out  byte dx, al
+    inc  dx
+    mov  al, bl
+    out  byte dx, al
+    dec  dx
+    mov  ax, 0FF08H
+(*%F FastIO *)
+    extrn $OutWord
+    call $OutWord
+(*%E *)
+(*%T FastIO *)
+    out  word dx, ax
+(*%E *)
+    lodsb
+scanLoop:
+    dec  bp
+    cmp  cl, 80H
+    je   needNewByte
+    shl  cl, 1
+getPixel:
+    test al, cl
+    jnz  scanDone
+    cmp  bp, di
+    jge  scanLoop
+scanDone:
+    inc  bp
+    mov  ax, bp
+    cld
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+needNewByte:
+    mov  cl, 1H
+newByteLoop:
+    lodsb
+    or   al, al
+    jnz  getPixel
+    sub  bp, 8
+    cmp  bp, di
+    jge  newByteLoop
+    mov  bp, di
+    dec  bp
+    jmp  scanDone
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __EGArightscan :
+
+right   = frame
+border  = frame
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+    push ds
+    mov  si, ax               (* ptr *)
+    mov  ds, bx
+    mov  es, bx
+    mov  di, dx               (* lim value *)
+    mov  bp, [bp][right]      (* right *)
+    mov  bx, cx               (* bl border *)
+    mov  cx, 7                (* calculate mask *)
+    and  cx, bp
+    mov  ch, 80H
+    shr  ch, cl
+    mov  cl, ch               (* cl = mask *)
+                              (* read mode set in left scan *)
+    lodsb
+EGARsLoop:
+    inc  bp
+    cmp  cl, 1H
+    je   EGAnNewByte
+    shr  cl, 1
+EGARgPixel:
+    test al, cl
+    jnz  EGARsDone
+    cmp  bp, di
+    jle  EGARsLoop
+EGARsDone:
+    dec  bp
+    mov  dx, 3CEH
+    mov  al, 5
+    out  byte dx, al
+    inc  dx
+    mov  al, 0
+    out  byte dx, al
+    mov  ax, bp
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+EGAnNewByte:
+    mov  ax, bp
+    mov  cx, di
+    sub  cx, bp
+    inc  cx
+    mov  bp, cx
+    and  bp, 7
+    shr  cx, 1
+    shr  cx, 1
+    shr  cx, 1
+    jcxz noneLeft
+    sub  al, al
+    xchg si, di
+repe ; scasb
+    xchg si, di
+    je   byteF
+    inc  cx
+    shl  cx, 1
+    shl  cx, 1
+    shl  cx, 1
+byteF:
+    mov  ax, di
+    sub  ax, cx
+    sub  ax, bp
+    mov  bp, ax
+    inc  bp
+    cmp  bp, di
+    ja   EGARsDone
+EGAFastDone:
+    dec  si
+EGAFastDone2:
+    lodsb
+    mov  cl, 80H
+    jmp  EGARgPixel
+
+noneLeft:
+    mov  bp, ax
+    jmp  EGAFastDone2
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdr320x200
+extrn __pixeladdr640x200
+
+select _DATA
+
+extrn __width
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+(*
+void CGAGet(unsigned char *buffer, short x1, y1, x2, y2);
+*)
+
+buffer        = frame
+x1            = 4+frame
+y1            = 6+frame
+x2            = 8+frame
+y2            = 10+frame
+len           = -2
+incr          = -4
+locals        =  4
+
+public __CGA320Get :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ax, [bp][x2]      (* get block size *)
+    sub  ax, [bp][x1]
+    mov  cx, 0FF03H
+    and  cl, al
+    xor  cl, 3
+    shl  cl, 1
+    shl  ch, cl
+    mov  cl, ch
+    push cx
+    mov  cl, 2
+    shr  ax, cl
+    inc  ax
+    push ax
+    mov  ax, [bp][y2]
+    sub  ax, [bp][y1]
+    inc  ax
+    push ax
+
+    mov  ax, [bp][y1]            (* compute video address *)
+    mov  bx, [bp][x1]
+    call __pixeladdr320x200
+    xor  cl, 6
+    jmp  common
+
+
+(*
+void CGAGet(unsigned char *buffer, short x1, y1, x2, y2);
+*)
+
+public __CGA640Get :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ax, [bp][x2]      (* get block size *)
+    sub  ax, [bp][x1]
+    mov  cx, 0FF07H
+    and  cl, al
+    xor  cl, 7
+    shl  ch, cl
+    mov  cl, ch
+    push cx
+    mov  cl, 3
+    shr  ax, cl
+    inc  ax
+    push ax
+    mov  ax, [bp][y2]
+    sub  ax, [bp][y1]
+    inc  ax
+    push ax
+
+    mov  ax, [bp][y1]            (* compute video address *)
+    mov  bx, [bp][x1]
+    call __pixeladdr640x200
+    xor  cl, 7
+common:
+    push es
+    pop  ds
+    mov  si, bx
+    mov  bx, 2000H
+    test si, 2000H
+    jz   interleave1
+    mov  bx, 80-2000H
+interleave1:
+    mov  [bp][incr], bx
+    les  di, [bp][buffer]
+    pop  ax                   (* pixel rows *)
+    stosw
+    mov  dx, ax               (* dx = row count *)
+    pop  ax                   (* bytes per pixel row *)
+    stosb
+    mov  [bp][len], ax
+    pop  ax
+    stosb                     (* mask for last byte *)
+    mov  ch, al
+
+getLoop1:
+    mov  bx, [bp][len]
+    push si
+getLoop2:
+    lodsw
+    dec  si
+    rol  ax, cl
+    stosb
+    dec  bx
+    jnz  getLoop2
+
+    and  es:[di][-1], ch
+    pop  si
+    add  si, [bp][incr]
+    mov  ax, 2000H
+    xor  ax, 80-2000H
+    xor  [bp][incr], ax
+    dec  dx
+    jnz  getLoop1
+
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdr320x200
+extrn __pixeladdr640x200
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+x1     = frame
+y1     = 2+frame
+buffer = 4+frame
+action = 8+frame
+len        = -2
+incr       = -4
+rows       = -6
+bitOp      = -8
+pixAddress = -10
+lastMask   = -12
+clShift    = -13
+locals     =  13
+
+incRow:
+    add  di, [bp][incr]
+    mov  ax, 2000H
+    xor  ax, 80-2000H
+    xor  [bp][incr], ax
+    dec  word [bp][rows]
+    ret  0
+
+__setBlock:
+
+    cmp  cx, 0FF00H
+    jnz  L640op15
+    mov  cx, [bp][len]
+L640op10:
+    push cx
+    push di
+rep ; movsb
+    pop  di
+    pop  cx
+    call incRow
+    jnz  L640op10
+    jmp  near L640setExit
+
+L640op15:
+    not  ch
+    mov  dx, 0FF00H
+    ror  dx, cl
+    mov  bx, [bp][len]
+    dec  bx
+L640op16:
+    push di
+    or   bx, bx
+    jz   L640op18
+    push bx
+L640op17:
+    and  es:[di], dx
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  L640op17
+    pop  bx
+L640op18:
+    mov  al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    pop  di
+    call incRow
+    jnz  L640op16
+    jmp  near L640setExit
+
+__XORBlock:
+    mov  bx, [bp][len]
+L640op20:
+    push di
+    push bx
+L640op21:
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    xor  es:[di], ax
+    inc  di
+    dec  bx
+    jnz  L640op21
+    pop  bx
+    pop  di
+    call incRow
+    jnz  L640op20
+    jmp  near L640setExit
+
+__ANDBlock:
+
+    not  ch
+    mov  bx, [bp][len]
+    dec  bx
+L640op30:
+    push di
+    or   bx, bx
+    jz   L640op32
+    push bx
+L640op31:
+    lodsb
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    inc  di
+    dec  bx
+    jnz  L640op31
+    pop  bx
+L640op32:
+    lodsb
+    or   al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    pop  di
+    call incRow
+    jnz  L640op30
+    jmp  near L640setExit
+
+__ORBlock:
+    mov  bx, [bp][len]
+L640op40:
+    push di
+    push bx
+L640op41:
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  L640op41
+    pop  bx
+    pop  di
+    call incRow
+    jnz  L640op40
+    jmp  near L640setExit
+
+
+__reverseBlock:
+
+    cmp  cx, 0FF00H
+    jnz  L640op55
+    mov  cx, [bp][len]
+L640op50:
+    push cx
+    push di
+revLoop1:
+    lodsb
+    not  al
+    stosb
+    loop revLoop1
+    pop  di
+    pop  cx
+    call incRow
+    jnz  L640op50
+    jmp  near L640setExit
+
+L640op55:
+    not  ch
+    mov  dx, 0FF00H
+    ror  dx, cl
+    mov  bx, [bp][len]
+    dec  bx
+L640op56:
+    push di
+    or   bx, bx
+    jz   L640op58
+    push bx
+L640op57:
+    and  es:[di], dx
+    lodsb
+    sub  ah, ah
+    not  al
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  L640op57
+    pop  bx
+L640op58:
+    mov  al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    not  ax
+    mov  [bp][lastMask], ax
+    lodsb
+    sub  ah, ah
+    not  al
+    ror  ax, cl
+    and ax, [bp][lastMask]
+    or   es:[di], ax
+    pop  di
+    call incRow
+    jnz  L640op56
+    jmp  near L640setExit
+
+
+(*
+void CGA640Put(short x1, y1, unsigned char *buffer, short action);
+*)
+
+public __CGA320Put :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  word [bp][pixAddress], __pixeladdr320x200
+    mov  byte [bp][clShift], 6
+    jmp  PCGAcommon
+
+public __CGA640Put :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  word [bp][pixAddress], __pixeladdr640x200
+    mov  byte [bp][clShift], 7
+PCGAcommon:
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ax, [bp][action]
+    or  ax, ax
+    jnz  L640op2
+L640op1:
+    mov  word [bp][bitOp], __ORBlock
+    jmp  gotOp
+L640op2:
+    dec  ax
+    jnz  L640op3
+    mov  word [bp][bitOp], __ANDBlock
+    jmp  gotOp
+L640op3:
+    dec  ax
+    jnz  L640op4
+    mov  word [bp][bitOp], __reverseBlock
+    jmp  gotOp
+L640op4:
+    dec  ax
+    jnz  L640op5
+    mov  word [bp][bitOp], __setBlock
+    jmp  gotOp
+L640op5:
+    mov  word [bp][bitOp], __XORBlock
+gotOp:
+    mov  ax, [bp][y1]
+    mov  bx, [bp][x1]
+    call [bp][pixAddress]
+    xor  cl, [bp][clShift]
+    mov  di, bx
+    mov  bx, 2000H
+    test di, 2000H
+    jz   L640interleave1
+    mov  bx, 80-2000H
+L640interleave1:
+    mov  [bp][incr], bx
+    lds  si, [bp][buffer]
+    lodsw
+    mov  [bp][rows], ax
+    lodsb
+    sub  ah, ah
+    mov  [bp][len], ax
+    lodsb
+    mov  ch, al
+    jmp  [bp][bitOp]
+L640setExit:
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __CGA320leftscan :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push di
+    push si
+    push ds
+    std
+    mov  si, ax               (* ptr *)
+(*%T _XTD *)
+    extrn __B800h
+    mov  ax, __B800h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0B800H
+(*%E *)
+    mov  ds, ax
+    mov  di, dx               (* left *)
+    mov  ax, dx
+    mov  dx, cx               (* limit *)
+    mov  cl, 6
+    shl  bl, cl
+    mov  cx, ax
+    and  cl, 3
+    shl  cl, 1
+    mov  bh, 0C0H
+    shr  bx, cl
+    lodsb
+CGALscanLoop:
+    dec  di
+    rol  bl, 1
+    rol  bl, 1
+    rol  bh, 1
+    rol  bh, 1
+    jc   CGALoad
+CGAloadDone:
+    mov  ah, al
+    and  ah, bh
+    cmp  ah, bl
+    je   CGALscanDone
+    cmp  di, dx
+    jge  CGALscanLoop
+CGALscanDone:
+    inc  di
+    mov  ax, di
+    cld
+    pop  ds
+    pop  si
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+CGALoad:
+    lodsb
+    jmp  CGAloadDone
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __CGA320rightscan :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+    push ds
+    mov  si, ax               (* ptr *)
+(*%T _XTD *)
+    extrn __B800h
+    mov  ax, __B800h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0B800H
+(*%E *)
+    mov  ds, ax
+    mov  es, ax
+    mov  di, dx               (* right *)
+    mov  ax, dx
+    mov  dx, cx               (* limit *)
+    mov  cl, 6
+    shl  bl, cl
+    mov  cx, ax
+    and  cl, 3
+    shl  cl, 1
+    mov  bh, 0C0H
+    shr  bx, cl
+    mov  cx, dx
+    sub  cx, di
+    mov  di, -1
+    lodsb
+CGARscanLoop:
+    ror  bl, 1
+    ror  bl, 1
+    ror  bh, 1
+    ror  bh, 1
+    jc  CGARLoad
+CGARnoInc:
+    mov  ah, al
+    and  ah, bh
+    cmp  ah, bl
+    loopne CGARscanLoop
+CGARscanDone:
+    jne  noInc
+    inc  cx
+noInc:
+    mov  ax, dx
+    sub  ax, cx
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+CGARLoad:
+    inc  di
+    jne  CGARfastTest
+    lodsb
+    jmp  CGARnoInc
+CGARfastTest:
+    mov  bp, cx
+    and  bp, 3
+    shr  cx, 1
+    shr  cx, 1
+    jcxz CGARnoInc
+    mov  di, si
+repe ; scasb
+    jne  foundNewByte
+    mov  cx, bp
+    jcxz noInc
+    jmp  setupNext
+foundNewByte:
+    inc  cx
+    shl  cx, 1
+    shl  cx, 1
+    add  cx, bp
+setupNext:
+    dec  di
+    mov  si, di
+    sub  di, di
+    lodsb
+    jmp  CGARnoInc
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __CGA640leftscan :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push di
+    push si
+    push ds
+    std
+    mov  si, ax               (* ptr *)
+(*%T _XTD *)
+    extrn __B800h
+    mov  ax, __B800h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0B800H
+(*%E *)
+    mov  ds, ax
+    mov  di, dx               (* left *)
+    mov  ax, dx
+    mov  dx, cx               (* limit *)
+    mov  cx, 7
+    and  ax, cx
+    sub  cx, ax
+    lodsb
+L640LscanLoop:
+    dec  di
+    inc  cl
+    cmp  cl, 8
+    jnz  L640LnoLoad
+    sub  cl, cl
+    lodsb
+L640LnoLoad:
+    mov  ah, 1
+    shl  ah, cl
+    and  ah, al
+    shr  ah, cl
+    cmp  ah, bl
+    jz   L640LscanDone
+    cmp  di, dx
+    jge  L640LscanLoop
+L640LscanDone:
+    inc  di
+    mov  ax, di
+    cld
+    pop  ds
+    pop  si
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __CGA640rightscan :
+
+    push bp
+    mov  bp, sp
+    push di
+    push si
+    push ds
+    mov  si, ax               (* ptr *)
+(*%T _XTD *)
+    extrn __B800h
+    mov  ax, __B800h
+(*%E *)
+(*%F _XTD *)
+    mov  ax, 0B800H
+(*%E *)
+    mov  ds, ax
+    mov  es, ax
+    mov  di, dx               (* right *)
+    mov  ax, dx
+    mov  dx, cx               (* limit *)
+    mov  cl, 7
+    shl  bl, cl
+    mov  cx, ax
+    and  cl, 7
+    mov  bh, 080H
+    shr  bx, cl
+    mov  cx, dx
+    sub  cx, di
+    mov  di, -1
+    lodsb
+CGARscanLoop:
+    ror  bl, 1
+    ror  bh, 1
+    jc  CGARLoad
+CGARnoInc:
+    mov  ah, al
+    and  ah, bh
+    cmp  ah, bl
+    loopne CGARscanLoop
+CGARscanDone:
+    jne  noInc
+    inc  cx
+noInc:
+    mov  ax, dx
+    sub  ax, cx
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+CGARLoad:
+    inc  di
+    jne  CGARfastTest
+    lodsb
+    jmp  CGARnoInc
+CGARfastTest:
+    mov  bp, cx
+    and  bp, 7
+    shr  cx, 1
+    shr  cx, 1
+    shr  cx, 1
+    jcxz CGARnoInc
+    mov  di, si
+repe ; scasb
+    jne  foundNewByte
+    mov  cx, bp
+    jcxz noInc
+    jmp  setupNext
+foundNewByte:
+    inc  cx
+    shl  cx, 1
+    shl  cx, 1
+    shl  cx, 1
+    add  cx, bp
+setupNext:
+    dec  di
+    mov  si, di
+    sub  di, di
+    lodsb
+    jmp  CGARnoInc
+
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __pixeladdrHerc
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+(*
+void HercGet(unsigned char *buffer, short x1, y1, x2, y2);
+*)
+
+buffer = frame
+x1     = 4+frame
+y1     = 6+frame
+x2     = 8+frame
+y2     = 10+frame
+len       = -2
+leaf      = -4
+locals    =  4
+
+public __HercGet :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ax, [bp][x2]      (* get block size *)
+    sub  ax, [bp][x1]
+    mov  cx, 0FF07H
+    and  cl, al
+    xor  cl, 7
+    shl  ch, cl
+    mov  cl, ch
+    push cx
+    mov  cl, 3
+    shr  ax, cl
+    inc  ax
+    push ax
+    mov  ax, [bp][y2]
+    sub  ax, [bp][y1]
+    inc  ax
+    push ax
+
+    mov  ax, [bp][y1]            (* compute video address *)
+    mov  bx, [bp][x1]
+    call __pixeladdrHerc
+    xor  cl, 7
+    push es
+    pop  ds
+    mov  si, bx
+    cmp  si, 2000H
+    jb   HGinterleave1
+    cmp  si, 4000H
+    jb   HGinterleave2
+    cmp  si, 6000H
+    jb   HGinterleave3
+HGinterleave4:
+    mov  bx, 3H
+    jmp  HGgotInterleave
+HGinterleave3:
+    mov  bx, 2H
+    jmp  HGgotInterleave
+HGinterleave2:
+    mov  bx, 1H
+    jmp  HGgotInterleave
+HGinterleave1:
+    mov  bx, 0H
+HGgotInterleave:
+    mov  [bp][leaf], bx
+    les  di, [bp][buffer]
+    pop  ax                   (* pixel rows *)
+    stosw
+    mov  dx, ax
+    pop  ax                   (* bytes per pixel row *)
+    stosb
+    mov  [bp][len], ax
+    pop  ax
+    stosb                     (* mask for last byte *)
+    mov  ch, al
+
+HGgetLoop1:
+    mov  bx, [bp][len]
+    push si
+HGgetLoop2:
+    lodsw
+    dec  si
+    rol  ax, cl
+    stosb
+    dec  bx
+    jnz  HGgetLoop2
+
+    pop  si
+    and  es:[di][-1], ch
+    mov  ax, [bp][leaf]
+    cmp  ax, 3
+    jnz  HGnotLast
+    sub  ax, ax
+    mov  [bp][leaf], ax
+    sub  si, 6000H-90
+    jmp  HGgotRow
+HGnotLast:
+    inc  ax
+    mov  [bp][leaf], ax
+    add  si, 2000H
+HGgotRow:
+    dec  dx
+    jnz  HGgetLoop1
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn  __pixeladdrHerc
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+x1     = frame
+y1     = 2+frame
+buffer = 4+frame
+action = 8+frame
+len        = -2
+leaf       = -4
+rows       = -6
+bitOp      = -8
+lastMask   = -10
+locals     =  10
+
+incRow:
+    mov  ax, [bp][leaf]
+    cmp  ax, 3
+    jnz  notLast
+    sub  ax, ax
+    mov  [bp][leaf], ax
+    sub  di, 6000H-90
+    jmp  gotRow
+notLast:
+    inc  ax
+    mov  [bp][leaf], ax
+    add  di, 2000H
+gotRow:
+    dec  word [bp][rows]
+    ret  0
+
+__setBlock:
+
+    cmp  cx, 0FF00H
+    jnz  op15
+    mov  cx, [bp][len]
+op10:
+    push cx
+    push di
+rep ; movsb
+    pop  di
+    pop  cx
+    call incRow
+    jnz  op10
+    jmp  near setExit
+
+op15:
+    not  ch
+    mov  dx, 0FF00H
+    ror  dx, cl
+    mov  bx, [bp][len]
+    dec  bx
+op16:
+    push di
+    or   bx, bx
+    jz   op18
+    push bx
+op17:
+    and  es:[di], dx
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  op17
+    pop  bx
+op18:
+    mov  al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    pop  di
+    call incRow
+    jnz  op16
+    jmp  near setExit
+
+__XORBlock:
+    mov  bx, [bp][len]
+op20:
+    push di
+    push bx
+op21:
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    xor  es:[di], ax
+    inc  di
+    dec  bx
+    jnz  op21
+    pop  bx
+    pop  di
+    call incRow
+    jnz  op20
+    jmp  near setExit
+
+__ANDBlock:
+
+    not  ch
+    mov  bx, [bp][len]
+    dec  bx
+op30:
+    push di
+    or   bx, bx
+    jz   op32
+    push bx
+op31:
+    lodsb
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    inc  di
+    dec  bx
+    jnz  op31
+    pop  bx
+op32:
+    lodsb
+    or   al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    pop  di
+    call incRow
+    jnz  op30
+    jmp  near setExit
+
+__ORBlock:
+    mov  bx, [bp][len]
+op40:
+    push di
+    push bx
+op41:
+    lodsb
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  op41
+    pop  bx
+    pop  di
+    call incRow
+    jnz  op40
+    jmp  near setExit
+
+
+__reverseBlock:
+
+    cmp  cx, 0FF00H
+    jnz  op55
+    mov  cx, [bp][len]
+op50:
+    push cx
+    push di
+revLoop1:
+    lodsb
+    not  al
+    stosb
+    loop revLoop1
+    pop  di
+    pop  cx
+    call incRow
+    jnz  op50
+    jmp  near setExit
+
+op55:
+    not  ch
+    mov  dx, 0FF00H
+    ror  dx, cl
+    mov  bx, [bp][len]
+    dec  bx
+op56:
+    push di
+    or   bx, bx
+    jz   op58
+    push bx
+op57:
+    and  es:[di], dx
+    lodsb
+    not  al
+    sub  ah, ah
+    ror  ax, cl
+    or   es:[di], ax
+    inc  di
+    dec  bx
+    jnz  op57
+    pop  bx
+op58:
+    mov  al, ch
+    mov  ah, 0FFH
+    ror  ax, cl
+    and  es:[di], ax
+    not  ax
+    mov  [bp][lastMask], ax
+    lodsb
+    sub  ah, ah
+    not  al
+    ror  ax, cl
+    and ax, [bp][lastMask]
+    or   es:[di], ax
+    pop  di
+    call incRow
+    jnz  op56
+    jmp  near setExit
+
+
+(*
+void HercPut(short x1, y1, unsigned char *buffer, short action);
+*)
+
+public __HercPut :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ax, [bp][action]
+    or  ax, ax
+    jnz  op2
+op1:
+    mov  word [bp][bitOp], __ORBlock
+    jmp  gotOp
+op2:
+    dec  ax
+    jnz  op3
+    mov  word [bp][bitOp], __ANDBlock
+    jmp  gotOp
+op3:
+    dec  ax
+    jnz  op4
+    mov  word [bp][bitOp], __reverseBlock
+    jmp  gotOp
+op4:
+    dec  ax
+    jnz  op5
+    mov  word [bp][bitOp], __setBlock
+    jmp  gotOp
+op5:
+    mov  word [bp][bitOp], __XORBlock
+gotOp:
+    mov  ax, [bp][y1]
+    mov  bx, [bp][x1]
+    call __pixeladdrHerc
+    xor  cl, 7
+    mov  di, bx
+    cmp  di, 2000H
+    jb   interleave1
+    cmp  di, 4000H
+    jb   interleave2
+    cmp  di, 6000H
+    jb   interleave3
+interleave4:
+    mov  bx, 3H
+    jmp  gotInterleave
+interleave3:
+    mov  bx, 2H
+    jmp  gotInterleave
+interleave2:
+    mov  bx, 1H
+    jmp  gotInterleave
+interleave1:
+    mov  bx, 0H
+gotInterleave:
+    mov  [bp][leaf], bx
+    lds  si, [bp][buffer]
+    lodsw
+    mov  [bp][rows], ax
+    lodsb
+    sub  ah, ah
+    mov  [bp][len], ax
+    lodsb
+    mov  ch, al
+    mov  bx, [bp][len]
+    jmp  [bp][bitOp]
+setExit:
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __active_page
+extrn __page_size
+extrn __bkcolor
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __clear_Herc :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push di
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__active_page]
+    mul  word [__page_size]
+(*%T _XTD *)
+    db   0C1H,0F8H,004H                (*I shl  ax, 4 *)
+    mov  di, ax
+    extrn __B000h
+    mov  ax, __B000h
+(*%E *)
+(*%F _XTD *)
+    add  ax, 0B000H
+    sub  di, di
+(*%E *)
+    mov  es, ax
+    mov  ax, [__bkcolor]
+    jz   black
+    mov  ax, 0FFFFH
+black:
+    mov  cx, 4000H
+    rep; stosw
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __fgcolor
+extrn __bkcolor
+extrn __display_state
+extrn __active_page
+extrn __txcolor
+extrn __current_video
+
+extrn __HercPut
+extrn __current_text
+__GPSET     = 3
+__GPRESET   = 2
+__GPAND     = 1
+__GPOR      = 0
+__GPXOR     = 4
+__RHUNDLIN  = 8
+
+mode          = 14       (* current video mode *)
+_HERCMONO     =  8       (* 720 x 348, BW for HGC *)
+
+(*  Buffer for character shape in putimage format for hercules *)
+__PixRows       : dw 12       (* pixel rows per char - 12 vertical **)
+__BytsPerRow    : db 1        (* 8 bit wide chars **)
+__FinalMask     : db 0FFH     (* All bits matter **)
+                  dw 0        (* Two zero pixel rows **)
+__Character     : dw 0,0,0,0  (* 8 pixel rows **)
+__Underline     : db 0        (* This byte for underlining **)
+                  db 0        (* 1 more zero pixel row **)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __txt_out :
+
+chk      = frame
+
+    push bp
+    mov  bp, sp
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ah, 9
+    mov  bh, [__active_page]
+    mov  al, [bp][chk]
+    mov  cl, 4
+    mov  bl, [__bkcolor]
+    shl  bl, cl
+    mov  dl, [__txcolor]
+    mov  dh, dl
+    and  dl, 0FH
+    or   bl, dl
+    test dh, 10H
+    jz   outChar
+    or   bl, 80H
+outChar:
+    cmp  word ds:[__current_video][mode], _HERCMONO
+    jz   herc_text
+    mov  cx, 1
+    int  10H
+done:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(* Obtain the character shape from the bios table at F000:FA6E**)
+(* al = char to output **)
+herc_text:
+    push di
+    push si
+    (* Copy char shape from bios table into buffer **)
+    mov bl, al                  (* char to output *)
+    xor bh, bh
+    push ds
+    mov ax, ds
+    mov es, ax
+(*%F _XTD *)
+    mov ax, 0F000H              (* bios segment *)
+(*%E *)
+(*%T _XTD *)
+    extrn __F000h
+    mov ax, __F000h
+(*%E *)
+    mov ds, ax
+    mov ax, 0FA6EH              (* char table starting offset *)
+    mov cl, 3
+    shl bx, cl                  (* char code * 8 (8 bytes in table/char) *)
+    add ax, bx                  (* offset of char in table *)
+    mov si, ax                  (* ds:si is char loc in bios **)
+    mov di, __Character         (* address of dest. down here **)
+    lodsw
+    stosw
+    lodsw
+    stosw
+    lodsw
+    stosw
+    lodsw
+    stosw
+    xor al, al                  (* Assume no underline *)
+    xor dh, dh                  (* dx is foreground 'colour' *)
+    mov cx, dx
+    and cl, 07H
+    and dl, 08H                 (* dx is underline bit **)
+    jz normal
+    not al
+normal:
+    stosb
+    pop ds
+
+(* Now call HercPut to load the character shape onto the screen RAM **)
+
+    push cx
+    push ds                     (* buffer *)
+    mov cx, __PixRows
+    push cx
+    mov al, [__current_text]    (* convert row to y pixels *)
+    xor ah, ah
+    shl ax, 1
+    shl ax, 1
+    mov bx, ax
+    shl ax, 1
+    add ax, bx                  (* row * 12 *)
+    push ax
+    mov al, [__current_text][2] (* convert col to x pixels *)
+    xor ah, ah
+    mov cl, 3
+    shl ax, cl
+    push ax
+(*%F NearCall *)
+    call far __HercPut
+(*%E *)
+(*%T NearCall *)
+    call __HercPut
+(*%E *)
+    add sp, 0AH
+    pop si
+    pop di
+    jmp done
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __fgcolor
+extrn __bkcolor
+extrn __display_state
+extrn __active_page
+extrn __txcolor
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+public __gcur :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push ax
+    mov  ah, 2
+    mov  bh, dl
+    mov  dl, cl
+    mov  dh, bl
+    int  10H
+    pop  bx
+    or   bl, 80H
+    mov  ah, 9
+    mov  al, 219
+outChar:
+    mov  cx, 1
+    int  10H
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __defaultmode
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+public __setbiosmode :
+
+mode     = frame
+
+    push  bp
+    mov   bp, sp
+    mov   ax, [bp][mode]
+    mov   ah, 0H
+    int   10H
+    pop   bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+public __getvideomode :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    mov  ah, 0FH
+    int  10H
+    sub  ah, ah
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+public __change_screen_background :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    push di
+    push si
+    push ds
+    mov  es, bx
+    mov  ds, bx
+    mov  di, ax
+    mov  si, ax
+    shl  dl, 1
+    shl  dl, 1
+    shl  dl, 1
+    shl  dl, 1
+changeLoop:
+    lodsw
+    and  ah, 0FH
+    or   ah, dl
+    stosw
+    loop changeLoop
+    pop  ds
+    pop  si
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(****************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __FindPS2
+extrn __FindEGA
+extrn __FindCGA
+extrn __FindMono
+
+select _DATA
+
+public  __TestSequence: db      0            (* this list of flags and addresses *)
+                        dw      __FindPS2    (* determines the order in which this *)
+                                             (* program looks for the various *)    (* subsystems *)
+public  __EGAflag :     db      0
+                        dw      __FindEGA
+
+public __CGAflag :      db      0
+                        dw      __FindCGA
+
+public __Monoflag :     db      0
+                        dw      __FindMono
+
+(****************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+(*             TYPE
+                 VIDstruct = RECORD
+                               VideoSubsystem0 : SHORTCARD
+                               Display0        : SHORTCARD
+                               VideoSubsystem1 : SHORTCARD
+                               Display1        : SHORTCARD
+                             END
+
+               PROCEDURE VideoID(VAR vs: VIDstruct)
+
+               Subsystem ID values:
+                               0 = (none)
+                               1 = MDA
+                               2 = CGA
+                               3 = EGA
+                               4 = MCGA
+                               5 = VGA
+                             80h = HGC
+                             81h = HGC+
+                             82h = Hercules InColor
+
+
+               Display types:  0 = (none)
+                               1 = MDA-compatible monochrome
+                               2 = CGA-compatible color
+                               3 = EGA-compatible color
+                               4 = PS/2-compatible monochrome
+                               5 = PS/2-compatible color
+
+
+       The values returned in VIDstruct[0].VideoSubsystem and
+       VIDstruct[0].Display indicate the currently active subsystem.
+*)
+
+Video0Type   = 0               (* first subsytem type *)
+Display0Type = 1               (* display attached to first subsystem *)
+Video1Type   = 2               (* second subsystem type *)
+Display1Type = 3               (* display attached to second subsystem *)
+
+Device0      = 0
+Device1      = 2
+
+MDA      =  1
+CGA      =  2
+EGA      =  3
+MCGA     =  4
+VGA      =  5
+HGC      = 80H
+HGCPlus  = 81H
+InColor  = 82H
+
+MDADisplay      =   1
+CGADisplay      =   2
+EGAColorDisplay =   3
+PS2MonoDisplay  =   4
+PS2ColorDisplay =   5
+
+TRUE            =   1
+FALSE           =   0
+
+select _DATA
+
+extrn __Monoflag
+extrn __EGAflag
+extrn __CGAflag
+extrn __TestSequence
+
+EGADisplays :   db      CGADisplay      (* 0000b, 0001b  (EGA switch values) *)
+                db      EGAColorDisplay (* 0010b, 0011b *)
+                db      MDADisplay      (* 0100b, 0101b *)
+                db      CGADisplay      (* 0110b, 0111b *)
+                db      EGAColorDisplay (* 1000b, 1001b *)
+                db      MDADisplay      (* 1010b, 1011b *)
+
+DCCtable :      db      0,0             (* translate table for INT 10H func 1AH *)
+                db      MDA,MDADisplay
+                db      CGA,CGADisplay
+                db      0,0
+                db      EGA,EGAColorDisplay
+                db      EGA,MDADisplay
+                db      0,0
+                db      VGA,PS2MonoDisplay
+                db      VGA,PS2ColorDisplay
+                db      0,0
+                db      MCGA,EGAColorDisplay
+                db      MCGA,PS2MonoDisplay
+                db      MCGA,PS2ColorDisplay
+
+
+NumberOfTests   = 4
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+(*
+ __FindPS2
+
+       This subroutine uses INT 10H function 1AH to determine the video BIOS
+       Display Combination Code (DCC) for each video subsystem present.
+*)
+
+public __FindPS2 :
+
+    mov  ax, 1A00H
+    int  10H          (* call video BIOS for info *)
+    cmp  al, 1AH      (* exit if function not supported (i.e., *)
+    jne  L13          (* no MCGA or VGA in system) *)
+
+(* convert BIOS DCCs into specific subsystems & displays *)
+
+    mov  cx, bx
+    xor  bh, bh       (* BX := DCC for active subsystem *)
+    or   ch, ch
+    jz   L11          (* jump if only one subsystem present *)
+
+    mov  bl, ch       (* BX := inactive DCC *)
+    add  bx, bx
+    mov  ax, [bx][DCCtable]
+
+    mov  es:[di][Device1], ax
+    mov  bl, cl
+    xor  bh, bh       (* BX := active DCC *)
+L11:
+    add  bx, bx
+    mov  ax, [bx][DCCtable]
+    mov  es:[di][Device0], ax
+
+(* reset flags for subsystems that have been ruled out *)
+
+    mov  byte [__CGAflag], FALSE
+    mov  byte [__EGAflag], FALSE
+    mov  byte [__Monoflag], FALSE
+
+    lea  bx, [Video0Type][di]      (* if the BIOS reported an MDA ... *)
+    cmp  byte es:[bx], MDA
+    je   L12
+    lea  bx, [Video1Type][di]      (* if the BIOS reported an MDA ... *)
+    cmp  byte es:[bx], MDA
+    jne  L13
+L12:
+    mov  word es:[bx], 0           (* ..... Hercules can't be ruled out *)
+    mov  byte [__Monoflag], TRUE
+L13:
+    ret  0
+
+(* Look for an EGA. This is done by making a call to an EGA BIOS function
+   which doesn't exist in the default (MDA, CGA) BIOS.
+*)
+
+public __FindEGA :              (* Caller:       AH = flags           *)
+                                (* Returns:      AH = flags           *)
+                                (*               Video0Type and       *)
+                                (*               Display0Type updated *)
+
+    mov  bl, 10H                (* BL := 10H (return EGA info) *)
+    mov  ah, 12H
+    int  10H                    (* call EGA BIOS for info *)
+                                (* if EGA BIOS is present *)
+                                (* BL <> 10H              *)
+                                (* CL = switch setting    *)
+    cmp  bl,10H
+    je   L22                    (* jump if EGA BIOS not present *)
+    mov  al, cl
+    shr  al, 1                  (* AL := switches/2 *)
+    mov  bx, EGADisplays
+    xlat                        (* determine display type from switches *)
+    mov  ah, al                 (* AH := display type *)
+    mov  al, EGA                (* AL := subsystem type *)
+    call FoundDevice
+    cmp  ah, MDADisplay
+    je   L21                    (* jump if EGA has a monochrome display *)
+    mov  byte [__CGAflag], FALSE(* no CGA if EGA has color display *)
+    jmp  L22
+L21:
+    mov  byte [__Monoflag], FALSE (* EGA has a mono display, so MDA and *)
+                                (* Hercules are ruled out *)
+L22:
+    ret  0
+
+
+(*  This is done by looking for the CGA's 6845 CRTC at I/O port 3D4H *)
+
+public  __FindCGA :            (* Returns:      VIDstruct updated *)
+
+    mov  dx, 3D4H               (* DX := CRTC address port *)
+    call __Find6845
+    jc   L31                    (* jump if not present *)
+    mov  al, CGA
+    mov  ah, CGADisplay
+    call FoundDevice
+L31:
+    ret  0
+
+(*
+   __FindMono  This is done by looking for the MDA's 6845 CRTC at I/O port 3B4H.
+   If a 6845 is found, the subroutine distinguishes between an MDA
+   and a Hercules adapter by monitoring bit 7 of the CRT Status byte.
+   This bit changes on Hercules adapters but does not change on an MDA.
+   The various Hercules adapters are identified by bits 4 through 6 of
+   the CRT Status value:
+        000BH = HGC
+        001BH = HGC+
+        101BH = InColor card
+*)
+public __FindMono :                    (* Returns:    VIDstruct updated *)
+
+    xor  bx, bx                        (* Clear RetraceToggle *)
+    mov  dx, 003BAH                    (* Set DX := Status Port Address *)
+    in   al, dx                        (* Get Status Byte *)
+    and  al, 080H                      (* Mask out bits 0..6 *)
+    mov  ah, al                        (* Store RdPort in AH *)
+    mov  cx, 08000H                    (* Set loop count to 32767 *)
+$$RdPortLoop:
+    dec  cx
+    jcxz $$RdPortDone
+$$RdPortLoop2:
+    in   al, dx                        (* Get Status Byte *)
+    and  al, 080H                      (* Mask out bits 0..6 *)
+    cmp  al, ah                        (* Same as last time? *)
+    jz   $$RdPortLoop                  (* If So, try again *)
+    in   al, dx                        (* Otherwise, update RdPort *)
+    and  al, 080H
+    mov  ah, al
+    inc  bx                            (* Increase RetraceToggle *)
+    loop $$RdPortLoop2
+$$RdPortDone:
+    mov  ah, MDADisplay                (* Assume MDA *)
+    cmp  bx, 2                         (* Did the Retrace Toggle > twice *)
+    ja   $$IsHerc                      (* If so, it's a Herc *)
+    mov  al, MDA                       (* If not, it's a plain MDA *)
+    jmp  $$Exit
+$$IsHerc:
+    in   al, dx                        (* Get the Status Byte *)
+    and  al, 70H                       (* Mask out bits 0..3 *)
+    cmp  al, 10H                       (* Is it a HGC+ ? *)
+    jnz  $$NotPlus                     (* If not, keep looking *)
+    mov  al, HGCPlus                   (* If so, tell the world *)
+    jmp  $$Exit
+$$NotPlus:
+    cmp  al, 50H                       (* Is it an InColor Card *)
+    jnz  $$PlainHGC                    (* If not, keep looking *)
+    mov  ah, EGAColorDisplay           (* InColor is EGA compatible *)
+    mov  al, InColor                   (* Shout it loud *)
+    jmp  $$Exit
+$$PlainHGC:
+    mov  al, HGC                       (* It must be a plain HGC *)
+$$Exit:
+    call FoundDevice                   (* update VideoConfig *)
+    ret  0                             (* Go Home *)
+
+(*
+   __Find6845  This routine detects the presence of the CRTC on an MDA,CGA, or
+   HGC. The technique is to write and read register 0FH of the chip (Cursor
+   Location low). If the same value is read as written, assume the chip
+  is present at the specified port address.
+*)
+
+__Find6845 :
+
+                                (* Caller:       DX = port addr *)
+                                (* Returns:      cf set if not present *)
+    mov  al, 0FH
+    out  byte dx, al            (* select 6845 reg 0FH (Cursor Low) *)
+    inc  dx
+
+    in   al, dx                 (* AL := current Cursor Low value *)
+    mov  ah, al                 (* preserve in AH *)
+    mov  al, 66H                (* AL := arbritrary value *)
+    out  byte dx, al            (* try to write to 6845 *)
+    mov  cx, 8000H
+L51:
+    loop L51                    (* wait for 6845 to respond *)
+    in   al, dx
+    xchg ah, al                 (* AH := returned value *)
+                                (* AL := original value *)
+    out  byte dx, al            (* restore original value *)
+    cmp  ah, 66H                (* test whether 6845 responded *)
+    je   L52                    (* jump if it did cf is reset *)
+    stc                         (* set carry flag if no 6845 present *)
+    ret  0
+L52:
+    clc
+    ret  0
+
+__FindHercMode:
+
+    mov  ax, 0F00H
+    int  10H
+    cmp  al, 7
+    jne  noMono
+    clc
+    ret  0
+noMono:
+    stc
+    ret 0
+
+
+(* __FindActive This subroutine stores the currently active device as Device0.
+   The current video mode determines which subsystem is active.
+*)
+
+__FindActive :
+
+    cmp  word es:[di][Device1], 0
+    je   L63                             (* exit if only one subsystem *)
+    cmp  byte es:[Video0Type][di], 4     (* exit if MCGA or VGA present *)
+    jge  L63                             (* INT 10H function 1AH *)
+    cmp  byte es:[Video1Type][di], 4     (* already did the work *)
+    jge  L63
+    mov  ah, 0FH
+    int  10H                             (* AL := current BIOS video mode *)
+    and  al, 7
+    cmp  al, 7                           (* jump if monochrome *)
+    je   L61                             (* (mode 7 or 0FH) *)
+    cmp  byte es:[Display0Type][di], MDADisplay
+L61:
+    jne  L63                             (* exit if Display0 is monochrome *)
+L62:
+    mov  ax, es:[di][Device0]            (* make Device0 currently active *)
+    xchg ax, es:[di][Device1]
+    mov  es:[di][Device0], ax
+L63:
+    ret  0
+
+(*
+   FoundDevice This routine updates the list of subsystems
+*)
+
+FoundDevice :
+                                             (* Caller:   AH = display #   *)
+                                             (*           AL = subsystem # *)
+                                             (* Destroys: BX *)
+
+    lea  bx, es:[Video0Type][di]
+    cmp  byte es:[bx], 0
+    je   L71                                 (* jump if 1st subsystem *)
+    lea  bx, es:[Video1Type][di]             (* must be 2nd subsystem *)
+L71:
+    mov  es:[bx], ax                         (* update list entry *)
+    ret  0
+
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __getsystem :
+
+(*  void _getsystem(VIDstruct *vid) *)
+
+ARGpVID  = frame
+    push bp
+    mov  bp,sp
+    push si
+    push di
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(* initialize the data structure that will contain the results *)
+
+(*%F NearPtr *)
+    les  di, [bp][ARGpVID]              (* ES:DI -> start of data structure *)
+(*%E *)
+(*%T NearPtr *)
+    mov  di, ds
+    mov  es, di
+    mov  di, [bp][ARGpVID]              (* ES:DI -> start of data structure *)
+(*%E *)
+    mov  word es:[di][Device0], 0       (* zero these variables *)
+    mov  word es:[di][Device1], 0
+
+(* look for various subsystems using the subroutines whose addresses are *)
+(* tabulated in TestSequence; each subroutine sets flags in TestSequence *)
+(* to indicate whether subsequent subroutines need to be called *)
+
+    mov  byte [__CGAflag], TRUE
+    mov  byte [__EGAflag], TRUE
+    mov  byte [__Monoflag], TRUE
+    mov  byte [__TestSequence], TRUE
+    mov  cx, NumberOfTests
+    mov  si, __TestSequence
+L01:
+    lodsb                           (* AL = flag *)
+    test al,al
+    lodsw                           (* AX = subroutine address *)
+    jz   L02                        (* skip subroutine if flag is false *)
+    push si
+    push cx
+    call ax                         (* call subroutine to detect subsystem *)
+    pop  cx
+    pop  si
+L02:
+    loop L01
+
+(* determine which subsystem is active *)
+
+    call __FindActive
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  di          (* restore caller registers and return *)
+    pop  si
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __getmemory :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    mov  ah, 12H
+    mov  bl, 10H
+    int  10H
+    mov  al, 64
+    inc  bl
+    mov  dl, bl
+    mul  dl
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __clear_blink :
+
+    mov  ax, 1003H
+    mov  bl, 0H
+    int  10H
+    ret  0
+
+(******************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __gr_abs_value :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    test ah, 80H
+    jz  absRet
+    neg ax
+absRet:
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret far 0
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+
+(**************************************************************************)
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __gdummy :             (* default null procedure for function pointers *)
+
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+(*
+void _setcur(short row, short col, short page);
+*)
+
+public __setcur :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+    mov  dh, al
+    mov  dl, bl
+    mov  bh, cl
+    mov  ah, 2
+    int  10H
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*************************************************************************)
+
+numxpixels     = 0       (* number of pixels on X axis *)
+numypixels     = 2       (* number of pixels on Y axis *)
+numtextcols    = 4       (* number of text columns available *)
+numtextrows    = 6       (* number of text rows available *)
+numcolors      = 8       (* number of actual colors *)
+bitsperpixel   = 10      (* number of bits per pixel *)
+numvideopages  = 12      (* number of available video pages *)
+mode           = 14      (* current video mode *)
+adapter        = 16      (* active display adapter *)
+monitor        = 18      (* active display monitor *)
+memory         = 20      (* adapter video memory in K bytes *)
+
+_DEFAULTMODE  =  -1      (* restore screen to original mode *)
+_TEXTBW40     =  0       (* 40 x 25 text, 16 grey *)
+_TEXTC40      =  1       (* 40 x 25 text, 16/8 color *)
+_TEXTBW80     =  2       (* 80 x 25 text, 16 grey *)
+_TEXTC80      =  3       (* 80 x 25 text, 16/8 color *)
+_MRES4COLOR   =  4       (* 320 x 200, 4 color *)
+_MRESNOCOLOR  =  5       (* 320 x 200, 4 grey *)
+_HRESBW       =  6       (* 640 x 200, BW *)
+_TEXTMONO     =  7       (* 80 x 25 text, BW *)
+_HERCMONO     =  8       (* 720 x 348, BW for HGC *)
+_MRES16COLOR  =  13      (* 320 x 200, 16 color *)
+_HRES16COLOR  =  14      (* 640 x 200, 16 color *)
+_ERESNOCOLOR  =  15      (* 640 x 350, BW *)
+_ERESCOLOR    =  16      (* 640 x 350, 4 or 16 color *)
+_VRES2COLOR   =  17      (* 640 x 480, BW *)
+_VRES16COLOR  =  18      (* 640 x 480, 16 color *)
+_MRES256COLOR =  19      (* 320 x 200, 256 color *)
+
+extrn __current_video
+extrn __clear_blink
+
+public __resetEGA :
+
+
+    mov  ax, _DATA
+    mov  es, ax
+    cmp  word es:[__current_video][mode], _VRES2COLOR
+    jnz  notVres
+    mov  cx, 1
+    jmp  ccDone
+notVres:
+    cmp  word es:[__current_video][mode], _ERESNOCOLOR
+    jnz  notEres
+    mov  cx, 5
+    jmp  ccDone
+notEres:
+    mov  cx, 0FH;
+ccDone:
+    mov  al, 2
+    mov  dx, 3CEH
+    out  byte dx, al
+    mov  al, 0FH
+    inc  dx
+    out  byte dx, al
+    mov  al, 1
+    dec  dx
+    out  byte dx, al
+    sub  al, al
+    inc  dx
+    out  byte dx, al
+    mov  al, 2
+    dec  dx
+    out  byte dx, al
+    sub  al, al
+    inc  dx
+    out  byte dx, al
+    mov  al, 3
+    dec  dx
+    out  byte dx, al
+    sub  al, al
+    inc  dx
+    out  byte dx, al
+    mov  al, 8
+    dec  dx
+    out  byte dx, al
+    mov  al, 0FFH
+    inc  dx
+    out  byte dx, al
+    mov  al, 7
+    dec  dx
+    out  byte dx, al
+    mov  al, cl
+    inc  dx
+    out  byte dx, al
+    mov  al, 5
+    dec  dx
+    out  byte dx, al
+    sub  al, al
+    inc  dx
+    out  byte dx, al
+    mov  al, 2
+    mov  dx, 3C4H
+    out  byte dx, al
+    mov  al, 0FH
+    inc  dx
+    out  byte dx, al
+    call __clear_blink
+
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __setbc :
+
+    mov  ah, 0BH
+    sub  bx, bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __setr10 :
+
+    mov  ax, 1010H
+    mov  bx, 10H
+    sub  cx, cx
+    sub  dx, dx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(***************************************************************************)
+
+section
+
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+
+public __gmemcpy :
+
+(*
+void *_gmemcpy(void *dest, void *source, unsigned num)
+
+Copies num bytes from source to dest (Does not handle any overlap).
+Returns destination address.
+*)
+
+num  = bxframe
+
+    mov  es, bx
+    mov  bx, sp
+    mov  bx, ss:[bx][num]
+    push di
+    push si
+    push ds
+    mov  ds, dx
+    mov  si, cx
+    mov  di, ax
+    mov  cx, bx
+    jcxz noMove
+    test al, 1
+    jz   evenAdd                       (* word align *)
+    movsb
+    dec  cx
+evenAdd:
+    shr  cx, 1
+    rep; movsw                         (* move words *)
+    adc  cx, cx
+    rep; movsb                         (* move odd byte *)
+noMove:
+    mov  dx, es
+    pop  ds
+    pop  si
+    pop  di
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+
+(****************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __gmemset :
+
+(*
+void *_gmemset(void *s, char c, unsigned num)
+
+Sets num bytes to c.
+Returns buffer address.
+*)
+
+    push di
+    mov  es, bx
+    mov  di, ax
+    mov  al, cl
+    mov  cx, dx
+    mov  dx, di
+    jcxz noMove
+    mov  ah, al
+    test di, 1
+    jz   evenAdd
+    stosb              (* word align *)
+    dec  cx
+evenAdd:
+    shr  cx, 1
+rep  ; stosw           (* move words *)
+    adc  cx, cx
+rep  ; stosb           (* move odd byte *)
+noMove:
+    mov  ax, dx
+    mov  dx, es        (* return buffer address *)
+    pop  di
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(***************************************************************************)
+section
+(*%F NearCall *)
+segment Graphics_TEXT(CODE,28H)
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+
+(*%F NearCall *)
+select Graphics_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public __gmemwset :
+
+(*
+void *memwset(void *s, char c, unsigned num)
+
+Sets num words to c.
+Returns buffer address.
+*)
+
+    push di
+    mov  es, bx
+    mov  di, ax
+    mov  ax, cx
+    mov  cx, dx
+    mov  dx, di
+rep ;  stosw
+    mov  ax, dx
+    mov  dx, es             (* return buffer address *)
+    pop  di
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __setvideomode
+extrn __setvideomode_vector
+extrn __display_state
+extrn __mode_changed
+
+select _TEXT
+
+public __restore_mode :
+
+(*%T _DLLOVL *)
+    push  bp
+    mov   bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    cmp  byte [__display_state], 0
+    jz   dontReset
+    cmp  byte [__mode_changed], 0
+    jz   dontReset
+    mov  ax, -1
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F _DLL *)
+    call far __setvideomode
+(*%E *)
+(*%T _DLL *)
+    call far [__setvideomode_vector]
+(*%E *)
+(*%F RegParam *)
+    pop  ax
+(*%E *)
+dontReset:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+segment _INIT(INIT_CODE,28H)
+
+
+extrn __initgraph
+extrn __initgraph_vector
+extrn __exitgraph
+extrn __restore_mode
+
+(*%T _DLLOVL *)
+
+select _DATA
+
+RestAdr: dd __restore_mode
+
+(*%E *)
+
+select  _TEXT
+do_initgraph : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initgraph : dw MAGIC_NUM
+            db PR4
+            dd do_initgraph
+(*%E *)
+(*%T NearCall *)
+initgraph : dw MAGIC_NUM
+            db PR4
+            dw do_initgraph
+(*%E *)
+
+select _DATA
+public __defaultmode :  dw  initgraph, 0
+
+select  _TEXT
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%F _DLL *)
+    call far __initgraph
+(*%E *)
+(*%T _DLL *)
+    cmp  word [__initgraph_vector], 0
+    jz   noInit
+    call far [__initgraph_vector]
+(*%E *)
+(*%F _DLLOVL *)
+    mov  word [__exitgraph], __restore_mode
+(*%F NearCall *)
+    mov  word [__exitgraph][2], cs
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    mov  ax, [RestAdr]
+    mov  word [__exitgraph], ax
+    mov  ax, [RestAdr][2]
+    mov  word [__exitgraph][2], ax
+(*%E *)
+noInit:
+    pop  ds
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *)
+
+(****************************************************************************)
+(*%T _DLL *)
+section
+
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __setvideomode_vector
+extrn __initgraph_vector
+
+public __set_initgraph_vector :
+
+    push  bp
+    mov   bp, sp
+    push ds
+    push di
+    mov  di, _DATA
+    mov  ds, di
+    mov  [__setvideomode_vector][2], dx
+    mov  [__setvideomode_vector], cx
+    mov  [__initgraph_vector][2], bx
+    mov  [__initgraph_vector], ax
+    pop  di
+    pop  ds
+    pop  bp
+    ret  far 0
+(*%E *)
+
+
+
+end

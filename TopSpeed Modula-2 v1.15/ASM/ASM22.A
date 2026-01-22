@@ -1,0 +1,20 @@
+module asm22;
+
+
+segment _TEXT (CODE,28H)
+segment _DATA (DATA,28H)
+
+select _DATA
+
+ Chaine : db 'BONJOUR$';
+
+select  _TEXT
+
+
+ public   asm2$bon:
+
+        mov     dx,Chaine
+        mov     ah,09
+        int     21H
+        ret     0
+end

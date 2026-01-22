@@ -1,0 +1,62 @@
+2996 Assembling @
+2997 (%F %L) @
+2998 (%F %L,%C) @
+2999
+3000 Warning: |Syntax error|Error: |Internal error: @
+3001 Unexpected end of file
+3002 Wrong combination of index registers
+3003 Unknown/misspelled instruction mnemonic
+3004 Incorrect operand(s)
+3005 Wrong number of operands
+3006 Missing byte/word specifier
+3007 Undeclared byte operand
+3008 error in modrm
+3009 Label not in expected segment
+3010 Label redefined
+3011 Equated symbol redefined as label
+3012 Bad operand for seg operator
+3013 Module name must match filename
+3014 Bad operand for select
+3015 No segment defined
+3016 Bad operand for group
+3017 Not a segment register
+3018 Operand may not be label
+3019 More than one label in address
+3020 Not an index register
+3021 Fixup bad segment index
+3022 problem 1
+3023 Forward label never defined
+3024 Short relative jump out of range
+3025 problem 2
+3026 Token too big
+3027 Undefined operand for conditional
+3028 Name table full
+3029 Bad char in hex constant
+3030 Bad char in octal constant
+3031 Bad char in decimal constant
+3032 Mismatched string constant
+3033 Mismatched comment
+3034 Bad character
+3035 Token too long
+3036 Scope table full
+3037 Sorry - too many segments
+3038 Forward reference to segment
+
+3100  ST
+3101  CST
+3102  globals
+3103  PAT
+3104  STR
+3105  STR
+3106  INP
+3107  SC
+
+
+
+
+
+
+
+
+
+

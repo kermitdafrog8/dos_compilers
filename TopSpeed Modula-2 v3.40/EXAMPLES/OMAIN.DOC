@@ -1,0 +1,228 @@
+The overlay system from Topspeed version 1 has been supplied for your
+convenience. If you have used the system with version 1 there are several
+things you have to look out for.
+
+Modules which are part of an overlay must not contain any initialization code
+"(*# module(init_code=>off) *)" must be specified in both definition and
+implementation part of the module.
+
+The linker must no be allowed to pack segments.
+"#pragma link_option(pack=>off)" must be specified in the project file.
+
+Programs using overlays must be compiled in XLarge or MThread model.
+
+Modules with initialization code which are used by an module in an overlay
+must be initialized before code in the overlay is called. This can be achieved
+by copying the import list from the module in the overlay into the module
+where the overlay is loaded.
+
+
+The following is an anotated listing of the omain overlay example.
+
+omain.pr ----------------------------------------------------------------------
+#set model    = "xlarge"
+#set system   = "dos"
+
+#set linkopt  = "case=>off"
+#set lang     = "mod"
+
+#include basic.pi
+
+#pragma link_option(pack=>off) -- linker must not pack segments.
+                               -- overlay system will not work if this hapens
+                               -- and no warnig will be given
+#pragma link(%jpilib)
+#compile omain
+#autocompile
+%dolink
+#if %make="on" #then
+  #run "ovl omain" -- run ovl program to split into overlays.
+#endif
+%doend
+
+omain.ovl ----------------------------------------------------------------------
+1 OP1_TEXT -- put code from module op1 in overlay 1
+
+2 OP2_TEXT -- put code from module op2 and op3 in overlay 2
+2 OP3_TEXT
+
+
+
+omain.mod ----------------------------------------------------------------------
+MODULE omain;
+(*%F _fdata*) Make program in XLarge or MThread model (*%E*)
+
+IMPORT ovl117,op1,op2,op3;
+
+IMPORT IO; (* IO is used in op1-op3, and therefore must be initioalized
+              before op1-op3 are used ,this import enshures this *)
+
+PROCEDURE x;
+BEGIN
+  ovl117.Load(1);
+  op1.p1;
+  ovl117.UnLoad(1);
+  ovl117.Load(2);
+  op2.p2;
+  op3.p3;
+  ovl117.UnLoad(2);
+END x;
+
+BEGIN
+  x;
+END omain.
+
+
+op1.def ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+DEFINITION MODULE op1;
+PROCEDURE p1;
+END  op1.
+
+op1.mo ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+IMPLEMENTATION MODULE op1;
+IMPORT IO;
+PROCEDURE p1;
+BEGIN
+  IO.WrStr('procedure p1 in op1');
+  IO.WrLn;
+END p1;
+
+END  op1.
+
+op2.def ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+DEFINITION MODULE op2;
+PROCEDURE p2;
+END  op2.
+
+op2.mod ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+IMPLEMENTATION MODULE op2;
+IMPORT IO;
+PROCEDURE p2;
+BEGIN
+  IO.WrStr('procedure p2 in op2');
+  IO.WrLn;
+END p2;
+
+END  op2.
+
+op3.def ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+DEFINITION MODULE op3;
+PROCEDURE p3;
+END  op3.
+
+op3.mod ----------------------------------------------------------------------
+(*# module(init_code=>off) *)
+(* overlayed modules are not allowed to have initcode *)
+IMPLEMENTATION MODULE op3;
+IMPORT IO;
+PROCEDURE p3;
+BEGIN
+  IO.WrStr('procedure p3 in op3');
+  IO.WrLn;
+END p3;
+
+END  op3.
+
+Using Overlays in Modula-2 Programs:
+====================================
+
+This  section  contains  a  brief description of  the system
+available for creating and using overlays.
+
+Please Note:    This  bit  of  software  was  designed  and
+implemented for  internal use  by JPI.    It  is  not  user
+friendly and any mistakes you make will probably crash your
+machine hopelessly.  It is however flexible and efficient.
+
+There are two components:  OVL is used to split an EXE-file
+into overlays.   The  Overlay module is used in the running
+program, to read in the overlays.
+
+In order  to give  you maximum  flexibility,  OVL.MOD,  the
+program which  makes overlays,  is provided in source form.
+As a  first step,  you should  compile  and  link  the  OVL
+program itself.
+
+The OVL  program modifies  your EXE-files  to enable you to
+use overlays for the program.  An Overlay consists of a set
+of complete  segments, which  are not loaded initially, but
+which can be brought in by the call.
+
+Overlay.Load(n)
+
+where Load  is a predefined procedure in the Overlay module
+included in  the Techkit.   (The  module also  contains the
+procedure UnLoad,  for removing  an overlay  from  memory).
+You can  have more  then one  overlay loaded  at a time (if
+Space permits).
+
+The parameter, n, is the number of the overlay to load, and
+must be  in the  range, 1..9.    After  being  loaded,  all
+procedures  in  that  overlay  may  be  called  as  normal.
+Overlay.Load  calls   Storage.HeapAllocate  to  obtain  the
+memory for the overlay.
+
+Thus, the overlay module makes it possible to move overlays
+into and out of your program.
+
+To create  the overlay(s),  you need  to do several things.
+Suppose your program is called FRED.  Make the porgram as
+normal, then create  a text  file, FRED.OVL,  with one line for
+each segment or group you wish to put in an overlay.  The format
+of each  line is  a number  from 1-9, followed by the group
+name (or segment name if there is no group name).
+For example,  suppose you want to overlay modules FRED1 andFRED2 into
+one  overlay  and  FRED3  into  another. The
+FRED.OVL file would contain the following:
+
+1 G_FRED1
+
+1 G_FRED2
+
+2 G_FRED3
+
+The command  to create  the overlays and to modify FRED.EXE
+is
+
+ovl fred
+
+This reads  the FRED.OVL  file, and creates the appropriate
+overlay File(s).
+
+The overlays will be in files FRED.OV1, FRED.OV2..FRED.OV9.
+
+Bear in  mind that  it is  the program's  responsibility to
+load the  overlays.   The map  is modified  to include only
+resident code, and the old map is copied to FRED.OMP.
+
+Handling Small Segments Properly
+
+There is  a slight  flaw in  the concept where segments are
+less than  one paragraph,  because this means that the OVL-
+program cannot  distinguish the  segment to which a segment
+fixup applies.  Thus, if two segments in different overlays
+have the same paragraph, chaos will result.
+
+This means  that, to  be safe,  all segments  should be  at
+least one  paragraph.   The OVL  program issues  a  warning
+whenever this  is a  problem.   If this  happens you should
+enlarge the  segment to  at least  16 bytes  by adding some
+extra variable declarations.
+
+Initialising code  also tends  to cause  problems.  In this
+case, the  simplest solution  is to  use explicit procedure
+calls for  modules which are non-resident, and then execute
+these (after  loading the  overlay) from another (resident)
+module's initialisation.
+
+

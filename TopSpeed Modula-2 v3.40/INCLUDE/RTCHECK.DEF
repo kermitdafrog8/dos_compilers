@@ -1,0 +1,41 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  RTCHECK.DEF - Modula-2 run-time checking definitions                    *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# module(implementation=>off, init_code=>off) *)
+
+DEFINITION MODULE RTCheck;
+
+IMPORT CoreSig;
+
+CONST
+(* Values for code parameter *)
+  CNS_STACK     =  1;      (* Stack overflow *)
+  CNS_NILPTR    =  2;      (* Nil Ptr dereference *)
+  CNS_INDEX     =  9;      (* Index out of range  *)
+  CNS_OVERFLOW  =  4;      (* Integer overflow *)
+  CNS_RANGE     =  5;      (* Integer out of range *)
+  CNS_RETURN    =  6;      (* No return in function *)
+  CNS_CASE      =  7;      (* No matching case *)
+  CNS_DIVZERO   =  8;      (* Long integer divide by zero *)
+  CNS_PVC       = 10;      (* Pure virtual function called *)
+
+(* return values for handler *)
+  CONTINUE       = TRUE;
+  TERMINATE      = FALSE;
+
+(*  call(near_call=>off, reg_param=>(), reg_saved=>(ax,bx,cx,dx,ds,si,di,st1,st2),
+         c_conv=>off),
+    name(prefix=>modula) *)
+
+  CnsHandlerType ::= CoreSig.CnsHandlerType;
+  CnsHandler     ::= CoreSig.CnsHandler;
+
+END RTCheck.
+

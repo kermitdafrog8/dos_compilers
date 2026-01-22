@@ -1,0 +1,44 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  SHTHEAP.DEF - Modula-2 small heap manager                               *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => on,
+         o_a_size => on) *)
+(*# module(init_code => on) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+DEFINITION MODULE ShtHeap ;
+
+TYPE  Segment = CARDINAL;
+      Size    = CARDINAL;
+      Pointer = SHORTADDR;
+
+VAR   Clear: BOOLEAN;    (* Clear allocated storage *)
+      Check: BOOLEAN;    (* Stop if Allocate fails *)
+      Debug: BOOLEAN;    (* Test heap consistency at every call *)
+
+CONST Nil   = Pointer ( -1 );  (* Returned if Allocate fails *)
+      Align = 4;               (* Pointer alignment *)
+
+  PROCEDURE Initialize ( H: Segment; Z: Size );
+  PROCEDURE Increase   ( H: Segment; Z: Size );
+
+  PROCEDURE Allocate ( H: Segment; VAR P: Pointer; Z: Size );
+  PROCEDURE Free     ( H: Segment; VAR P: Pointer; Z: Size );
+
+  PROCEDURE Largest ( H: Segment ): Size;
+  PROCEDURE Total   ( H: Segment ): Size;
+
+  PROCEDURE Test ( H: Segment );
+
+END ShtHeap.
+

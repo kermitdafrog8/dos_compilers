@@ -1,0 +1,183 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INITESYS.A - embedded system startup                                    *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(* Skeleton startup for embedded systems :-
+
+   Project should include initesys and corertl. Functions may also be imported
+   from language standard libraries.
+*)
+
+include "corelib.inc"
+
+module initesys
+
+(* This is an example startup file for a minimal run-time system for modula2,
+   Pascal or C *)
+
+section
+segment ENTERCODE(BOOTCODE,28H)
+segment INITCODE(CODE,28H)
+segment MP_CODE(MP_CODE,68H)
+segment _TEXT(CODE,28H)
+segment _INITN(INITN,28H)
+segment _INIT(INIT,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment FAR_BSS(FAR_BSS,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+
+select _TEXT
+
+public _exit :    (* This procedure must be defined in case the main procedure *)
+                  (* returns *)
+
+code   = frame
+(*%F RegParam *)
+    push bp
+    mov  bp, sp
+    mov  al, [bp][code]
+(*%E *)
+    mov  ah, 4CH
+    int  21H
+
+db 'TopSpeed RTL (C) JPI 1989'
+
+section
+segment _TEXT(CODE,28H)
+public Standard$HALT:
+    mov ax,4C00H
+    int 21H
+
+section
+
+segment ENTERCODE(BOOTCODE,28H)
+segment INITCODE(CODE,28H)
+segment _TEXT(CODE,28H)
+segment _INITN(INITN,28H)
+segment _INIT(INIT,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment EMU_STATE(DATA,28H)
+reserved:
+  dw 0,0,0,0,0,0,0,0
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+
+(*%F NearPtr *)
+group DGROUP(EMU_STATE,_CONST,_DATA,BSS_START,_BSS,BSS_END)
+(*%E *)
+(*%T NearPtr *)
+group DGROUP(EMU_STATE,_CONST,_DATA,BSS_START,_BSS,BSS_END,STACK)
+(*%E *)
+
+select _DATA
+
+SSisDS    = 8
+HeapSize  = 6
+StackSize = 4
+
+select BSS_START
+public __bss_start:
+public _edata:
+
+select BSS_END
+public __bss_end:
+public _end:
+
+select ENTERCODE
+
+(* The Program Entry Point *)
+
+extrn  __entry_point
+    jmp far __entry_point
+
+select _TEXT
+
+extrn _main
+extrn _exit
+extrn __FloatInit
+extrn __initm
+extrn _x_main
+extrn __stk_base
+extrn __farstack
+
+
+public __entry_point :
+
+
+  mov  ax, STACK                 (* This stack initialization is only  *)
+  mov  ss, ax                    (* a default. You should set up ss:sp *)
+  mov  sp, 1000H
+
+                                 (* Interrupt controllers and or other *)
+                                 (* system hardware should be initialized *)
+                                 (* here if used for embedded systems *)
+
+                                 (* The following must be done to *)
+                                 (* initialise the modula2 init code and *)
+                                 (* some system variables *)
+  mov  ax, seg _x_main
+  mov  ds, ax
+  mov word [_x_main][0], _main
+  mov word [_x_main][2], seg _main
+(*%F NearPtr *)
+  mov word [__stk_base], 256     (* sets lower limit for stack pointer *)
+  mov word [__farstack], 1       (* indicates stack has own segment *)
+(*%E *)
+(*%T NearPtr *)
+  mov word [__stk_base], __bss_end+256
+  mov word [__farstack], 0
+(*%E *)
+
+(*call far __FloatInit  *)      (* call Floating point initialisation here *)
+
+(* For Modula2, Pascal .... *)
+   jmp  far __initm    (* This will execute initialisation code *)
+                                (* call main module *)
+
+(* For C ....
+(*%F sameCS *)
+   call far _main
+(*%E *)
+(*%T sameCS *)
+   call _main
+(*%E *)
+(*%F RegParam *)
+   push ax
+(*%E *)
+(*%F sameCS *)
+   call far _exit
+(*%E *)
+(*%T sameCS *)
+   call _exit
+(*%E *)
+
+*)
+
+dw EMU_STATE
+dw _CONST
+dw _DATA
+dw BSS_START
+dw _BSS
+dw BSS_END (* establishs order ! *)
+(*%T NearPtr *)
+dw STACK
+(*%E *)
+dw reserved
+dw 0
+end *
+

@@ -1,0 +1,24 @@
+DEFINITION MODULE ProcTrace;
+
+TYPE
+  Name = ARRAY[0..30] OF CHAR;
+
+VAR
+  Entry,
+  Exit   : PROC;    (* procedures called on entry and exit from any  *)
+                    (* procedure compiled with the (*$Q+*) directive *)
+  MonAdr : ADDRESS;
+  MonWrd : WORD;
+
+PROCEDURE Monitor(VAR W: WORD);      (* Monitor variable W *)
+
+PROCEDURE Check(S: ARRAY OF CHAR);   (* check current monitored variable *)
+
+PROCEDURE Get_Name() : Name;         (* returns name of current procedure *)
+
+PROCEDURE GetCsIp() : ADDRESS;
+
+PROCEDURE Install;                   (* Install procedure-trace traps *)
+                     
+END ProcTrace.
+

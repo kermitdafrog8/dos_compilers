@@ -1,0 +1,861 @@
+Modula-2 Library SourceKit            Documentation version 3.10
+==========================            ==========================
+
+Introduction
+------------
+
+Why a read-me file?
+
+There are two major reasons why printed documentation was
+not produced for the TopSpeed SourceKits:
+
+*  Internal revision. Only the public interface of the
+   run-time libraries can remain fixed. TopSpeed's policy
+   of continual improvement means that the actual
+   implementation of products may be changed between
+   minor releases.
+
+*  User feedback. This documentation will be augmented
+   in response to user requests for information where
+   possible.
+
+
+Modula-2 library naming
+-----------------------
+
+In normal use, the correct Modula-2 libraries are linked
+automatically by the project system. However, if manual
+selection is required, the following naming convention
+must be used:
+
+  %O%%M%%C%M2.LIB
+  %O%%M%%C%MLIB.LIB
+
+Where the macros %O%, %M% and %C% are expanded as follows:
+
+  %O%      Operating system:
+             R   Real mode (MSDOS).
+             W   Windows.
+             P   Protected mode (OS2).
+  %M%      Memory model:
+             S   Small model.
+             C   Compact model.
+             M   Medium model.
+             L   Large model.
+             X   XLarge model.
+             T   Mthread model.
+             O   Overlay model (MSDOS only).
+             D   Dynalink model.
+  %C%      Calling convention:
+             _   JPI.
+             F   Stack frame.
+
+For example, the large model, MSDOS, JPI calling
+convention Modula-2 libraries are named:
+
+   RL_MLIB.LIB, RL_M2.LIB
+
+In a multi-language program, the MLIB library is not
+used, MLIBC being substituted.
+
+
+Conditional compilation
+-----------------------
+
+The assembly language files produce code for all TopSpeed
+memory models, operating systems and calling conventions.
+This is achieved by conditional compilation.
+The following boolean flags are used to reflect the
+various possibilities:
+
+  NearPtr  When true, data pointers are 16 bit. When
+           false, data pointers are 32 bit.
+           Small and Medium models use NearPtr = true.
+           All other models use NearPtr = false.
+
+  NearCall When true, calls and return are near, and
+           procedure variables are 16 bit. When false,
+           calls and return are far, and procedure
+           variables are 32 bit.
+           Small and Compact models use NearCall = true.
+           All other models use NearCall = false.
+
+  SameDS   When true, DS is not assumed to be fixed, i.e.
+           pointing to DGROUP, the default data segment.
+           XLarge, Mthread, Overlay and Dynalink models
+           use SameDS = false. All other models use
+           SameDS = true.
+
+  RegParam When using the jpi calling convention, passing
+           parameters in registers, RegParam is true.
+           When using the standard stack frame calling
+           convention, RegParam is false.
+
+  MThread  In memory models that support multi-thread
+           operation, MThread is true.
+           Mthread, overlay and dynalink models support
+           multiple threads. Code to support this mode of
+           operation is include in these models.
+
+  _OS2     When true, OS2 specific code is generated. When
+           false MSDOS and some Windows code is generated
+
+  _WINDOWS When true, Windows specific code is generated.
+
+  _DLLOVL  When true, code required for the TopSpeed
+           overlay manager is generated. This required
+           for Overlay model and the Dynalink model under
+           MSDOS.
+
+  _DLL     When true, code specific to DLLs is generated.
+
+  ProtMode When true, protected mode features are enabled
+           for either OS2 or Windows.
+
+  _WINDLL  When true, code specific to Windows DLLs is
+           generated.
+
+The Modula-2 files use the following conditional
+compilation flags:
+
+  _mthread In memory models that support multithread
+           operation, _mthread is true.
+           Mthread, overlay and dynalink models support
+           multiple threads. Code to support this mode of
+           operation is include in these models.
+
+  _OS2     When true OS2 specific code is generated. When
+           false MSDOS and some Windows code is generated
+
+  _WINDOWS When true, Windows specific code is generated.
+
+  _DLL     When true, code specific to DLLs is generated.
+
+
+
+MKLIB.PI
+--------
+
+MKLIB.PI is included by the project file mklib.pr. It
+defines all the TopSpeed libraries, and the commands
+necessary to make them. The macro settings necessary to
+make a specific group of libraries are described in the
+relevant language library reference. The Modula-2 library
+is re-made automatically when any language library is re-
+made.
+
+
+Library structure
+-----------------
+
+The Modula-2 library comprises the following modules.
+
+modcore.a     Intermediate core library interface file.
+spawn.a       Process spawning module.
+storage.mod   Default memory management module.
+wstorage.mod  Windows memory management module.
+mstorage.mod  Multi language memory management module.
+fior.mod      File redirection module.
+shtheap.mod   Short heap memory management module.
+formio.mod    Formatted output module.
+window.mod    Text window module.
+fio.mod       File I/O module.
+asmlib.a      Assembly language implementation module.
+mathlib.mod   Math library module.
+system.mod    System module. System definitions and
+              process primitives.
+str.mod       String module.
+lib.mod       Miscellaneous library functions and
+              procedures.
+io.mod        Console I/O module.
+floatexc.mod  Floating point exception handling module.
+process.mod   Multi thread process module.
+winfio.mod    Windows file I/O module.
+winstr.mod    Windows string handling module.
+biosio.mod    BIOS I/O module.
+lim.mod       Expanded memory module.
+msmouse.mod   Microsoft mouse interface.
+graph.mod     Graphics module.
+graphi.mod    IOPL OS2 graphics server module.
+
+
+The Modula-2 library EXP file
+------------------------------
+
+The MSDOS and OS2 DLL versions of the core library have
+corresponding EXP files, declaring the exported identifiers:
+
+RD_M2.EXP RD_MLIB.EXP        Real mode.
+PD_M2.EXP PD_MLIB.EXP        Protected mode.
+
+If a public definition is added or removed from a module,
+EXP must be altered to reflect the change, if the DLL
+version is to be made.
+
+Similarly, a cut-down version of the core library DLL may
+be made by commenting out any unused identifiers. Smart
+linking will take care of removing the unwanted code from
+the DLL when it is remade.
+
+EXP files also exist for the multi-language DLL, MLIBC.
+
+
+Modula-2 Library modules
+------------------------
+
+The public interface to the library modules is described
+in the Modula-2 documentation. Only internal procedures and
+implementation details are described here.
+
+
+MODCORE.A
+---------
+
+Modcore is an intermediate interface file to the core
+library. It function is performed by other libraries in a
+multi-language program.
+
+Procedures and functions
+
+  __rreal_out, __rreal_in, __init_dummy, __initwin,
+  __setvideomode, __exit1, __initmt, __initgraphpublic,
+  __clock_time, _time, __flsbuf, __filbuf, __flusher
+    These are all dummy procedures for resolving uncalled
+    references.
+
+  __exec
+    Procedure for executing command shell.
+
+  __get_retcode
+    Returns exit status of spawned process.
+
+   _AdjustMem
+    Adjusts far heap size.
+
+  __write
+    Low level OS2 file write function.
+
+  __read
+    Low level OS2 file read function.
+
+  __os2_open
+    Low level OS2 file open function.
+
+  __close
+    Low level OS2 file close function.
+
+  _chdir, _mkdir, _rmdir, _getcurdir
+    Low level OS2 directory manipulation functions.
+
+  _rename
+    Low level OS2 file rename function.
+
+  _unlink
+    Low level OS2 file delete function.
+
+  __getfmode
+    Low level OS2 file status function.
+
+  _strlen, _strrchr, _strnicmp, _strcpy
+    Functions for manipulating zero terminated strings.
+
+
+SPAWN.A
+-------
+
+Spawn provides low level functions for spawning and chaining to
+new processes.
+
+Procedures and functions
+
+  __execve
+    Execve processes the command line by calling __CatArgV,
+    the program name by calling FindProg, and environment
+    strings by calling CatEnvV, and than uses the executor to
+    chain to a new process.
+
+  Executor
+    The Executor is a special subroutine which is copied up
+    to a memory area beyond the overlay image.  When execve
+    has completed all preparations it puts a modified exeHead
+    structure in a stack area at ES:BX (above the Executor)
+    and jumps to the Executor. The Executor is then
+    responsible for the final stages of calling MSDOS to load
+    the overlay, and then initializing registers and
+    jumping to the start of the overlayed program.
+
+  __FindProg
+    The given file name *nameP is to be interpreted as the
+    name of an executable file, given the usual MSDOS rules
+    for program names:
+
+    - if the name ends in ".*" or "." then no endings are
+      substituted, otherwise the endings ".COM" and ".EXE"
+      will be the trial endings.
+    - if the name begins with "/" or "\" or "?:", or if the
+      usePath argument is false, then there are no trial
+      prefixes, else the trial   prefixes are those in the
+      PATH variable in the environment.
+    - with each prefix, beginning with a null prefix, the
+      name is searched for using each of its trial endings,
+      continuing until the first   match or until all
+      prefixes and endings have been tried.
+
+    A buffer is allocated for the trial paths.  If a trial
+    match succeeds, the result of the function is a pointer
+    to the buffer which holds the complete path.  The file is
+    not open (the CHMOD function is used to test if the file
+    exists, not FIND).  The caller is responsible to free()
+    the buffer when it is no longer needed.
+
+    The function result is a pointer to the buffer.  If the
+    search fails then the buffer is de-allocated and the
+    function result is NULL.
+
+    The function also returns the size of the path in CX,
+    with a value of zero if the search failed.
+
+    In the case where a path is found the caller is
+    responsible for deallocating the buffer, using free().
+
+  __CatArgV
+    Takes the vector of arguments and concatenate them into
+    an MSDOS-style command line.  Use a space to separate
+    each argument, with a maximum of 126 characters, plus a
+    preceding length byte and a following CR ('0x0D').
+
+    Also, check the assumption that *argV[1] and *argV[2] may
+    be MSDOS 1.xx style (CPM-era) file names.  If so,
+    construct FCBs from them.
+
+    A NULL entry in the argV vector is taken as a terminator.
+    The entry argV[0] by Unix convention is a command name
+    which should not appear in the MSDOS command line, so it
+    is entirely ignored here.
+
+    Allocate a structure to hold the two FCBs and the command
+    line.  If the command line does not overflow, then the
+    return value is the pointer to the structure:
+
+    argComposite
+      FCB1     char [16];
+      FCB2     char [16];
+      length   char;
+      text     char [127];  /* includes trailing 0x0D */
+
+    The size of the arguments is calculated.  If it will
+    total more than 126 bytes, including spaces, then the
+    function quits without allocating an argComposite.  If
+    the total is OK, then the size of argComposite is trimmed
+    to hold just the necessary number of characters.
+
+    The return value is a pointer to the argComposite, in
+    DX:AX, with the total length of the argComposite in CX.
+    If an error occurs, then DX:AX == NULL and CX == 0.
+
+  __CatEnvV
+    Take the environment vector and concatenate the
+    environment strings into an MSDOS-style contiguous
+    environment.  Each string remains terminated by a zero,
+    with a null string as an overall terminator and a maximum
+    length of 32k bytes.
+
+    If a NULL envV value is supplied, then replace it with
+    the global _environ variable.
+
+    The size of the environment is totalled, and if it does
+    not exceed 32k bytes then a space is allocated, including
+    15 byte extra for paragraph alignment. The environment is
+    adjusted to begin on a paragraph boundary since MSDOS
+    uses segment values alone to locate environment strings.
+
+    A NULL entry in the envV vector or a pointer to an empty
+    string are taken as terminators.
+
+    The return value in DX:AX is the pointer to  the
+    allocated memory (NULL if none allocated).  The register
+    ES contains the paragraph number at which the environment
+    string actually begins (zero if none allocated).  Note
+    that while MSDOS needs only the ES value, the DX:AX
+    pointer will in general be required in order to free()
+    the allocation.
+
+    The register CX returns the length of the environment
+    string, including the terminating zero.  CX == 0 in cases
+    of error.
+
+  __beget
+    A child process, with program identified by *pathP, is
+    found, validated, and executed.  The current process
+    continues to exist but is asleep until the child process
+    is finished.
+
+    A return value of -1 indicates that the child process
+    could not be created.  Otherwise, the return value will
+    be the exit code of the child process, which by
+    convention is zero if the child executed without fault.
+    The exact meaning and severity of non-zero exit codes are
+    not standardized.
+
+    If usePath is true then the PATH environment variable
+    will be used to help find the program name, otherwise
+    *pathP is assumed to include directory names and the PATH
+    is not used.  However, in either case the suffixes ".COM"
+    and ".EXE" will automatically be tried unless the
+    supplied name already ends with an extension.
+
+    The basis for the begetting of a child process is the
+    MSDOS Exec command, function 4Bh request kind 0.
+    However, there are several preliminary actions required.
+    Firstly the exact and complete program name must be
+    found, which involves tracing the PATH= environment
+    variable.  This is done by the _FindProg function.
+
+    Next the arguments must be scanned and concatenated into
+    a single command string of up to 126 bytes, plus a length
+    byte and a trailing carriage return.
+
+    Arguments [1] and [2] may be file names, and so the MSDOS
+    Parse Filename function (29h) is used to build matching
+    FCB's if possible.  This is done with the _CatArgV
+    function.
+
+    Note that argument [0] is by convention the same as
+    pathP.  It is not used and not checked.  The end of the
+    argV vector must be set by placing a NULL pointer in the
+    final element of the vector.
+
+    The envV vector points to a collection of environment
+    strings.  These must also be concatenated into a
+    contiguous region of up to 32k bytes, terminated with a
+    double zero, which is the form expected by Exec.  This is
+    done by the _CatEnvV function.  The envV vector is
+    terminated either by a NULL pointer or by a pointer to a
+    null string.  If envV == NULL then the current program's
+    environment is used.
+
+    When all these things have been done the child program
+    may be executed using function 4Bh, with the environment,
+    command line, and dummy FCBs supplied as parameters to
+    function 4Bh.  After the child has terminated, function
+    4Dh is used to pick up the exit code.
+
+
+STORAGE.MOD
+-----------
+
+Storage.mod provides default memory management for all
+non-windows Modula-2 only programs.
+
+The Near Heap
+
+  A memory model with 16 bit data pointers (Small or
+  Medium) has data residing in one segment in order to be
+  able to address and data object using the short pointer.
+  Therefore the heap must reside in this default data segment.
+
+  In these models the functions ALLOCATE, DEALLOCATE and
+  AVAILABLE operate on this near heap and return short
+  pointers to object within the default data segment.
+
+  The size of this near heap may be limited by the
+  data(heap_size=>) pragma. It normally occupies all of the
+  space from the top of the stack to the end of the
+  segment.
+
+  |-------------------------|  64K
+  |        Heap             |
+  |-------------------------|
+  |        Stack            |
+  |-------------------------|
+  |      Static Data        |
+  |-------------------------|  0
+
+
+The Far Heap
+
+  A memory model with 32 bit data pointers (Compact, Large,
+  Xlarge, Mthread) has data residing in many segments.
+  Therefore the heap may reside in a far segment and be
+  much larger in size The heap_size pragma has no effect.
+
+  In these models the functions ALLOCATE, DEALLOCATE and
+  AVAILABLE operate on this far heap and return long
+  pointers to object within this huge segment.
+
+  |-------------------------|  Top of Memory
+  |        Heap             |
+  |-------------------------|
+  |        Stack            |
+  |-------------------------|
+  |   Far Static Data       |
+  |-------------------------|
+  |-------------------------|  up to 64K
+  |      Static Data        |
+  |-------------------------|  0
+
+  Under MSDOS this far heap is a contiguous block of memory
+  growing from the top of the stack to the top of memory.
+  The entire available memory at program startup is
+  allocated to the far heap.
+
+  Under OS2 the far heap is a linked list of separate
+  segments. The size of the far heap is limited by
+  available physical memory and maximum swap file size.
+
+Constants and variables
+
+  CONST EndMarker = 0FFFFH;
+    Used to mark last block in far heap.
+
+  CONST Align = 4;
+    Used to align size of near heap block request.
+
+  VAR NearHeapSetup, FarHeapSetup: BOOLEAN;
+    Flags indicating near and far heaps have been
+    initialized.
+
+  VAR LastBlock: FarHeapRecPtr;
+    Storage for last block in heap when shrinking and
+    restoring DOS far heap.
+
+Procedures and functions
+
+  PROCEDURE FarHeapShrink(): CARDINAL;
+    Shrinks far heap to minimum size and returns surplus
+    memory to DOS. Used when spawning process.
+
+  PROCEDURE FarHeapRestore;
+    Restores heap to previous size before process spawn.
+
+  PROCEDURE FarHeapFix(Space: CARDINAL);
+    Fixes far heap when exiting TSR program.
+
+  PROCEDURE InitFarHeap;
+    Initializes far heap.
+
+  PROCEDURE InitNearHeap;
+    Initializes near heap.
+
+  PROCEDURE Merge(LowRec, HighRec: NearHeapRecPtr);
+    Merges two adjacent near heap blocks, when freeing or
+    reallocating.
+
+
+WSTORAGE.MOD
+------------
+
+Wstorage provides memory management module for a Windows
+process. All memory management requests are vectored to
+Windows API calls.
+
+
+MSTORAGE.MOD
+------------
+
+Multi language memory management module. When linking
+with C, C++ or Pascal, the core memory manager must be
+used. mstorage provides an interface to coremem. See Core
+library documentation.
+
+
+FIOR.MOD
+--------
+
+FIOR provides a file redirection capability. The actual
+I/O is executed by FIO, only the file location is done by
+this module.
+
+Constants and variables
+
+  CONST StrTabSize = 1024
+    Size of string table. Used to store redirection paths.
+
+  VAR StrTab      : ARRAY [0..StrTabMax] OF CHAR
+    String table. Used to store redirection paths.
+
+  VAR StrTabPtr   : CARDINAL
+    Pointer into string table.
+
+  CONST MaxNoOfConversions = 50
+    Maximum number of paths that can be stored in string table.
+
+  VAR NoOfConversions : CARDINAL ;
+    Actual number of paths stored in string table.
+
+  VAR Conversion : ARRAY[1..MaxNoOfConversions] OF CARDINAL
+    Indexes into string table.
+
+  CONST   FileBuffSize = 4096
+    File buffer size.
+
+  VAR FileBuff     : FileBuffPtr
+    Current pointer into file buffer.
+
+  VAR FileBuffBase : FileBuffPtr
+    Pointer to base of file buffer.
+
+Procedures and functions
+
+  PROCEDURE SetIOR(Num: CARDINAL);
+    Sets IO result variable.
+
+  PROCEDURE AddText ( s : ARRAY OF CHAR ) : CARDINAL ;
+    Copies text into string table.
+
+  PROCEDURE OpenTextFile ( name : ARRAY OF CHAR ) : BOOLEAN;
+    Locates and opens redirection file.
+
+  PROCEDURE ReadTextLn ( VAR l : ARRAY OF CHAR ) ;
+    Reads a line of text from redirection file.
+
+  PROCEDURE CloseTextFile ;
+    Closes text file.
+
+  PROCEDURE DosCall ( VAR R : SYSTEM.Registers ) : BOOLEAN;
+    DOS procedure for generating software interrupt.
+
+  PROCEDURE GetDosVersion (): CARDINAL;
+    Checks for DOS version 3+. The module needs to know if
+    the program name is available.
+
+  PROCEDURE AbsolutePath ( name : ARRAY OF CHAR ) : BOOLEAN
+    Check if a supplied path is a complete file path.
+
+  PROCEDURE ExtensionPos ( VAR s : ARRAY OF CHAR ) : CARDINAL;
+    Returns index of file extension in a path string.
+
+  PROCEDURE OpenOrCreateFile ( name: ARRAY OF CHAR ;
+                               om  : OpenMode): CARDINAL;
+    Locates file then opens or creates file depending on
+    setting of om.
+
+
+WINDOW.MOD
+----------
+
+The JPI text window module uses CoreWind as a low-level
+server module for actual screen access.
+
+A stack of open windows is maintained, with the current
+window on top. A cursor chain to control the active
+cursor is also maintained.
+
+Constants and variables
+
+  VAR Lock,Unlock  : LockProc
+    multi thread lock and unlock procedure variables.
+
+  CONST GuardConst = 4A4EH
+    Guard constant used to validate window handle.
+    procedures and variables
+
+Procedures and functions
+
+  PROCEDURE CheckWindow  ( W : WinType );
+    Validates window handle using check guard. If handle is
+    invalid, process is terminated with error.
+
+  PROCEDURE  ClipFrame ( W : WinType );
+    Clips window pane depending on existence of frame.
+
+  PROCEDURE ClipXY ( W : WinType; VAR X,Y : RelCoord );
+    Clips X Y coordinates.
+
+  PROCEDURE  BufferSpaceFill ( W : WinType; pos : CARDINAL;
+                               len : CARDINAL );
+    Fill an area of window buffer with attribute and
+    character values.
+
+  PROCEDURE  CurWin () : WinType;
+    Returns the current window being used for output for this
+    thread. If no window has been assigned by Use then it
+    returns Top. This function locks the window system and
+    leaves it locked if CoreWind._multip set.
+
+  PROCEDURE  ResetCursor;
+    Restores cursor position and size if not obscured.
+
+  PROCEDURE  UnlinkCursor ( W : WinType );
+    Removes window from cursor chain.
+
+  PROCEDURE  MakeWindow ( VAR WD : WinDef ) : WinType;
+    Creates a new Window descriptor. The size is Inclusive of
+    any frame if specified. The window buffer is not
+    allocated at this point.
+
+  PROCEDURE  TakeOffStack ( W : WinType );
+    Removes window from stack.
+
+  PROCEDURE  UpdateScreen ( W : WinType; X,Y : AbsCoord;
+    Updates the screen from the window buffer.
+
+  PROCEDURE  RedrawSection ( W: WinType; X1,Y1,X2,Y2: AbsCoord );
+    Redraws rectangular portion of the window from the buffer.
+
+  PROCEDURE  DisposeTitle ( W : WinType );
+    Disposes of window title.
+
+  PROCEDURE  WindowWrite (W     : WinType;
+                          x,y   : RelCoord;
+                          Len   : CARDINAL;
+                          str   : ADDRESS;frame :
+                          BOOLEAN );
+    Writes a string of characters and attributes to the
+    window buffer.
+
+  PROCEDURE  DrawFrame ( W : WinType );
+    Draws window frame.
+
+  PROCEDURE  MergeWindows ( s,d : WinType);
+    Merges two windows. s is a new hidden window, while d is
+    the old window to be merged into.
+
+  PROCEDURE  IGotoXY ( W : WinType; X,Y : RelCoord );
+    Sets the current X Y position of the pane currently being
+    used
+
+  PROCEDURE  NullProc;
+    Null procedure. Its address is the default value of the
+    Lock and Unlock procedure variables.
+
+  PROCEDURE  WriteC ( W : WinType; C : CHAR);
+    Writes a character to the window, and updates cursor
+    position.
+
+  PROCEDURE  WriteOut (S : ARRAY OF CHAR);
+    Writes string to window. This procedure vectors IO output
+    procedures.
+
+  PROCEDURE ReadString  ( VAR string : ARRAY OF CHAR );
+    Reads string from keyboard, echoing to window. This
+    procedure vectors IO input procedures.
+
+
+FIO.MOD
+-------
+
+File I/O module.
+
+Variables
+
+  The OK, IOR and EOF variables are implemented as arrays
+  of BOOLEAN in multi thread models, with an array member
+  corresponding to a thread.
+
+Procedures and functions
+
+  PROCEDURE SetIOR(Num: CARDINAL);
+    Set IOR variable.
+
+  PROCEDURE SetThreadOK( b : BOOLEAN);
+    Set OK variable.
+
+  PROCEDURE SetThreadEOF( b : BOOLEAN);
+    Set EOF variable.
+
+  PROCEDURE ErrorCheck(Code: CARDINAL; ErrNum: CARDINAL;
+    Checks error return of OS call.
+
+  PROCEDURE StreamLock(F: FileInf);
+  PROCEDURE StreamUnlock(F: FileInf);
+    Stream lock and unlock procedures for OS2. Under OS2
+    there is no need to lock the entire process when
+    accessing a stream, so each stream has an associated
+    semaphore.
+
+  PROCEDURE FlsBuf(F: FileInf): INTEGER;
+    Empties file buffer on buffered file.
+
+  PROCEDURE FilBuf(F: FileInf): INTEGER;
+    Fills file buffer on buffered file.
+
+  PROCEDURE RdItem( F : File; VAR S : ARRAY OF CHAR );
+    Reads an item from input file. An item is defined as all
+    characters not in the set SEPARATORS.
+
+  PROCEDURE FindFreeStream(): FileInf;
+    When allocating a buffer to a file, this functions finds
+    an unused file descriptor.
+
+
+ASMLIB.A
+--------
+
+Procedures and functions
+
+  PROCEDURE STANDARD.NULLPROC;
+    Null procedure variables should point to this procedure.
+    If called, process is terminated with an error.
+
+  PROCEDURE HALT;
+    Terminates process by calling CoreMain.exit.
+
+  PROCEDURE  @LoadRegisters
+    Loads 80X87 registers from REGISTERS record.
+
+  PROCEDURE @SaveRegisters
+    Saves 80X87 registers to REGISTERS record.
+
+  PROCEDURE - $NormPtr
+    Normalizes far pointer. MSDOS only.
+
+
+PROCESS.MOD
+-----------
+
+The DOS multi thread process module implements a time
+slicing scheduler to control threads. The OS2 module uses
+the OS2 multi thread facility, via CoreProc._beginthread.
+
+DOS procedures and variables
+
+  PROCEDURE QInsert(T: CoreProc.Task; VAR Q: CoreProc.Task);
+    Inserts task after last task in Q with greater or equal
+    priority.
+
+  PROCEDURE AddReadyProcess(T: CoreProc.Task);
+    Adds a new process, created by NEWPROCESS, to the ready
+    list. It gets added ahead of current process if at the
+    same or higher priority.
+
+  PROCEDURE CheckTimeQ;
+    Checks for ready process in queue.
+
+  PROCEDURE Slice;
+    Clears waiting queue, then schedules next ready process
+    if it is of equal or higher priority.
+
+  MODULE SS[1]
+    This local module implements the scheduler using IRQ 1,
+    timer interrupt.
+
+  PROCEDURE Idler;
+    This procedure is always on the CoreProc._cp chain.
+
+
+OS2 procedures and variables
+
+  PROCEDURE ErrorNamed ( IOR   : CARDINAL; Code: CARDINAL );
+    Checks error return value of OS calls.
+
+
+GRAPHI.MOD
+----------
+
+This module is the IOPL OS2 graphics server module.
+Because a process must be executing in ring 2 to access
+I/O ports, all graphics functions must be in an IO
+privilege segment.
+
+Swapping sessions. The graphics screen is saved and
+restored when sessions are swapped by the following
+procedures. A background thread monitors using
+SavRedrawWait.
+
+Procedures and functions
+
+  PROCEDURE SaveScreen;
+  PROCEDURE RestoreScreen();Modula-2 Library Documentation
+
+

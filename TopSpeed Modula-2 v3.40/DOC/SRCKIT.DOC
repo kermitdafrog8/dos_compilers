@@ -1,0 +1,1678 @@
+Core Library and startup files         Documentation version 3.10
+==============================         ==========================
+
+Introduction
+------------
+
+Why a read-me file?
+
+There are two major reasons why printed documentation was
+not produced for the TopSpeed SourceKits:
+
+*  Internal revision. Only the public interface of the 
+   run-time libraries can remain fixed. TopSpeed's policy 
+   of continual improvement means that the actual 
+   implementation of products may be changed between  
+   minor releases.
+
+*  User feedback. This documentation will be augmented in 
+   response to user requests for information where 
+   possible.
+
+
+What is the core library?
+-------------------------
+
+The standard library for a TopSpeed language comprises
+two major components, the language specific part and the 
+language independent core. 
+
+The core provides startup and termination code, plus
+integrated I/O, memory management, text windowing,
+graphics, and other services. This arrangement reduces
+redundancy and ensures that the major system features are
+compatible between languages.
+
+
+Core library naming
+
+In normal use, the correct core library is linked automatically
+by the project system. However, if manual selection is required,
+the following naming convention must be used:
+
+   %O%%M%%C%COM.LIB
+
+Where the macros %O%, %M% and %C% are expanded as follows:
+
+  %O%    Operating system:
+  R      Real mode (MSDOS).
+  W      Windows.
+  P      Protected mode (OS2).
+  %M%    Memory model:
+  S      Small model.
+  C      Compact model.
+  M      Medium model.
+  L      Large model.
+  X      XLarge model.
+  T      Mthread model.
+  O      Overlay model (MSDOS only).
+  D      Dynalink model.
+  %C%    Calling convention:
+  _      JPI.
+  F      Stack frame.
+
+For example, the large model, MSDOS, JPI calling
+convention core library is named:
+
+   RL_COM.LIB
+
+
+The core library Interface
+---------------------------
+
+For reasons of compatibility, the core library interface 
+remains fixed between major releases. However, you should 
+avoid using functions, procedures and data objects
+declared in the core library interface for future
+portability.
+
+
+The core library Implementation
+-------------------------------
+
+Why assembler?
+
+Assembly language code is not straightforward to maintain 
+or easy to understand. In a traditional implementation, 
+some of the routines could have been implemented in a 
+high level language. However, TopSpeed's approach has the 
+following advantages:
+
+*  Efficiency. Many of the library functions, such as 
+   string handling, are highly optimized, giving a 
+   significant improvement in performance over other
+   products.
+*  Multi language environment. To allow the user to 
+   remake and customize the run-time libraries, the 
+   complete language implementation must either be 
+   written in the host language or assembly language.
+*  Low level requirements. While 'tricks' can often be
+   employed to implement low-level features, assembly 
+   language is often the most elegant and efficient way 
+   to implement operating system and machine specific 
+   code.
+
+
+Conditional compilation
+-----------------------
+
+The assembly language files produce code for all TopSpeed 
+memory models, operating systems and calling conventions. 
+This is achieved by conditional compilation.
+
+The following boolean flags are used to reflect the 
+various possibilities:
+
+  NearPtr  When true, data pointers are 16 bit. When
+           false, data pointers are 32 bit.
+           Small and Medium models use NearPtr = true. 
+           All other models use NearPtr = false.
+
+  NearCall When true, calls and return are near, and
+           procedure variables are 16 bit. When false,
+           calls and return are far, and procedure
+           variables are 32 bit.
+           Small and Compact models use NearCall = true.
+           All other models use NearCall = false.
+
+  SameDS   When true, DS is not assumed to be fixed, i.e. 
+           pointing to DGROUP, the default data segment.
+           XLarge, Mthread, Overlay and Dynalink models
+           use SameDS = false. All other models use
+           NearCall = true.
+
+  RegParam When using the jpi calling convention, passing
+           parameters in registers, RegParam is true.
+           When using the standard stack frame calling
+           convention, RegParam is false.
+
+  MThread  In memory models that support multi-thread
+           operation, MThread is true.
+           Mthread, overlay and dynalink models support
+           multiple threads. Code to support this mode of
+           operation is include in these models.
+
+  _OS2     When true OS2 specific code is generated. When
+           false MSDOS and some Windows code is generated
+
+  _WINDOWS When true, Windows specific code is generated.
+
+  _DLLOVL  When true, code required for the TopSpeed 
+           overlay manager is generated. This required
+           for Overlay model and the Dynalink model under
+           MSDOS.
+
+  _DLL     When true, code specific to DLLs is generated.
+
+  ProtMode When true, protected mode features are enabled 
+           for either OS2 or Windows.
+
+  _WINDLL  When true, code specific to Windows DLLs is 
+           generated.startup files five main EXE file
+           startup files are used by TopSpeed:
+                initexe.a
+                initnew.a
+                initpm.a
+                initwin.a
+                initmwin.a
+           Plus two DLL initialization files:
+                initdll.a
+                initwdll.a
+           The selection of the correct startup code
+           removes the need for more library variants and
+           allows greater flexibility of run-time
+           segmentation.
+
+Each file performs two main functions:
+
+*  Declaration of segmentation. 
+*  The segment and group declarations at the top the file
+   determine the ordering and groups recognized by the
+   linker. If a new segment class needs to be added, it
+   must be declared in the first section of the startup
+   file.
+·  The db definitions at the bottom of the file determine 
+   the ordering of segments within DGROUP. These must not
+   be changed.
+·  Initial startup code. Information stored in registers
+   at program startup is saved, and a call is made to low
+   level initialization code to insert any initialization 
+   blocks in to a list which will be processed later. 
+
+Initialization may either be created by hand to 
+initialize assembly language modules, or by the C++ 
+compiler to construct static objects. See Advanced 
+Programmer's guide.
+
+
+initexe.a
+This is the default startup file for an OS2 or DOS exe 
+file.
+
+The __initx record has the following structure:
+
+  far ptr:   Address of program entry sequence.
+  word:      Size of near heap.
+  word:      Size of stack.
+  byte:      Stack location. Non-zero in dgroup.
+
+In the code section, the stack size and location are
+saved, the near heap, if present, is located, and the 
+program entry point determined.
+
+Finally the initialization blocks associated with the 
+program are added to the list, and a far jump made into
+the library startup code.
+
+
+initnew.a
+This startup is identical to initexe apart from its 
+segment ordering. It is used by Modula-2 and Pascal 
+programs in XLarge models to reduce DOS exe file size. 
+Since static data is not required to be initialized to 
+zero, it may be placed at the end of the file.
+
+
+initpm.a
+This startup is identical to initexe apart from its stack 
+location. It is used by Presentation manager programs 
+which require a stack segment fixed in DGROUP.
+
+
+initwin.a
+This startup file provides both initial startup code for 
+C and C++ Windows programs, and a dummy main procedure 
+that calls the program entry point WinMain.
+
+
+initmwin.a
+This startup file provides both initial startup code for 
+Modula-2 and Pascal Windows programs, and a dummy 
+procedure that calls the program entry point WinMain.
+
+
+initdll.a
+This file adds any initialization blocks associated with 
+the DLL to the list associated with the process. The file 
+is used for both DOS and OS2 DLLs.
+
+
+initwdll.a
+The file is used for Windows DLLs. It adds any
+initialization blocks associated with the DLL to the 
+list, and calls the DLLs startup sequence.
+
+
+Floating point files
+--------------------
+
+
+Support files
+
+Three floating point support files are used by TopSpeed:
+
+   noemul.a
+   nofloat.a
+   r_emul.a
+   p_emul.a
+   winfloat.a
+
+These files resolve calls to helper functions and perform 
+the floating point initialization.
+
+  nofloat   This is used when no floating point is 
+            required by the program.
+  noemul    This is used when no emulation is required in 
+            program that used floating point.
+r_emul      This is used by MSDOS programs that require  
+            floating point emulation.
+p_emul      This is used by OS2 programs that require    
+            floating point emulation.
+winfloat    This is used by Windows programs that require 
+            floating point emulation.
+
+
+Emulation strategies
+
+Under MSDOS, the standard Microsoft software interrupts 
+are used to invoke the emulator. If a chip is present at 
+run-time, interrupt instructions are back patched to 
+floating point instructions.
+
+Under OS2, the emulator is invoked via the invalid op-
+code exception.
+
+Under Windows, special OS fixups are used. These are 
+fixed up by the Windows loader to either interrupts or 
+floating point instructions depending on the run-time 
+environment. Not that Windows emulator is used instead of 
+the TopSpeed emulator in Windows programs
+
+
+Emulator data 
+
+In order to achieve re-entrancy, the TopSpeed emulator 
+uses a data area at the bottom of each thread's stack 
+segment. In all memory models, This area is reserved.
+
+
+MKLIB.PI
+--------
+
+Overview
+
+MKLIB.PI is included by the project file mklib.pr. It
+defines all the TopSpeed libraries, and the commands 
+necessary to make them. The macro setting s necessary to 
+make a specific group of libraries are described in the 
+relevant language library reference. The core library is 
+re-made automatically when any language library is re-
+made.
+
+Library structure
+
+Core library comprises following files:
+  coremain.a      Library startup and termination code.
+  coresig.a       Exception and error handling.
+  coremath.a      Floating point math and conversions.
+  3rdparty.a      Helper functions for third party code.
+  corefile.a      File I/O data definitions.
+  corertl.a       Helper functions and compiler run-time   
+                  support.
+  coreio.a        Low level input and output functions.
+  corepmd.a       Low level post mortem dump support.
+  corewind.a      Low level text window functions.
+  coremem.a       Memory management.
+  coreemul.a      Operating system independent floating 
+                  point emulation code.
+  coreproc.a      Low level multi thread functions.
+  coregrap.a      Low level, hardware dependent, graphics 
+                  functions. MSDOS only.
+
+The system header file is included by each file:
+
+  corelib.inc     System constant definitions.
+
+
+Interface files
+---------------
+
+Interface files for each language are provided. They used 
+internally by the high level library modules and should 
+not be used by the user unless directed by the Language
+documentation.
+
+
+Replacing or redefining modules
+-------------------------------
+
+Certain of the core library modules may be replaced by 
+user defined ones. For example, CoreMem could be replaced 
+by an another memory manager, as long as the interface 
+required by the high level language library and startup 
+code is preserved. 
+More precise details are provided in the documentation 
+for the individual module.
+
+
+The core library EXP file
+-------------------------
+The MSDOS and OS2 DLL versions of the core library have 
+corresponding EXP files, declaring the exported 
+identifiers:
+  RD_COM.EXP      Real mode.
+  PD_COM.EXP      Protected mode.
+
+If a public definition is added or removed from a  core 
+module, EXP must be altered to reflect the change, if the 
+DLL version is to be made.
+
+Similarly, a cut-down version of the core library DLL may 
+be made by commenting out any unused identifiers. Smart 
+linking will take care of removing the unwanted code from 
+the DLL when it is remade.
+
+
+Windows DLL core library
+------------------------
+
+The DLL versions of the windows libraries are not DLLs 
+themselves; they link statically with a user created DLL. 
+Versions exists in all supported models, and have the 
+name COMD instead of COM.
+
+The library initialization is called from the initwdll
+file.
+
+
+Core Library modules
+--------------------
+
+
+corelib.inc
+
+The constants defined in this file may not be changed unless
+specifically documented as such.
+The model and calling convention constants are defined:
+
+   NearCall
+   SameDS
+   NearPtr
+   MThread
+   RegParam
+
+Two constants that determine the pointer sizes in Modula-
+2 and Pascal initialization records are defined:
+
+near_init_code = NearCall
+near_init_data = SameDS
+
+The constant StackChecks is defined to be non-zero. This 
+enables stack checking in certain functions that use
+large local variables. A small reduction in program size 
+may achieved at the cost of safety by setting this 
+variable to 0.
+
+All process spawning functions and the C function write
+perform a stack check by default.
+
+Three constants are defined to specify the offset of
+parameters on a standard BP stack frame.
+
+  frame     Default for current memory model.
+  lframe    Far call.
+  sframe    Near Call
+
+Three constants are defined to specify the offset of parameters
+on an optimized BX stack frame. e.g.
+
+  mov bx, sp
+  mov ax, ss:[bx][var]
+
+  bxframe      Default for current memory model.
+  lbxframe      Far call.
+  sbxframe      Near Call
+
+Code and data pointer sizes are defined for the model 
+default, plus near and far variants.
+
+   CodePtrSize
+   FarCodePtrSize
+   NearCodePtrSize 
+
+   DataPtrSize
+   FarDataPtrSize
+   NearDataPtrSize 
+
+The FILE structure is defined for near and far data
+pointer models. This is used directly by C stdio input 
+and output functions, and as a global stream descriptor 
+by all languages.
+
+A subset of the error codes defined in errno.h are 
+defined for use by the assembler parts of the library.
+
+   ENOENT
+   ENOPATH
+   EACCESS
+   EBADF
+   E2BIG
+   ENOMEM
+   ENOSPC
+   EINVAL
+   EDOM 
+   ERANGE
+
+Similarly a subset of the I/O flags are defined. These 
+are documented by comments.
+
+The next section is a subset of the OS2 API type 
+definitions required by the assembler library.
+
+THREADTABLESIZE is the size of the thread information 
+record. An array of these records is maintained by the 
+library for internal static data. The constant MAXTHREAD 
+is of interest because this controls the maximum number 
+of threads supported. See Advanced Programmer's Guide. 
+
+The following constants are constants private to the 
+implementation. Of interest are STACK_GUARD, which is 
+used to terminate the BP chain in overlay and DOS DLL
+models, plus the error codes generated by the overlay 
+loader, LOADER_ERROR_*.
+
+
+coremain.a
+----------
+
+Overview
+
+Coremain contains functions, variables and procedures for
+program startup and termination.
+
+Variables
+
+__argbuf         Command line buffer
+__hugeshift      Huge pointer shift value.
+__osmajor        major OS version number
+__osminor        minor OS version number
+__osmode         flag, true if protected mode
+
+Functions
+Pointers passed to at/onexit are pushed onto the stack and
+called LIFO on program termination:
+__exit_stk       at/onexit function stack.
+__exit_ptr       atexit stack pointer
+__exit_top       atexit stack top
+__exit_list_done atexit stack flag. True if executed.
+
+The low level C library and C++ static object
+initialization code is called from a record entry. The
+records, gathered from the main program and any DLLs
+used, are stored as a linked list of arrays. These are
+traversed once for each priority level, and any code of 
+that priority is called. The called code calls InitLoop 
+to process the next record. 
+
+At the end of this process the main module is called. 
+
+When that returns or the program terminated, the code 
+sections execute any termination code and return, 
+ensuring that destructors are called in reverse order.
+
+InitCalled      Running total of low-level initialization 
+                procedures called.
+@InitGrandTotal Total of low-level initialization
+                procedures to be called.
+@InitCurrent    Current record being processed.
+@InitRecPointer Pointer to current record.
+@InitPointer    Pointer to current control record.
+@InitPriority   Current priority being processed.
+
+If the process is ended by a call to HALT or exit, the 
+stack context is restored to ensure that the termination 
+chain is executed.
+
+@StackContextBP      BP value
+@StackContextSS      SS value
+@StackContextSP      SP value
+
+Variables used in program termination.
+
+@ExitCode      program termination code.      
+__exit_io      procedure variable for io termination.
+__exit_file    procedure variable for file handling 
+               termination.
+__exit_tmp     procedure variable for temporary file
+               clean up.
+__exit_proc    procedure variable for process module   
+               termination
+__exitbreak    procedure variable for deinstalling break 
+               handler.
+__exitsig      procedure variable for deinstalling signal 
+               handlers.
+__exitgraph    procedure variable for graph module 
+               termination.
+
+Modula-2 and Pascal use a chain of procedures for their 
+termination code, as used by Lib.Terminate.
+
+__Term2              exit label for Terminate chain
+standard@haltChain   pointer to beginning of chain.
+
+Two procedure variables are used to install real number 
+conversion in printf and scanf. This is used to prevent 
+these functions dragging floating point unnecessarily
+
+__real_in      procedure variable for formatted input of
+               real numbers
+__real_out     procedure variable for formatted output of 
+               real numbers
+
+General variables
+__CmdLine             command line storage used by
+                      windows DLL.
+__farstack            flag, true if stack in far
+                      segment.
+__sp_temp             used for restoring SP.
+__ss_temp             used for restoring SS
+DOSHUGESHIFT          Huge shift constant
+_x_initx              pointer to startup vector.
+_x_bss_end            end of BSS segment
+_x_bss_start          start of BSS segment.
+__sigsetup            flag, true if signal handling
+                      setup.
+__psp                 Program segment prefix.
+__env                 Environment segment.
+__heap_base           base of far heap.
+__env_init            flag, true if environment
+                      initialized.
+__arg_init            flag, true command processed.
+STKHQQ                stack length.
+__stklen              stack length.
+__SSisDS              flag, true if SS in dgroup
+__far_ss              far stack segment
+__x_near_stack_start  start of near stack
+__heap_size           heap size, used by windows
+                      DLLs.
+_x_main               points to main module
+__stk_base            base of stack.
+__nmemsetup           flag, true if near heap setup.                           
+__fmodmemsetup        flag, true if Modula-2 far heap 
+                      setup.
+__fmemsetup           flag, true if near heap setup. 
+__res_mem             procedure variable for restoring
+                      heap after spawn.
+__fix_mem             procedure variable for fixing far 
+                      heap before spawn.
+__shr_mem             procedure variable for shrinking
+                      far heap before spawn.
+__argv                array of pointers to command line 
+                      arguments.
+__env_var             array of pointers to environment
+                      strings
+__osversion           OS version
+
+
+Procedures and routines
+
+Public interface library procedures are not normally 
+mentioned here since they are documented fully in the 
+appropriate language library reference.
+
+_exit
+This the C and C++ exit function. It is also called 
+indirectly by Modula-2 and Pascal.
+
+__InitLoop
+This procedure is called by C and C++ initialization 
+code. It chains all the initialization and termination 
+code.
+
+__InitLink
+This procedure is called from process and DLL startup to 
+add an array of initialization records to the list.
+
+__InitSetup
+Preprocesses list of initialization record arrays .
+
+__cleanup
+Calls termination procedure variables.
+
+__setenv
+Initializes program environment variable table.
+
+exit_handler, __set_exit_handler
+Install an exit handler for OS2. This will be called if 
+the program terminates will a segment overrun for 
+example.
+
+__main_args2
+calls _main with 2 arguments.
+
+__main_args3
+
+calls _main with 3 arguments
+
+__libmain_args
+
+Calls windows DLL libmain function.
+
+__set_machine_id
+sets machine id information.
+
+__env_copy
+copies environment strings to local buffer.
+
+__init0, __init2, __init3
+vectors for calling main module.
+
+__initWDLL
+entry point for Windows DLL.
+
+__getheapbase
+returns base of far heap.
+
+do_initargc
+Initialization code to process command line arguments.
+
+__setargv
+Initializes command line variables.      
+
+__real_pdef, __real_sdef
+Default procedure that is called if an attempt is made to 
+format an integer floating point number by either printf 
+or scanf.
+
+__exit
+Low level, operating system specific termination 
+procedure. It all ends here.
+
+__startup
+The library entry point.
+
+$Stage2
+The second initialization stage, called after low level 
+and C++ initialization.
+
+__call_main
+calls _main 
+
+__fp_1
+Tells library that floating point is present.
+
+__fp_0
+Tells library that floating point is absent.
+
+
+Replacing module 
+
+In normal circumstances this module may not be replaced.
+
+
+Embedded systems
+
+embedded systems programmers are unlikely to be using the 
+low level library initialization. In this case the 
+program main module will be called directly from 
+initesys, so coremain becomes redundant. However, some 
+functions or variables may be referenced. It is safe to 
+include coremain, as no OS or machine specific code will 
+be dragged in as long as __startup is not used.
+
+
+Initialization
+The initialization code contained in this module concerns 
+command line arguments and environment strings. The 
+procedures __setargv and __setenv mentioned above perform 
+the actual initialization.
+
+
+coresig.a
+---------
+
+Overview
+
+Coresig provides error, signal and exception handling.
+variables
+
+__sigTrans
+Table for translating signal numbers
+
+__raiseTrans
+Table for translating signal numbers
+
+CoreSig@CnsHandler
+procedure variable for handling run-time errors such as
+ nil pointer dereference etc.
+
+__sigTable
+signal vector table
+
+__vec0,__vec2,__vec4,__vec16,__vec23,__vec24
+Storage for interrupt vectors to be restored on program 
+termination.
+
+@RecursiveExit
+Flag, set true at first call to terminate process. A 
+subsequent fatal error will cause immediate termination.
+
+_errno 
+The C global error variable.
+
+@InProgramFlag 
+Flag, when true process not executing in operating system 
+(MSDOS).
+
+@StopProgramFlag 
+Flag, when true signals that process has received a 
+terminate signal. (MSDOS)
+
+@MachineId 
+Indicates if machine is an AT.
+
+__pmd_stub
+procedure variable for invoking post mortem dump.
+
+Procedures and functions
+
+Public interface library procedures are not normally
+mentioned here since they are documented fully in the 
+appropriate language library reference.
+
+__seterrno 
+Used to set error variable _errno.
+
+__errno__ 
+called in multi-thread models to access _errno. 
+
+__ioerr 
+Used to set dos error variable.
+
+@ReloadCache
+Dummy procedure in far segment to force cache flushing on 
+some machines.
+
+__sysmsg
+System error message output procedure.
+
+__FatalErrorPos
+Returns current IP:CS
+
+__FatalError
+Invokes program termination and creates ERRORINF.$$$ 
+file. If post mortem dump is included the debug file will 
+also be produced.
+
+@DosInterrupt
+Executes DOS Int21H. Checks for re-entering DOS.
+
+__SigInit 
+Initializes signal handling system
+
+do_initsig
+Initialization block for signal system. Calls __SigInit.
+
+__do_exitsig
+Clean up for signal handling.
+
+__initsig
+Minimal signal handling initialization called if main 
+signal system not used.
+
+__sigDefault
+Default procedure for handling signal. Terminates 
+program.
+
+__sig23
+Handler for int23.
+
+__sigFp_AT, __sig_Fp
+Handler for floating point exceptions.
+
+
+Initialization
+
+The initialization code contained in this module relates 
+to the signal handling mechanism. The actual 
+initialization is done by __SigInit.
+
+
+Replacing module
+
+It is not really practicable to replace this module if it 
+features are required. The signal and exception handling 
+are complex and highly implementation specific.
+
+
+Embedded systems
+
+This module may be omitted, since the startup code in 
+initesys will not use the signal handling mechanisms. 
+However, using run-time checks or floating point will 
+require the use of coresig.
+
+
+coremath.a
+----------
+
+Coremath implements the assembler floating point math 
+library. The file is in two sections, one for stack frame 
+and one for JPI calling conventions.
+
+
+3rdparty.a
+----------
+
+This module implements compiler support functions called 
+by code generated by other vendors products.
+
+
+corefile.a
+----------
+
+Corefile contains the data definitions for the file I/O
+descriptor arrays.
+
+OPEN_MAX      Sets maximum number of open files.
+__open_max    Variable used by high level languages to
+              get file maximum.
+__iob         C FILE array.
+__openfd      C file handle descriptor array.
+_BufInf       Modula-2 buffered file descriptor array.
+__tmpfiles    Temporary file name array.
+__tmpfptrs    Temporary file FILE structure array.
+
+
+corertl.a
+---------
+
+corertl contains compiler helper functions, run-time 
+error handlers and Modula-2/Pascal module initialization 
+code.
+
+All helper functions have far, near and IO privilege
+versions. The names used below omit the prefixes F, N and 
+I.
+
+All the helper functions use a stack based calling
+convention, and return values in dx:ax.
+
+$UnsMol
+Multiplies two unsigned long integers with modulus 
+wraparound on overflow.
+
+$SgnMol
+Multiplies two signed long integers with modulus 
+wraparound on overflow.
+
+$SgnDiv
+Divides two signed long integers.
+
+$UnsDiv
+Divides two unsigned long integers.
+
+$UnsRem
+Calculates the remainder of two unsigned long integers.
+
+$SgnRem
+Calculates remainder of two signed long integers.
+
+$UnsMul
+Multiplies two unsigned long integers.
+
+$SgnMul
+Multiplies two signed long integers.
+
+$SgnMod
+Calculates modulus of two signed long integers.
+
+$LngShl
+Shifts left signed long integer.
+
+$LngShr
+Shifts right signed long integer.
+
+$ULngShr
+Shifts right unsigned long integer.
+
+$PushByt
+Pushes bytes onto stack.
+
+$PopByt
+Pops bytes from stack.
+
+$SetOr
+Computes bitwise OR of two sets.
+
+$SetDif
+Computes bitwise difference of two sets.
+
+$SetXor
+Computes bitwise XOR of two sets.
+
+$SetAnd
+Computes bitwise AND of two sets.
+
+$DupByt
+Copies bytes.
+
+$EquByte
+Compares two blocks of bytes. Returns result in flags and
+non-zero in AX if equal.
+
+$NotEquByte
+Compares two blocks of bytes. Returns result in flags and 
+non-zero in AX if not equal.
+
+$HugeSub
+Subtracts two huge pointers.
+
+$LngRol
+Rotates left a signed long integer.
+
+$StkChk
+Performs stack check. Called on entry to procedure.
+
+$CnsStk
+Called if stack overflow occurs. Invokes error handling 
+mechanism.
+
+$CnsPtr
+Called if nil pointer dereference occurs. Invokes error
+handling mechanism.
+
+$CnsIdx
+Called if array index error occurs. Invokes error handling
+mechanism.
+
+$CnsOvr
+Called if overflow occurs. Invokes error handling
+mechanism.
+
+$CnsRng
+Called if range error occurs. Invokes error handling 
+mechanism.
+
+$CnsRet
+Called if illegal return occurs. Invokes error handling 
+mechanism.
+
+$CnsCase
+Called if case error occurs. Invokes error handling 
+mechanism.
+
+$CnsDiv
+Called if divide by zero occurs. Invokes error handling 
+mechanism.
+
+$CnsPVC
+Called if pure virtual function called. Invokes error 
+handling mechanism.
+
+__initm
+Calls modula2/Pascal initialization, followed by the main 
+module. If this module returns then _exit is called.
+
+$initm
+Calls each of the module initialization routines. The 
+bottom of the stack segment is used for working space. A 
+stack of 16k gives enough storage for about 1000 modules 
+which should be ample. There are logically three arrays, 
+a fixed size hash table, an array of graph nodes, and an 
+array of lists used for sorting. The latter two are of 
+dynamic size and are interleaved, and allocated together. 
+Once the order has been determined, the addresses are 
+pushed onto the stack, and a return instruction is 
+executed.
+
+
+Embedded systems
+
+This module must be included, unless no compiler
+generated calls exist in your code..
+
+
+coreio.a
+--------
+
+Coreio provides low level file and console I/O 
+facilities, plus a DOS timer delay function.
+
+Variables
+
+__fmode 
+default file open mode.
+
+__fmask
+default permission mask.
+
+__ungotchar
+character put back by ungetch.
+
+__DelayFactor, __Iter, __Count
+calibration information for timer delay.
+
+__upperHex
+Hex format case.
+
+__zero_code, __scanwaiting
+variables for handling extended key codes.
+
+__kbdhandle
+OS2 keyboard handle.
+
+__i_putch
+putch function vector.
+
+__i_cgets
+cgets function vector.
+
+__p_init
+console initialization flag.
+
+__doserrno      dos error variable.
+
+
+Procedures and functions
+
+Public interface library procedures are not normally 
+mentioned here since they are documented fully in the 
+appropriate language library reference.
+
+__d_putch
+Default putch function. The graph, JPI window and 
+clipping window modules install their own versions of 
+putch.
+
+__d_cgets
+Default cgets function. The graph, JPI window and 
+clipping window modules install their own versions of 
+cgets.
+
+__iosetup
+Flag, true if file I/O initialized.
+
+do_initio
+Initialization block for file I/O.
+
+do_initTimer
+Initialization block for delay timer.
+
+__pascreate, __pasopen
+Internal file open functions for pascal library.
+
+__exists
+low level function to check for a file's existence.
+
+
+Initialization
+
+The timer and file I/O systems are initialized in coreio.
+
+
+Embedded systems
+
+Unless I/O is actually used, the module is not required. 
+The very low level I/O functions such as __read, __write 
+etc require no initialization.
+
+
+corepmd.a
+---------
+
+Corepmd contains the initialization and low level code
+for the post mortem dump facility. It is not used unless 
+PMD is enabled.
+
+
+corewind.a
+----------
+
+CoreWind provides initialization and low level functions 
+for the JPI window module.
+
+__initwin_vector   vector used for DLL initialization.
+__fullscreen       The default window handle.
+__uselist          List of windows to be used.
+__windowstack      Stack of active windows.
+__cursorstack      Cursor stack.
+__multip           Flag, true if multi-thread process.
+__winsetup         Flag, true if window module 
+                   initialized.
+__cursorlines      Number of raster lines in the cursor.
+__ScrnAddr         Address of screen memory.
+__ActPag           Active display page.
+__IsColor          Flag, true if color display.
+__IsSnow           Flag, true if CGA snow checking
+                   enabled.
+__ScreenSel        OS2 display memory selector.
+__Config, __BufInf, __Status
+                   OS2 screen configuration.
+
+All the procedures in this module are called from the 
+high level wdinow modules.
+
+__bufferwrite
+Writes character directly to window buffer.
+
+__getscreendepth
+Returns depth in rows of screen.
+
+__palxlat
+Translate palette colors.
+
+__buffertoscreen
+Updates screen from window buffer.
+
+__screentobuffer
+Updates window buffer from screen.
+
+__setvideopage
+Selects active display page.
+
+__activepage
+Returns active display page.
+
+__initscreentype
+Determines display mode and parameters.
+
+do_initconio
+Initialization block for window module. __initwin does 
+the actual initialization.
+
+__set_initwin_vector 
+Initializes vector for DLL.
+
+
+Embedded systems
+
+The window module uses BIOS calls and code segment variables,
+so it not suitable for embedded systems programming.
+
+
+coremem.a
+---------
+
+Coremem implements the run-time memory management of both
+near and far heaps. Note that in Modula-2 only programs 
+all the far heap is allocated to the Storage module, and 
+sub-allocated.
+
+
+Near heap structure
+-------------------
+
+The near heap is a single contiguous block of memory 
+located in DGROUP. Free blocks form a linked list. The 
+list is terminated by a nil value.
+
+The header structure is as follows:
+
+  Block size                     word
+  offset of next free block      word
+
+When a block is allocated and removed from the free list,  
+only the block size part of the header is preserved, a
+pointer to the second word of the header is returned.
+
+
+DOS far heap structure  
+----------------------
+
+The far heap is a single contiguous block of memory 
+located above the stack segment. Free blocks form a 
+linked list. The list is terminated by a nil segment 
+value.
+
+The header structure is as follows:
+
+  Block size                      word
+  segment of next free block      word
+
+When a block is allocated and removed from the free list, 
+only the block size part of the header is preserved, a 
+pointer to the second word of the header is returned.
+
+All blocks are paragraph aligned. The heap expands 
+upwards into free memory. If the heap contracts, surplus 
+memory is returned to DOS.
+
+
+OS2 far heap structure  
+----------------------
+
+The OS2 far heap is a linked list of short heaps. Each 
+heap has a header of the following structure:
+
+selector of previous heap       word
+selector of next heap           word
+offset of first free block      word
+Heap status                     word
+
+The first block begins after the header at offset 8. The
+heap status word can have two values:
+
+  1      Heap allocated and active.
+  0      Heap free and unused.
+
+If a request is made to allocate a huge block or one 
+greater than 64K - 8, a segment is allocate from the 
+Operating system.
+
+When a heap becomes full, a new segment is allocated and 
+added to the list. When a heap becomes empty, it is 
+returned to the operating system. However, in xlarge, 
+mthread and dynalink models, the heap segment is shrunk 
+to its header size and marked as free. This means that 
+any selectors referring to dynamic memory still on the 
+stack may still be popped safely. When a new heap segment 
+is required, the first free heaps will be re-used.
+
+__memtype        OS2 segment allocation attribute
+__fheapstart     segment value of bottom of far heap
+__fheaptop       segment value of top of far heap
+__firstfree      segment of first free block in far heap
+__fheapsem       process control semaphore
+__nheapstart     offset of beginning of near heap
+__nfirstfree     offset of first free *block in near heap
+__nheaptop       offset of end of near heap
+__firstheap      first heap of OS2 far heaps
+
+
+Procedures and functions
+
+Public interface library procedures are not normally
+mentioned here since they are documented fully in the 
+appropriate language library reference.
+
+__nheap_merge
+Merges two near heap blocks if they are adjacent.
+
+do_initfmem
+Initializatin block for far heap.
+
+do_initnmem
+Initializatin block for near heap.
+
+__shrink_mem
+Shrinks far heap to minimum size and returns rest of 
+memory to DOS. Used when spawning a process.
+
+__heap_align
+Normalizes block request to far heap allocation function. 
+Two bytes are added for header overhead, and the size is 
+then rounded up to the nearest paragraph.
+
+__heap_free
+Returns any surplus memory to DOS if far heap contracts.
+
+__heap_merge
+Merges two far heap blocks if they are adjacent.
+
+__get_heapstate, _set_heapstate
+In overlay or dynalink model under DOS, the far heap is 
+managed by the overlay manager. Any library functions 
+that access the heap must call __get_heapstate to get the
+current state of the heap before access it, and call 
+set_heapstate to update the overlay manager.
+
+__newheap
+Creates new OS2 far heap.
+
+__newheapr
+Creates or reinitializes an OS2 far heap in xlarge, 
+mthread or dynalink  model.
+
+__osalloc
+Allocates memory from OS2.
+
+__osfree
+Disposes of an empty OS2 far heap.
+
+__osfreer
+Disposes of an empty OS2 far heap. If in xlarge, mthread 
+or dynalink model, the heap is shrunk to its header size 
+and not freed. This is to ensure that any selector values 
+subsequently popped from the stack are still valid.
+
+
+Initialization
+
+The far and near heaps are initialized in this module.
+
+
+coreemul.a
+----------
+
+Coreemul implements the floating point emulator. If 
+floating point is used and emulation is required, either 
+R_EMUL (DOS), or P_EMUL (OS2), will be linked, causing 
+the emulator to be initialized. Note that Windows3 
+programs use the windows emulator.
+
+
+coreproc.a
+----------
+
+Coreproc implements low level thread handling functions
+as well as the Modula-2 system procedures NEWPROCESS etc.
+
+__threadTable      Table of thread control structures.
+__threadTotal      Total number of active threads.
+__cp               currently active task + ready queue
+__dq               queue of delayed tasks 
+__wq               queue of tasks that have reached their 
+                   delay time but haven't been placed on  
+                   the ready queue.
+__SchedProc        Pointer to scheduler.
+__Started          Flag, true if scheduler started.
+__Continue         Procedure variable used by closedown 
+                   procedure.
+__Stop             Signal to stop scheduler.
+__LockNestMonster  Lock count.
+__SchedTime        Time value for scheduler.
+__NextThread       Next thread number to be started.
+__proc_init        Flag, true if process module 
+                   initialized.
+__initmt_vector    Vector used to initialize DLL.
+__ProcIds          Process Id array.
+__LockSem          OS2 Lock procedure semaphore.
+__LockCount        OS2 lock count.      
+__LockedThread     Number of locked thread.
+@CurrentProcess    Current DOS thread.
+__core_lock        procedure variable for language 
+                   independent lock.
+__core_unlock      procedure variable for language 
+                   independent unlock.
+__core_delay       procedure variable for language 
+                   independent delay.
+
+
+Major functions
+
+Public interface library procedures are not normally 
+mentioned here since they are documented fully in the 
+appropriate language library reference.
+
+__set_initmt_vector
+Instigates DLL initialization.
+
+_new_priority
+Compiler generated call to change priority.
+
+CoreProc$initprocess, SYSTEM$initprocess
+Basic low level initialization for SYSTEM.
+
+do_initproc
+Initialization block for process module.
+
+
+Initialization
+
+The initialization block for the process module is 
+contained in coreproc, but the actual code is implemented 
+in a high level language.
+
+
+coregrap.a
+----------
+
+Coregraph implements the hardware specific and
+performance critical areas of the JPI graph module. 
+
+
+Variables
+
+__active_page        Active display page.
+__bkcolor            Background color.
+__clip_br            Bottom right corner of clip region.
+__clip_tl            TopLeft corner of clip region.
+__current_graph      Current position of graphics cursor.
+__current_mask       pointer to current fill mask.
+__current_text       Current position of text cursor.
+__current_video      Current video configuration.
+__cursor_lock        Cursor lock count.
+__cursor_state       Current cursor state.
+__depth              Depth in pixels of screen.
+__display_state      Current display mode.
+__EGA_table          EGA color translation table.
+__EGA64K             Flag, true if 64K EGA card present.
+__EGAPlaneShift      EGA plane shift value.
+__EGAScreen          Address of EGA screen.
+__EGAStartPlane      Starting EGA plane.
+__EGAtranslate       Flag, true if translation of EGA 
+                     color value required.
+__fgcolor            Current foreground color.
+__fill_mask          Current fill mask.
+__current_linestyle  Current line style.
+__fstart             Start of fill when filling pie.
+__g_charout          procedure variable for outputting 
+                     character to screen.
+__g_strin            procedure variable for reading 
+                     string from keyboard.
+__get                procedure variable for getting bit 
+                     image of screen.
+__hline              procedure variable for drawing 
+                     horizontal line.
+__hscan              procedure variable for scanning  a 
+                     line of pixels. Used by floodfill.
+__initgraph_vector   vector for initialization of DLL.
+__lastmode           Previous display mode.
+__line               procedure variable for drawing line.
+__mode_changed       Flag, true if program has changed 
+                     display mode.
+__origin             Origin of viewport.
+__page_size          Size of graphics display page.
+__plot               procedure variable for setting 
+                     pixel.
+__point              procedure variable for getting pixel
+                     value.
+__put                procedure variable for copying bit 
+                     image to screen.
+__scr_attr           Text mode character attribute.
+__text_br            Bottom right corner of text window.
+__text_tl            Top left corner of text window.
+__txcolor            Current text color.
+__visual_page        Current visual display page.
+__width              Screen width.
+__wrap_state         State of text wrap.
+
+
+Procedures and functions.
+
+All the following routines a called from the high level 
+cgraph.c and graph.mod modules.
+
+$OutWord
+Word output to port. This is done in single bytes for 
+portability. However, coregraph may be recompiled with 
+FastIO true, which causes output by an out dx 
+instruction. 
+
+__CGA320Get
+Captures bit image of CGA 320*200 graphics screen.
+
+__CGA320HLine
+Draws horizontal line in CGA 320*200 graphics mode.
+
+__CGA640HLine
+Draws horizontal line in CGA 640*200 graphics mode.
+
+__CGA320leftscan
+Scans pixel line to the left in CGA 320*200 graphics 
+mode. Used by floodfill.
+
+__CGA320Line
+Draws line in CGA 320*200 graphics mode.
+
+__CGA320Put
+Copies bit image to CGA 320*200 graphics screen.
+
+__CGA320rightscan
+Scans pixel line to the right in CGA 320*200 graphics 
+mode. Used by floodfill.
+
+__CGA640Get
+Captures bit image of CGA 640*200 graphics screen.
+
+__CGA640leftscan
+Scans pixel line to the left in CGA 640*200 graphics 
+mode. Used by floodfill.
+
+__CGA640Line
+Draws line in CGA 640*200 graphics mode.
+
+__CGA640Put
+Copies bit image to CGA 640*200 graphics screen.
+
+__CGA640rightscan
+Scans pixel line to the right in CGA 640*200 graphics 
+mode. Used by floodfill.
+
+__change_screen_background
+Updates graphics screen background.
+
+__clear_Herc
+Clears hercules graphics screen.
+
+__EGA2HLine
+Draws horizontal line in EGA 2 color graphics mode.
+
+__EGA2Line
+Draws line in EGA 2 color graphics mode.
+
+__EGA2Plot
+Sets pixel in EGA 2 color graphics mode.
+
+__EGA2Point
+Gets pixel in EGA 2 color graphics mode.
+
+__EGAGet
+Captures bit image of EGA native mode graphics screen.
+
+__EGAHLine
+Draws horizontal line in native EGA graphics mode.
+
+__EGAleftscan
+Scans pixel line to the left in EGA graphics mode. Used 
+by floodfill.
+
+__EGALine
+Draws line in native EGA graphics mode.
+
+__EGAPlot
+Sets pixel in native EGA graphics mode.
+
+__EGAPoint
+Gets pixel in native EGA graphics mode.
+
+__EGAPut
+Copies bit image to EGA graphics screen.
+
+__EGArexlat, __EGAxlat
+Translation procedures used for 64K EGA.
+
+__EGArightscan
+Scans pixel line to the right in EGA graphics mode. Used 
+by floodfill.
+
+__gcur
+Draws graphics cursor.
+
+__getmemory
+Returns display adapter memory size.
+
+__hclip
+Clips horizontal line.
+
+__HercGet
+Captures bit image of hercules mode graphics screen.
+
+__HercHLine
+Draws horizontal line in hercules graphics mode.
+
+__HercLine
+Draws line in hercules graphics mode.
+
+__HercPut
+Copies bit image to hercules graphics screen.
+
+__lclip
+Clips line.
+
+__pixeladdr320x200
+Calculates pixel address and shift count in CGA 320*200
+graphics mode.
+
+__pixeladdr640x200
+Calculates pixel address and shift count in CGA 640*200
+graphics mode.
+
+__pixeladdrEGA
+Calculates pixel address and shift count in native EGA 
+graphics mode.
+
+__pixeladdrEGA2
+Calculates pixel address and shift count in EGA 2 color 
+graphics mode.
+
+__pixeladdrHerc
+Calculates pixel address and shift count in hercules 
+graphics mode.
+
+__resetEGA
+Resets EGA/VGA adapter.
+
+__restore_mode
+Cleanup function top restore display mode on termination.
+
+__setbiosmode
+Sets display mode using BIOS call.
+
+__txt_out
+Outputs text to screen.
+
+__VGAGet
+Captures bit image of VGA 256 color graphics screen.
+
+__VGAHLine
+Draws horizontal line in VGA 256 color graphics mode.
+
+__VGALine
+Draws line in VGA 256 color graphics mode.
+
+__VGAleftscan
+Scans pixel line to the left in VGA 256 color graphics 
+mode. Used by floodfill.
+
+__VGAPoint
+Gets pixel in VGA 256 color graphics mode.
+
+__VGAPut
+Copies bit image to VGA 256 graphics screen.
+
+__VGArightscan
+Scans pixel line to the right in VGA 256 color graphics 
+mode. Used by floodfill.
+
+do_initgraph 
+Initialization block for graphics module.
+
+
+Initialization
+
+The initialization block for graphics is contained in 
+this module, but the actual initialization code is in a 
+high level language.
+

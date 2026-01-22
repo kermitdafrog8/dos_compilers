@@ -1,0 +1,13 @@
+#system dos exe
+#model  xlarge
+
+#pragma link_option(case=>off,pack=>off)
+#compile omain.mod
+#link %prjname
+
+
+#if #not action = compile #then
+  #run "ovl omain" -- run ovl program to split into overlays.
+#endif
+
+

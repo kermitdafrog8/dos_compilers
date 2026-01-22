@@ -1,0 +1,37 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INOUT.DEF - Modula-2 core library interface                             *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE InOut ;
+
+CONST EOL = 36C ;
+VAR
+      Done   : BOOLEAN ;
+      termCH : CHAR ;
+
+PROCEDURE OpenInput   ( defext : ARRAY OF CHAR ) ;
+PROCEDURE OpenOutput  ( defext : ARRAY OF CHAR ) ;
+PROCEDURE CloseInput ;
+PROCEDURE CloseOutput ;
+
+PROCEDURE Read        ( VAR v : CHAR ) ;
+PROCEDURE ReadString  ( VAR v : ARRAY OF CHAR ) ;
+PROCEDURE ReadCard    ( VAR v : CARDINAL ) ;
+PROCEDURE ReadInt     ( VAR v : INTEGER ) ;
+
+PROCEDURE Write       ( v : CHAR ) ;
+PROCEDURE WriteLn ;
+PROCEDURE WriteString ( v : ARRAY OF CHAR ) ;
+PROCEDURE WriteCard   ( v : CARDINAL ; w : CARDINAL ) ;
+PROCEDURE WriteInt    ( v : INTEGER ;  w : CARDINAL ) ;
+PROCEDURE WriteOct    ( v : CARDINAL ; w : CARDINAL ) ;
+PROCEDURE WriteHex    ( v : CARDINAL ; w : CARDINAL ) ;
+
+END InOut.
+

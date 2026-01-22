@@ -1,0 +1,83 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INITMDLL.A - Modula & Pascal library DLL startup code                   *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module initmdll
+
+segment INITCODE(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment INIT_DATA(FAR_DATA,28H)
+segment C_ORDER(FCODE,28H)
+segment D_ORDER(BSS,68H)
+segment EMU_STATE(DATA,28H)
+
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+
+group DGROUP(EMU_STATE,_CONST,_DATA,BSS_START,_BSS,BSS_END)
+
+select INIT_DATA
+
+InitRec: dw 0, 0, 0, _INIT
+
+select BSS_START
+public __bss_start:
+public _edata:
+
+select BSS_END
+public __bss_end:
+public _end:
+
+select D_ORDER
+buffer: org 8
+
+extrn __set_PMDbody_vector
+extrn __set_exit1_vector
+(*%T _PMD *)
+extrn  __PMDbody
+(*%E *)
+
+select _DATA
+(*%T _PMD *)
+PMDbody_ptr: dd __PMDbody
+(*%E *)
+
+extrn __InitLink
+
+select INITCODE
+
+  push ds
+  mov  ax, _BSS
+  mov  ds, ax
+(*%T _PMD *)
+  mov  bx, [__PMDbody_ptr][2]
+  mov  ax, [__PMDbody_ptr]
+  call far __set_PMDbody_vector
+(*%E *)
+  pop  ds
+
+  mov bx, InitRec
+  mov ax, INIT_DATA
+  call far __InitLink
+  mov ax, -1
+  ret far 0
+
+dw EMU_STATE
+dw _CONST
+dw _DATA
+dw BSS_START
+dw _BSS
+dw BSS_END (* establishs order ! *)
+dw 0
+
+end *
+

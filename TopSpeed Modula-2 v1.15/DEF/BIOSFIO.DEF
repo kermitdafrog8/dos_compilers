@@ -1,0 +1,41 @@
+DEFINITION  MODULE biosfio;
+
+
+FROM SYSTEM IMPORT Registers;
+FROM Lib    IMPORT Intr;
+
+TYPE str_erreur  = ARRAY[0..19] OF ARRAY[0..42] OF CHAR;
+
+CONST c_erreur = str_erreur( "Pas d'erreur",
+                             "Commande incorrecte",
+                             "Identificateur de secteur incorrect",
+                             "Tentative d'‚criture sur un disque prot‚g‚",
+                             "Secteur pas trouv‚",
+                             "Erreur de r‚initialisation",
+                             "La disquette a ‚t‚ retir‚e",
+                             "Table des paramŠtres incorrecte",
+                             "D‚passement de capacit‚ du DMA",
+                             "D‚passement de la limitte d'un segment",
+                             "Erreur de secteur",
+                             "Donn‚es non valides ( mauvais CRC )",
+                             "Erreur de donn‚es corrig‚e",
+                             "Erreur issue du controleur",
+                             "Mauvais positionnement sur une piste",
+                             "Time out : pas de r‚ponse du controleur",
+                             "Disque pas prˆt",
+                             "Erreur ind‚finie",
+                             "Erreur d'‚criture",
+                             "Erreur de status"
+                             );
+
+PROCEDURE erreur(x : SHORTCARD): CARDINAL;
+
+PROCEDURE reset() : SHORTCARD;
+
+PROCEDURE lit_secteur ( piste,tete,secteur,nbre_secteurs,drive : SHORTCARD ;
+                        VAR buffer : ARRAY OF BYTE) : SHORTCARD ;
+
+PROCEDURE ecrit_secteur ( piste,tete,secteur,nbre_secteurs,drive : SHORTCARD ;
+                          VAR buffer : ARRAY OF BYTE) : SHORTCARD ;
+
+END biosfio.

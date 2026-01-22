@@ -1,0 +1,44 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREFILE.MOX - increase file handle limits                              *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off,init_code=>off) *)
+(*# data(seg_name => null) *)
+(*# call(o_a_copy => off) *)
+(*# check(stack=>off,
+          index=>off,
+          range=>off,
+          overflow=>off,
+          nil_ptr=>off) *)
+(*# name(prefix=>c) *)
+
+
+IMPLEMENTATION MODULE CoreFile;
+
+
+(* The following constant must be changed in FIO.DEF to the desired number
+   of file handles - 5:
+
+CONST
+  MaxOpenFiles = 25;
+   The following constant must be changed in CoreFile.DEF to the desired
+   total number of file handles:
+
+CONST
+  MaxHandles = 30;
+
+  This file must then be renamed to corefile.mod and included in your project.
+*)
+
+END CoreFile.
+

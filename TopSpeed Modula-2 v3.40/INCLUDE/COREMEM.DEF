@@ -1,0 +1,119 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMEM.DEF - Modula-2 interface to COREMEM.A                           *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+DEFINITION MODULE CoreMem;
+
+
+CONST
+    _HEAPOK       =  0;
+    _HEAPEMPTY    = -1;
+    _HEAPBADBEGIN = -2;
+    _HEAPBADNODE  = -3;
+    _HEAPOVERFLOW = -4;
+    _HEAPEND      = -5;
+    _HEAPBADPTR   = -6;
+
+TYPE
+    _heapinfoptr = POINTER TO _heapinfo;
+    _heapinfo = RECORD
+                    _pentry : _heapinfoptr;
+                    _size : CARDINAL;
+                    _useflag : CARDINAL;
+                END;
+
+(* Exported Procedures *)
+
+PROCEDURE calloc(_num,_size: CARDINAL): ADDRESS;
+PROCEDURE free(_block: ADDRESS);
+PROCEDURE malloc(_size: CARDINAL): ADDRESS;
+PROCEDURE realloc(_block: ADDRESS; _size: CARDINAL): ADDRESS;
+
+PROCEDURE _msize(_buffer: ADDRESS): CARDINAL;
+PROCEDURE _memmax(): CARDINAL;
+PROCEDURE _memavl(): CARDINAL;
+PROCEDURE _heapchk(): INTEGER;
+PROCEDURE _heapset(_fill: CARDINAL): INTEGER;
+PROCEDURE _heapwalk(VAR _entry : _heapinfo): INTEGER;
+PROCEDURE _expand(buffer: ADDRESS; _size: CARDINAL): ADDRESS;
+PROCEDURE coreleft(): CARDINAL;
+PROCEDURE _freect(_size: CARDINAL): CARDINAL;
+
+(*# data(near_ptr=>on) *)
+(* **** ADDRESS after this point must be 16-bit. *)
+  TYPE
+    _nheapinfoptr = POINTER TO _nheapinfo;
+    _nheapinfo = RECORD
+                     _pentry : _nheapinfoptr;
+                     _size : CARDINAL;
+                     _useflag : CARDINAL;
+                 END;
+
+PROCEDURE _ncalloc(num,_size: CARDINAL): NearADDRESS;
+PROCEDURE _nfree(_block: NearADDRESS);
+PROCEDURE _nmalloc(_size: CARDINAL): NearADDRESS;
+PROCEDURE _nrealloc(_block: NearADDRESS; _size: CARDINAL): NearADDRESS;
+
+PROCEDURE _nmsize(_buffer: NearADDRESS): CARDINAL;
+PROCEDURE _nheapchk(): INTEGER;
+PROCEDURE _nheapset(_fill: CARDINAL): INTEGER;
+PROCEDURE _nheapwalk(VAR _entry : _nheapinfo): INTEGER;
+PROCEDURE _nexpand(buffer: NearADDRESS; _size: CARDINAL): NearADDRESS;
+
+(*# data(near_ptr=>off) *)
+(* **** ADDRESS after this point must be 32-bit. *)
+TYPE
+    _fheapinfoptr = POINTER TO _fheapinfo;
+    _fheapinfo = RECORD
+                     _pentry : _fheapinfoptr;
+                     _size : CARDINAL;
+                     _useflag : CARDINAL;
+                 END;
+
+PROCEDURE _fcalloc(num,_size: CARDINAL): FarADDRESS;
+PROCEDURE _ffree(_block: FarADDRESS);
+PROCEDURE _fmalloc(_size: CARDINAL): FarADDRESS;
+PROCEDURE _frealloc(_block: FarADDRESS; _size: CARDINAL): FarADDRESS;
+
+PROCEDURE _fmsize(_buffer: FarADDRESS): CARDINAL;
+PROCEDURE _fheapchk(): INTEGER;
+PROCEDURE _fheapset(_fill: CARDINAL): INTEGER;
+PROCEDURE _fheapwalk(VAR _entry : _fheapinfo): INTEGER;
+PROCEDURE _fexpand(buffer: FarADDRESS; _size: CARDINAL): FarADDRESS;
+
+(* **** Huge objects still need to be handled. *)
+PROCEDURE hfree(_block: FarADDRESS);
+PROCEDURE halloc(_size: LONGCARD): FarADDRESS;
+PROCEDURE hrealloc(_block: FarADDRESS; _size: LONGCARD): FarADDRESS;
+VAR
+  _MaxReallocHugeSegments: CARDINAL;
+
+PROCEDURE nearcoreleft(): CARDINAL;
+PROCEDURE farcoreleft(): LONGCARD;
+
+(*# restore *)
+
+
+PROCEDURE _fblockavail(): LONGCARD;
+PROCEDURE _shrink_mem;
+
+VAR
+  _memtype: CARDINAL;    (* OS2 memory allocation type *)
+  _fheaptop: CARDINAL;   (* top of far heap *)
+
+  _firstfree: CARDINAL;  (* first free block *)
+  _fheapsem: LONGCARD;   (* process control semaphore *)
+  _nheapstart: CARDINAL; (* beginning of near heap *)
+  _nheaptop: CARDINAL;   (* end of near heap *)
+END CoreMem.
+

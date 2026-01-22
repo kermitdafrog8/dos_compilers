@@ -1,0 +1,145 @@
+Creating Code with Absolute Addresses
+=====================================
+
+Your TechKit includes a program, TSLOCATE.EXE, that enables you to
+specify exactly where the various segments of your program are to
+be placed. This can be very useful for creating embedded programs,
+for putting your programs in PROM's or for making a bootable disk for a
+program that is to run without DOS.
+
+TSLOCATE is used to locate an MSDOS EXE-file.  That is,
+the segments are allocated absolute segment values in the 8086
+1-Mbyte memory space.  The output is the binary image of the
+program.
+
+The memory layout for the target system is specified in the
+.MEM file, together with the linker classes which are to be
+put in the memory. For example:
+
+ram   100  60000 DATA Dummy BSS M_DATA STACK HEAP
+rom F8000  FFFF0 CODE F_CODE
+rom FFFF0 100000 BOOTCODE
+width 2
+
+Each line of the .MEM file must start with rom, ram or
+width.
+
+For rom and ram lines, these words are followed by two
+hexadecimal numbers, specifying the start and end absolute addresses
+of some memory in the target system configuration. The second address is a
+`stop' address, so that a warning can be produced if there is not
+enough memory. The addresses are followed by a list of class
+names, separated by spaces. The order of the names is not significant
+(the ordering is determined by the order in the link).
+
+The word width is followed by a number which should be 1, 2 or
+4.  The default is 1.  This number specifies the target data bus
+width, in bytes.  For example, width 2 indicates that the
+target data bus is 2 bytes wide, and causes two binary files to be
+produced --- one with the even bytes, one with the odd bytes. This is
+necessary because PROMs are normally only 1 byte wide, so in a system
+with a 16-bit data bus at least 2 PROMs will be required.
+
+TSLOCATE is invoked with a single parameter --- the file name,
+but not including the extension. For example
+
+tslocate myprog
+
+When invoked, TSLOCATE uses three input files:
+
+
+MYPROG.EXE
+the msdos excutable file
+
+MYPROG.MAP
+the map produced by the linker
+
+MYPROG.MEM
+the ASCII file specifying the memory layout
+
+
+The output files from TSLOCATE are:
+
+
+
+MYPROG.BN?
+the binary image(s)
+
+MYPROG.MP2
+the .MAP file with edited addresses
+
+Certain environments may have unusual code location requirements.
+One hint to keep in mind when dealing with such cases is the following:
+If the class names in the map file prove to be too "coarse," you can
+always edit the map file to change the class name for certain segments.
+
+Putting Things in (P)ROM
+The following considerations are important if you need to put
+code into ROM or into PROM
+
+Special arrangements must be made for segments which are initialised
+and subsequently modified. Probably the easiest method to start with
+is to avoid this situation, possibly by using the data pragma to specify
+that the initialised variables are placed in seperate segments, and not
+attempting to modify them. Note that string and floating point
+literals are equivalent to initialised data.
+
+An alternative idea is to run tslocate twice, the first time
+to create the code image, the second time to create the initialised
+data image. Then when the rom program starts execution it should copy
+the region of prom where the initialised data image is stored into
+the ram location where it is required during execution.
+
+Startup code for embedded systems
+=================================
+
+The INITESYS.A file is in the SRC directory.
+
+Your project should include initesys,corertl and coremain. Functions may also be
+imported from language standard libraries.
+
+1) Do not use #link, as the point using INITESYS instead of INITEXE
+   is to avoid bringing in all the standard library code. Instead, include
+   a #compile for each part of the library that is required, then use
+   #dolink.
+
+2) In the module INITESYS.A the last line has 'end *', the * character
+   being a command to the assembler to indicate the entry point.
+
+For example, if you have an assembler file V25LIB.A which implements some
+functions for your embedded system and has no initialization code, your
+project would look like this:
+
+         ----------- EMBEDDED.MOD ------------------
+         MODULE Embedded;
+         IMPORT V25Lib;
+
+         BEGIN
+         .
+         END Embedded.
+
+         ------------- V25LIB.DEF ------------------
+         (*# module( init_code => off) *)
+         DEFINITION MODULE V25Lib;
+         .
+         END V25Lib.
+
+         ------------ V25LIB.A -------------------
+         .
+         .
+         .
+
+         ----------- EMBEDDED.PR -----------------
+         #system dos exe
+         #model small jpi
+
+         #compile initesys.a
+         #compile embedded.mod
+         #compile v25lib.a
+         #compile coremain.a
+         #compile corertl.a  -- ditto for other required system independent
+                             -- parts of modula library
+         #dolink embedded
+         #run "tslocate embedded"
+
+

@@ -1,0 +1,6844 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREEMUL.A - 8087 emulator                                              *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreEmul
+(********************************************************************)
+(* 8087 emulation support - part common to real and protected modes *)
+(********************************************************************)
+
+false = 0 (* Beware !  For incoming parameters, non-false = true.*)
+true = 1 (* For results, we generate the proper numbers.*)
+
+lesser = -1 (* Incoming, lesser < 0*)
+equal =  0
+greater =  1 (* Incoming, greater > 0*)
+
+by0 = 0
+by1 = 1
+
+w0 = 0
+w1 = 2
+w2 = 4
+w3 = 6
+
+dd0 = 0
+dd1 = 4
+
+nearParam = 4
+
+emInt = 34H  (* allocated to 8087 by Microsoft Corp.*)
+
+(* The iAPX87 chips usually report exceptions when the next numeric *)
+(*  instruction is attempted (since processing runs in parallel *)
+(*  with the CPU).  The emulator will normally do the same, but *)
+(*  if the following symbol is defined some optional assembly is *)
+(*  enabled which allows exceptions to be emulated in the failing *)
+(*  instruction.  The main benefit is that FWAIT may validly be *)
+(*  converted to no-op, gaining speed. *)
+
+instantException  =  true  (* report excep immediately *)
+
+
+(* error types *)
+
+fe_OK                   =  0
+fe_Divide_By_Zero       =  04H
+fe_Imaginary            =  01H
+fe_Operand_Too_Small    =  02H
+fe_Operand_Too_Big      =  01H
+fe_Overflow             =  08H
+fe_Underflow            =  10H
+fe_Bad_Parameter        =  01H
+fe_Invalid_Operation    =  01H
+fe_No_Space             =  01H
+fe_Precision            =  20H
+
+(* Using a 15-bit signed exponent is enough to emulate the iNDP-87 *)
+(*       and simplifies avoids overflow when combining exponents. *)
+
+zero_exponent           =     0C001H
+infinite_exponent       =     4001H
+
+positive_sign           =     0
+negative_sign           =     1
+
+
+(* 8087/287 status word values after comparisons *)
+
+e287_incomparable       =     4500H
+e287_lesser             =     0100H
+e287_equal              =     4000H
+e287_greater            =     0000H
+
+
+(* 8087/287 status word after XAM *)
+
+e287_plusInfinity  =  0500H
+e287_plusNormal    =  0400H
+e287_plusZero      =  4000H
+e287_minusNormal   =  0600H
+e287_empty         =  4100H
+
+
+(* control word rounding control field *)
+
+e287_roundingControl  =  0CH
+e287_round            =  00H
+e287_floor            =  04H
+e287_ceiling          =  08H
+e287_chop             =  0CH
+
+
+(* IEEE exponent bias constants, relative to temporary format *)
+
+iees_exponent_bias  =  7EH
+ieel_exponent_bias  =  3FEH
+temp_exponent_bias  =  3FFEH
+
+(* The temporary format here is not identical to iNDP-87 format.  The *)
+(*       exponent is not biased and the sign is held in a separate *)
+(*       byte.  This format is faster for emulation software to use. *)
+
+  emu_fraction  = 0
+  emu_exponent  = 8
+  emu_sign      = 10
+  emu_spare     = 11
+  emu_temp_size  = 12
+
+(*INCLUDE E086ENTR*)
+
+(*  The emulation does not extend to some more exotic possibilities for *)
+(*  using the iNDP registers.  When stack overflow occurs, registers do *)
+(*  not wrap around.  When registers below stack bottom are addressed, the *)
+(*  register actually used is undefined.  In both cases, the emulator *)
+(*  generates an "invalid operation" exception.  If the exception is not *)
+(*  masked and exception interrupts are properly supported, the program *)
+(*  should behave as if the real chip was present.  If exceptions are not *)
+(*  processed, then the result will be unpredictable. *)
+
+fregs                = 200
+emws_limitSP         = 200    (* org 8*emu_temp_size *)
+emws_initialSP       = 296    (* org 9*emu_temp_size *)
+emws_saveVector      = 404    (* org 4 *)
+emws_not_used        = 408    (* org 6 *)
+emws_status          = 414    (* org 2, aligned. Result of comparisons *)
+emws_control         = 416    (* org 2  processing options and exceptions. *)
+
+emws_instrnPtrxx     = 418    (* org 4  used with error recovery *)
+emws_dataPtrxx       = 422    (* org 4   --------- " ------------ *)
+emws_instructionxx   = 426    (* org 2  bytes swapped, used for error recovery *)
+
+emws_tos             = 428    (* org 2  current level of e87 register stack *)
+emws_maxStack        = 430    (* org 2 *)
+
+invLn2               = 432    (* org emu_temp_size, dw 0F0BBH, 05C17H, 03B29H, 0B8AAH, 1; db positive_sign, 0*)
+emws_resume_ip       = 444    (* org 2 *)
+emws_resume_bp       = 446    (* org 2 *)
+emuRecSize           = 448
+
+(* offsets from bp of saved registers *)
+oldFlags        = 22
+oldCS           = 20
+oldIP           = 18
+oldAX           = 16
+oldBX           = 14
+oldCX           = 12
+oldDX           = 10
+oldSI           = 8
+oldDI           = 6
+oldDS           = 4
+oldES           = 2
+oldBP           = 0
+
+segment EMU_TEXT  (EMU_CODE,28H)
+
+(*%T _mthread *)
+extrn __FloatSave
+extrn __FloatRestore
+(*%E *)
+
+public __FloatInitStack :
+
+ mov word ss:[InMathLib],0
+(*%T RegParam *)
+ push cx     (* initialise fp registers except for stack top *)
+ mov cx,7
+push_zero:
+ fldz st(0)
+ loop push_zero
+ pop cx
+(*%E *)
+(*%T _mthread *)
+ push ds
+ push es
+ push ss
+ pop ds
+ push ss
+ pop es
+ call far __FloatSave
+ call far __FloatRestore
+ pop es
+ pop ds
+(*%E *)
+ ret  far 0
+
+segment EMU_TEXT(EMU_CODE,28H)
+
+public __EmulInitInstance: (* ax = resume address, bx = stack segment *)
+ push cx
+ push di
+ push ds
+ push es
+ mov ds, bx
+ mov es, bx
+ mov [emws_resume_ip],ax
+ mov di, emws_limitSP
+ mov cx, emws_resume_ip - emws_limitSP
+ sub ax, ax
+ rep; stosb
+ mov word [emws_status],0
+ mov word [emws_control],33FH + 0C00H
+ and word [emws_control],~001DH (* enable invalid op/underflow/overflow/divide by zero exception *)
+ mov word [emws_tos],(*offset*) emws_initialSP
+ mov word [emws_maxStack],(*offset*) emws_initialSP
+ mov word [emws_initialSP],0
+ mov word [emws_initialSP][2],0
+ mov word [emws_initialSP][4],0
+ mov word [emws_initialSP][6],0
+ mov word [emws_initialSP][8],infinite_exponent
+ mov word [invLn2][0],0F0BBH
+ mov word [invLn2][2],05C17H
+ mov word [invLn2][4],03B29H
+ mov word [invLn2][6],0B8AAH
+ mov word [invLn2][8],00001H
+ (*mov word [invLn2][10],00000H*)
+ pop  es
+ pop  ds
+ pop  di
+ pop  cx
+ ret  0
+
+other_jumps :
+  dw  e287_tos_Function
+  dw  e287_FPU_Control
+  dw  e287_Reserved_1
+  dw  e287_Reserved_2
+
+arith_push : dw  iees_Push, emu_Float32, ieel_Push, emu_Float
+
+arith_actCase:
+  dw  arith_Add, arith_Multiply
+  dw  arith_Compare, arith_CompareP
+  dw  arith_Subtract, arith_SubtractR
+  dw  arith_Divide, arith_DivideR
+
+en_regCaseSwitch :
+  dw  en_regCase0
+  dw  en_regCase1
+  dw  en_regCase2
+  dw  en_regCase3
+  dw  en_regCase4
+  dw  en_regCase5
+  dw  en_regCase6
+  dw  en_regCase7
+
+
+public emulate8087:
+(* AL contains 0..7, the op code number, and AH contains mod/r/m
+   DL indicates if there was a segment override
+   ES contains the segment of the segment override (if any)
+*)
+
+  mov  ss:[emws_resume_bp], bp
+  mov  sp, ss:[emws_tos]
+  mov  bx, 0C007H
+  and  bl, ah      (* bl = regMode *)
+  and  bh, ah      (* bh = disp *)
+  xchg  cx, ax      (* ch = mod/R/M, cl = op *)
+  cmp  bh, 0C0H
+  jae  en_NotMemoryOperand
+en_memoryOperand:
+  sub  ax, ax
+  shl  bl, 1
+  cmp  bh, 40H
+  mov  bh, 0
+  ja  en_dispCase_80
+  je  en_dispCase_40
+en_dispCase_00:
+  cmp  bl, 6*2
+  jne  en_dispCaseEnd
+  lodsw
+  mov  di, [bp][oldDS]
+  jmp  en_checkSegFix
+en_dispCase_40:
+  lodsb
+  cbw
+  jmp  cs:[en_regCaseSwitch][bx]
+en_dispCase_80:
+  lodsw
+en_dispCaseEnd:
+  jmp  cs:[en_regCaseSwitch][bx]
+en_regCase0:
+  add  ax, [bp][oldBX]
+  add  ax, [bp][oldSI]
+  mov  di, [bp][oldDS]
+  jmp    en_regCaseEnd
+en_regCase1:
+  add  ax, [bp][oldBX]
+  add  ax, [bp][oldDI]
+  mov  di, [bp][oldDS]
+  jmp    en_regCaseEnd
+en_regCase2:
+  add  ax, [bp][oldBP]
+  add  ax, [bp][oldSI]
+  mov  di, ss
+  jmp    en_regCaseEnd
+en_regCase3:
+  add  ax, [bp][oldBP]
+  add  ax, [bp][oldDI]
+  mov  di, ss
+  jmp    en_regCaseEnd
+en_regCase4:
+  add  ax, [bp][oldSI]
+  mov  di, [bp][oldDS]
+  jmp    en_regCaseEnd
+en_regCase5:
+  add  ax, [bp][oldDI]
+  mov  di, [bp][oldDS]
+  jmp    en_regCaseEnd
+en_regCase6:
+  add  ax, [bp][oldBP]
+  mov  di, ss
+  jmp    en_regCaseEnd
+en_regCase7:
+  add  ax, [bp][oldBX]
+  mov  di, [bp][oldDS]
+en_regCaseEnd:
+en_checkSegFix:
+  mov  [bp][oldIP], si  (* CSIP correct for next instruction *)
+  xchg si, ax      (* operandPtr := es:si *)
+  cmp  dl, true    (* was segFix present ? *)
+  je   en_wasFixed
+  mov  es, di
+en_wasFixed:
+  push ss
+  pop  ds
+(*mov  [emws_dataPtr][0], si*)
+(*mov  [emws_dataPtr][2], es*)
+  jmp en_gotoLong
+en_NotMemoryOperand:
+  mov  [bp][oldIP], si  (* CSIP correct for next instruction *)
+  mov  ax, ss
+  mov  ds, ax
+  mov  es, ax    (* ss=cs=ds=es *)
+en_gotoLong:
+  test  cl, 1
+  jz   e287_Arith
+  cmp  ch, 3 * 40H
+  jb   e287_Load_Store
+  test  ch, 20H
+  jz   e287_Register_Move
+other_case:
+  mov  bx, 6
+  and  bl, cl
+  jmp  cs:[other_jumps][bx]
+
+(*public*) e287_Register_Move  :
+
+(* which register ?*)
+
+mov  al, emu_temp_size
+mul  bl      (* register number*)
+add  ax, sp
+xchg  si, ax      (* operandPtr := es : si*)
+
+mov  bx, 18H
+and  bl, ch
+and  cl, 06H
+or  bl, cl
+
+cld
+mov  cx, emu_temp_size/2
+
+jmp  near  cs:[remo_case][bx]
+
+(*public*) e287_Arith  :
+
+mov  bp, cx    (* save a copy of cx in BP*)
+
+cmp  ch, 0C0H
+jnb  arith_reg
+
+  sub  sp, emu_temp_size
+  mov  di, sp
+
+  mov  bx, 6
+  and  bl, cl      (* switch according to TYP field*)
+  call cs:[arith_push][bx]
+
+  mov  bx, sp
+  lea  ax, [bx][emu_temp_size]
+  mov  dx, ax
+  mov  si, emu_temp_size  (* si = popAfter*)
+  jmp  arith_action
+
+
+arith_reg:
+  mov  al, emu_temp_size
+  mul  bl      (* register number*)
+  add  ax, sp
+  xchg  bx, ax      (* op2 := ^register [bl];*)
+
+  mov  ax, sp
+
+  test  cl, 4    (* test .Reverse bit*)
+  mov  dx, ax
+  jz  arith_notReversed
+  mov  dx, bx
+arith_notReversed:
+
+arith_testPop:
+  sub  si, si    (* si = popAfter*)
+  test  cl, 2    (* isolate the .Pop bit*)
+  jz  arith_action
+  mov  si, emu_temp_size
+
+arith_action:
+push ss
+pop  es        (* es = ds = ss*)
+
+and  bp, 3800H
+mov  cl, 6
+rol  bp, cl        (* BP = word index [opb]*)
+
+mov  cx, (*offset*) arith_end    (* optimise return from cases*)
+jmp  near cs:[arith_actCase][bp]
+
+(*public*) e287_Load_Store  :
+
+(* these two statements are an optimised preparation for the case switches*)
+mov  bp, 6
+and  bp, cx    (* select CL.typ (same as CL.xtp)*)
+      (*   Note BP is conserved by subroutine calls*)
+
+test  ch, 20H
+jnz  ldst_extended
+
+  test  ch, 10H
+  jnz  ldst_store
+
+    test  ch, 08H
+    jnz  ldst_pushThenPop
+
+      sub  sp, emu_temp_size
+      mov  di, sp
+      call cs:[ldst_loadCase][bp]
+(*      jmp  ldst_end*)
+
+    ldst_pushThenPop:  (*{ reserved, logically No-Op's }*)
+      jmp  ldst_end
+
+
+  ldst_store:
+    mov  di, sp
+    xchg  si, di
+    push cx
+    call cs:[ldst_storeCase][bp]
+    pop  cx
+
+    test  ch, 08H      (* pop required ?*)
+    jz  ldst_end
+      add  sp, emu_temp_size
+    jmp  ldst_end
+
+
+ldst_extended:
+  mov  ax, 08H
+  and  al, ch    (* select CH.x*)
+  or  bp, ax    (* BP = 2 * x|xtp*)
+
+  test  ch, 10H
+  jnz  ldst_xStore
+
+    call cs:[ldst_xPushCase][bp]
+    jmp  ldst_end
+
+  ldst_xStore:
+    xchg  si, di
+    call cs:[ldst_xStoreCase][bp]
+
+ldst_end:
+jmp  near  e287_Exit
+
+(*public*) e287_Exit :
+
+  mov  ss:[emws_tos], sp      (* record the e87 registers' new stack top *)
+ExceptionExit:
+  mov bp, ss:[emws_resume_bp]
+  jmp ss:[emws_resume_ip]
+
+(*INCLUDE E287ADSU.ASM*)
+
+(* algorithm notes*)
+
+(* subtraction is done as (a - b) = (a + (-b))*)
+
+(* align the lesser operand rightwards to match the greater.*)
+(* add them together, realign fraction rounded if overflow.*)
+
+(* The arithmetic is done using 5 bytes (dx:ax:CH), with the least significant*)
+(* byte (CH) holding the right-shifted part of the lesser of the two numbers.*)
+(* Actually only 2 bits are required, but use of a whole byte is easier.*)
+(* This 5th byte comes into play if the numbers are nearly equal.  At the end*)
+(* of calculation the 5th byte is rounded off and a 4-byte result is*)
+(* delivered.*)
+
+
+
+x_p  =  4+nearParam
+y_p  =  2+nearParam
+z_p  =  0+nearParam  (* z := x +- y*)
+
+paramsize  =  6
+
+align  =  -1    (* used for shift counts*)
+excess =  -2    (* bits 64..71 of calculation*)
+zExp   =  -4    (* effective exponent of z*)
+zSign  =  -5    (* effective sign of z*)
+op     =  -6    (* are we to add or to subtract*)
+
+(*public*) emu_Subtract  :        (*NEAR*)
+
+  mov  cl, negative_sign
+  jmp  @Shared_Add_Sub
+
+
+
+(*public*) emu_Add  :  (*NEAR*)
+
+  mov  cl, positive_sign
+
+
+
+@Shared_Add_Sub  :  (*NEAR*)
+
+  push bp; mov bp,sp; lea sp,[bp][op]; push si; push di
+
+  mov  si, [bp][x_p]
+  mov  di, [bp][y_p]
+  mov  al, cl
+  xor  al, [di][emu_sign]
+  xor  al, [si][emu_sign]
+  mov  [bp][op], al    (* op := negative if the operands are to*)
+        (*  be subtracted*)
+        (* op := positive if same sign, addition.*)
+
+  mov  ax, [si][emu_exponent]
+  mov  bx, [di][emu_exponent]
+
+  cmp  ax, bx
+  jge  @share_x_ge_y
+
+@share_y_gt_x:
+  xor  cl, [di][emu_sign]
+  xchg  ax, bx
+  xchg  si, di
+  jmp  @share_limits
+
+@share_x_ge_y:
+  mov  cl, [si][emu_sign]
+
+@share_limits:
+  (* si points to the larger, di to the smaller (or near-equal)*)
+  (* ax exponent       bx exponent*)
+
+  mov  [bp][zSign], cl  (* larger's sign dominates result*)
+
+  mov  cx, [si][emu_exponent]  (* the larger's exponent*)
+  mov  [bp][zExp], cx    (*  will dominate result*)
+
+  cmp  ax, infinite_exponent
+  jge  @larger_is_result
+  cmp  bx, zero_exponent
+  jle  @larger_is_result
+
+@share_align:    (* now align the smaller number to match the larger.*)
+  sub  ax, bx
+  cmp  ax, 64
+  jle  @share_normal
+
+
+@larger_is_result:
+  mov  ax, [si][emu_fraction][w0]
+  mov  bx, [si][emu_fraction][w1]
+  mov  cx, [si][emu_fraction][w2]
+  mov  dx, [si][emu_fraction][w3]
+  jmp  near  @shared_end
+
+
+
+@share_normal:
+  mov  [bp][align], al
+
+  mov  ax, [di][emu_fraction][w0]
+  mov  bx, [di][emu_fraction][w1]
+  mov  cx, [di][emu_fraction][w2]
+  mov  dx, [di][emu_fraction][w3]
+  mov  byte [bp][excess], 0
+
+  sub  byte [bp][align], 8
+  jl  @align_bits
+@align_bytes:
+  mov  [bp][excess], al
+  mov  al, ah
+  mov  ah, bl
+  mov  bl, bh
+  mov  bh, cl
+  mov  cl, ch
+  mov  ch, dl
+  mov  dl, dh
+  mov  dh, 0
+  sub  byte [bp][align], 8
+  jge  @align_bytes
+
+@align_bits:
+  and  byte [bp][align], 7
+  jz  @align_end
+@align_bit_shift:
+  shr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  rcr  byte [bp][excess], 1
+  dec  byte [bp][align]
+  jnz  @align_bit_shift
+
+@align_end:
+  sub  di, di      (* convenient zero*)
+
+  cmp  byte [bp][op], positive_sign  (* add or subtract*)
+  jne  @share_do_subtract
+
+
+
+(* start of addition*)
+
+@share_do_add:
+  add  ax, [si][emu_fraction][w0]
+  adc  bx, [si][emu_fraction][w1]
+  adc  cx, [si][emu_fraction][w2]
+  adc  dx, [si][emu_fraction][w3]
+
+  jnc  @shared_round    (* normalise if overflowed*)
+  rcr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  rcr  byte [bp][excess], 1
+  inc  word [bp][zExp]
+  jmp  @shared_round
+
+(* end of addition*)
+
+
+
+(* start of subtraction*)
+
+@share_do_subtract:
+  xor  byte [bp][zSign], negative_sign
+  sub  ax, [si][emu_fraction][w0]  (* smaller - larger*)
+  sbb  bx, [si][emu_fraction][w1]  (*   is the*)
+  sbb  cx, [si][emu_fraction][w2]  (*     negative of*)
+  sbb  dx, [si][emu_fraction][w3]  (*       the expected result*)
+
+(* Since we compared only exponents when checking which is "larger", in*)
+(* the case where exponents were equal there is a chance the fraction is*)
+(* smaller.  Since the smaller is supposed to be in registers, the subtraction*)
+(* would give a negative result (carry=borrow bit flagged) if they are the*)
+(* correct way around.*)
+
+  jnb  @sub_align    (* "smaller" actually larger*)
+
+(* "larger" was larger, so negate to get correct result.*)
+
+  xor  byte [bp][zSign], negative_sign
+  not  dx
+  not  cx    (* use the identity  -x = not(x) + 1*)
+  not  bx
+  not  ax
+  neg  byte [bp][excess]
+  cmc
+  adc  ax, di
+  adc  bx, di
+  adc  cx, di
+  adc  dx, di
+
+@sub_align:
+  mov  si, 64
+  or  dh, dh
+  js  @shared_round
+
+
+(* Bit shifting appears inefficient.  However, note that only when x and y*)
+(* are nearly equal will their difference require large realignments, and*)
+(* such cases are unlikely.  It does not seem worthwhile to provide byte*)
+(* or word shifts.*)
+
+@sub_bit_shift:
+  dec  si
+  jz  @sub_result_zero
+  shl  byte [bp][excess], 1
+  rcl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  adc  dx, dx
+  jns  @sub_bit_shift
+
+  sub  si, 64
+  add  [bp][zExp], si
+  jmp  @shared_round
+
+
+@sub_result_zero:
+  mov  word [bp][zExp], zero_exponent
+  mov  byte [bp][zSign], positive_sign
+  jmp  @shared_end
+
+
+(* end of subtraction*)
+
+
+
+(* shared code for both add and subtract*)
+
+@shared_round:
+  shl  byte [bp][excess], 1
+  adc  ax, di
+  adc  bx, di
+  adc  cx, di
+  adc  dx, di
+  jnc  @roundEnd
+  rcr  dx, 1      (* note dx:cx:bx:ax must be 8000:0:0:0*)
+  inc  word [bp][zExp]      (*  if you get to here*)
+
+@roundEnd:
+  cmp  word [bp][zExp], infinite_exponent
+  jge  @overflow
+  cmp  word [bp][zExp], zero_exponent
+  jle  @underflow
+
+@shared_end:
+  cld
+  mov  di, [bp][z_p]
+  stosw
+  xchg  ax, bx
+  stosw
+  xchg  ax, cx
+  stosw
+  xchg  ax, dx
+  stosw
+  mov  ax, [bp][zExp]
+  stosw
+  mov  al, [bp][zSign]
+  stosb
+
+  pop di; pop si; mov sp,bp; pop bp
+
+  ret  paramsize
+
+
+@overflow:
+  mov  ch, fe_Overflow
+  mov  word [bp][zExp], infinite_exponent
+  jmp  @extreme
+
+@underflow:
+  mov  ch, fe_Underflow
+  mov  word [bp][zExp], zero_exponent
+
+@extreme:
+  call e287_Exception
+  mov  byte [bp][zSign], positive_sign  (* extremes always positive*)
+  sub  ax, ax
+  mov  bx, ax
+  mov  cx, ax
+  mov  dx, ax
+  jmp  @shared_end
+
+
+
+(*INCLUDE E287ATAN.ASM*)
+
+pi_by_2 : dw 0C235H, 2168H, 0DAA2H, 0C90FH, 1; db positive_sign, 0
+
+
+(* Polynomial coefficients for Chebyshev approx. to ArcTan (x) / x,*)
+(*    in terms of every second power.*)
+
+poly_terms : dw  8
+poly_coeffs :
+dw     0H,     0H,     0H,     0H,   0H; db positive_sign, 0   (* 1.0*)
+dw 05557H, 05555H, 05555H,  0155H,   0H; db negative_sign, 0
+dw 032BEH, 03333H, 03333H,    03H,   0H; db positive_sign, 0
+dw 01E7DH, 09249H,  0924H,     0H,   0H; db negative_sign, 0
+dw 0FEBCH, 071C6H,   01CH,     0H,   0H; db positive_sign, 0
+dw 0FF5CH, 05D16H,     0H,     0H,   0H; db negative_sign, 0
+dw 0BBD8H,  013AH,     0H,     0H,   0H; db positive_sign, 0
+dw 00C0AH,    04H,     0H,     0H,   0H; db negative_sign, 0
+
+
+numOfIntervals  =  4
+topInterval  =  3
+
+topsOf :
+dw 00000H, 00000H, 00000H, 0E700H, -3; db positive_sign, 0
+dw 0A4BDH, 07BD6H, 064EEH, 0B35CH, -1; db positive_sign, 0
+dw 085B5H, 0FC47H, 03074H, 0A111H,  0; db positive_sign, 0
+one :
+dw 00000H, 00000H, 00000H, 08000H,  1; db positive_sign, 0
+
+arcTans :
+dw 0FA9CH, 0B064H, 01DB2H, 0E607H, -2; db positive_sign, 0
+dw 0FA9CH, 0B064H, 01DB2H, 0E607H, -1; db positive_sign, 0
+dw 0BBF5H, 0044BH, 05646H, 0AC85H,  0; db positive_sign, 0
+
+middles :
+dw 06EE6H, 01FD9H, 009BDH, 0E9FAH, -2; db positive_sign, 0
+dw 07B8DH, 0BD35H, 0845BH, 0F6DDH, -1; db positive_sign, 0
+dw 0D57FH, 00235H, 080DBH, 0CC73H,  0; db positive_sign, 0
+
+(* algorithm notes*)
+
+(* Firstly we take the ratio z = x / y, with x and y the parameters.  We only*)
+(* need z.*)
+
+(* A Chebyshev polynomial expansion is used for a very narrow domain*)
+(* of arguments, -1/N .. +1/N, where N is on the order of 8.  The remaining*)
+(* range +1/N .. 1.0 is mapped onto the smaller interval.*)
+
+(* Beginning with high-school trigonometry:*)
+
+(*  Tan (a + b) =  (Tan (a) + Tan (b)) / (1 - Tan(a) * Tan(b))*)
+
+(* We seek to find:*)
+
+(*       psi = ArcTan (z)*)
+
+(* let   z = (centre + v) / (1 - centre * v)*)
+
+(*  where the closest value of centre is chosen by comparing z to a table*)
+(* of bounds of intervals from 0 to infinity, and  v  is a number in the*)
+(* range -1/N .. +1/N.  The intervals and centres are pre-computed to*)
+(* ensure that v will be in this range.*)
+
+(* We can calculate  v  by re-arranging the algebra:*)
+
+(*         v = (z - centre) / (1 + centre * z)*)
+
+(* The importance of this formula is that if*)
+
+(*     theta = ArcTan (centre)       -- pre-calculated table of theta values*)
+
+(*     phi   = ArcTan (v)            -- calculated by rapid polynomial*)
+
+(* then*)
+
+(*     ArcTan (z) = theta + phi*)
+
+(* which is the answer we seek.*)
+
+
+
+(* VAR*)
+(* sign   : (positive_sign, negative_sign);*)
+(* theta  : 0 .. topInterval;*)
+(* result : emu_temp;*)
+
+(* BEGIN*)
+
+(* z := x / y;*)
+
+(* theta := 0;*)
+
+(* WHILE (theta < top_interval) AND (x > topsOf [theta]) DO  theta := theta + 1;*)
+
+(* IF theta = 0 THEN  result := ArcTan (z)*)
+(* ELSE*)
+(*     theta := theta - 1;*)
+(*     z := (z - middles [theta]) / (1 + z * middles [theta]);*)
+(*     result := ArcTan (z) + arcTans [theta];*)
+
+(* emu_PAtan := result;*)
+(* END;*)
+
+
+
+
+(*public*) emu_PAtan  :  (*NEAR*)
+_theta   =  -2
+_temp    = _theta - emu_temp_size
+
+  push bp; mov bp,sp; lea sp,[bp][_temp]; push si; push di
+
+  push si
+  push di
+  push si
+  call emu_Divide
+
+  mov  byte [bp][_theta], 0
+  mov  di, (*offset*) topsOf               (* di := ^ topsOf [theta]*)
+
+at@while:
+  cmp     byte [bp][_theta], topInterval
+  jae     at@whileEnd
+
+  push di (*1*)
+  push si
+  call copy_di_to_temp
+  push di
+  call emu_Compare
+  pop di (*1*)
+
+  cmp  ax, e287_greater
+  jne  at@whileEnd
+
+  inc     byte [bp][_theta]
+  add     di, emu_temp_size
+  jmp     at@while
+
+
+at@whileEnd:
+  cmp  byte [bp][_theta], 0
+  jne  at@notSmall
+
+
+at@small:
+  call ArcTan      (* _result := ArcTan (si)*)
+  jmp  at@normalEnd
+
+
+at@notSmall:
+  dec  byte [bp][_theta]   (* theta := theta - 1;*)
+
+(*     z := (z - middles [theta]) / (1 + z * middles [theta]);*)
+
+  mov  al, emu_temp_size
+  mul  byte [bp][_theta]
+  add  ax, (*offset*) middles
+  xchg  di, ax
+
+  sub  sp, emu_temp_size
+  mov  ax, sp
+
+  push si
+  call copy_di_to_temp
+  push di
+  push ax
+  call emu_Subtract
+
+  push si
+  push di
+  push si
+  call emu_Multiply
+
+  mov  di, one
+  call copy_di_to_temp
+  push di
+  push si
+  push si
+  call emu_Add
+
+  mov  ax, sp
+  push ax
+  push si
+  push si
+  call emu_Divide
+
+  add  sp, emu_temp_size
+
+  call ArcTan
+
+  mov  al, emu_temp_size
+  mul  byte [bp][_theta]
+  add  ax, (*offset*) arcTans
+  xchg di, ax
+  call copy_di_to_temp
+  push di
+  push si
+  push si
+  call emu_Add
+
+at@normalEnd:
+
+at@end:
+  pop di; pop si; mov sp,bp; pop bp
+  ret 0
+
+copy_di_to_temp:
+  push ax
+  mov ax, cs:[di]
+  mov [bp][_temp],ax
+  mov ax, cs:[di][2]
+  mov [bp][_temp][2],ax
+  mov ax, cs:[di][4]
+  mov [bp][_temp][4],ax
+  mov ax, cs:[di][6]
+  mov [bp][_temp][6],ax
+  mov ax, cs:[di][8]
+  mov [bp][_temp][8],ax
+  mov ax, cs:[di][0AH]
+  mov [bp][_temp][0AH],ax
+  lea di, [bp][_temp]
+  pop ax
+  ret 0
+
+(* FUNCTION  ArcTan  ( _z : emu_temp ) _result : emu_temp;*)
+
+(* { Polynomial evaluation of ArcTan of a number within a small domain*)
+(*   centred upon zero.*)
+
+
+(* BEGIN*)
+(* _result := _z * Poly ( _z * _z, poly_terms, poly_coeffs);*)
+(* END;*)
+
+
+ArcTan    :
+
+(* parameter and result both at [si]*)
+
+linear_bound  =  -32
+
+  push si
+  push di
+
+  call emup_Push
+
+  cmp  word [si][emu_exponent], linear_bound
+  jg  art@nonLinear
+
+  mov  di, si
+  call emu_Pop       (* ArcTan (x) ~= x for very small x*)
+  jmp  art@end
+
+art@nonLinear:
+  mov  di, sp
+  add  word [di][emu_exponent], 3  (* the polynomial is designed*)
+          (* for a *8 magnified parameter.*)
+  call emup_Square_Fix
+
+  push cs:[poly_terms]    (* number of terms to evaluate*)
+  mov  ax, poly_coeffs
+  push cs
+  push ax
+  call emup_Polynomial
+
+  push di
+  push si
+  push si
+  call emu_Multiply  
+
+  add  sp, emu_temp_size  (* pop Poly value off stack*)
+
+art@end:
+  pop  di
+  pop  si
+  ret  0
+
+
+(*INCLUDE E287CNST.ASM*)
+
+(*
+one:      dw 0, 0, 0, 8000H, 1; db positive_sign, 0
+*)
+
+Log2of10: dw 08AFEH, 0CD1BH, 0784BH, 0D49AH, 2; db positive_sign, 0
+Log2ofE:  dw 0F0BBH, 05C17H, 03B29H, 0B8AAH, 1; db positive_sign, 0
+Pi:       dw 0C235H, 2168H, 0DAA2H, 0C90FH, 2; db positive_sign, 0
+Log10of2: dw 0F799H, 0FBCFH, 09A84H, 09A20H, -1; db positive_sign, 0
+LogEof2:  dw 079ACH, 0D1CFH, 017F7H, 0B172H, 0; db positive_sign, 0
+zero:     dw 0, 0, 0, 0, zero_exponent; db positive_sign, 0
+
+(* All constants' procedures are in0-out1 pattern (see e287long.asm) and*)
+(*       thus take no input and place their output at ss=ds=es:[di]*)
+
+(*public*) emu_1  :  (*NEAR*)
+
+  mov  ax, (*offset*) one
+  jmp  MoveConstant
+
+
+(*public*) emu_Log2of10  :  (*NEAR*)
+
+  mov  ax, (*offset*) Log2of10
+  jmp  MoveConstant
+
+
+(*public*) emu_Log2ofE  :  (*NEAR*)
+
+  mov  ax, (*offset*) Log2ofE
+  jmp  MoveConstant
+
+
+
+(*public*) emu_Pi  :  (*NEAR*)
+
+  mov  ax, (*offset*) Pi
+  jmp  MoveConstant
+
+
+(*public*) emu_Log10of2  :  (*NEAR*)
+
+  mov  ax, (*offset*) Log10of2
+  jmp  MoveConstant
+
+
+(*public*) emu_LogEof2  :  (*NEAR*)
+
+  mov  ax, (*offset*) LogEof2
+  jmp  MoveConstant
+
+
+(*public*) emu_0  :  (*NEAR*)
+
+  mov  ax, (*offset*) zero
+(*  jmp  MoveConstant*)
+
+
+MoveConstant:
+  push ds
+
+  push cs
+  pop  ds
+  xchg  si, ax
+  cld
+  mov  cx, emu_temp_size / 2
+rep;  movsw
+
+  sub  di, emu_temp_size  (* restore original di*)
+  xchg  si, ax      (*   and si values*)
+  pop  ds
+  ret  0
+
+
+(*public*) emu_Extreme  :  (*NEAR*)
+
+  push di
+
+  mov  es:[di][emu_exponent], ax   (* infinity or zero, chosen by caller*)
+
+  mov byte  es:[di][emu_sign], positive_sign
+  sub  ax, ax
+  cld
+  stosw    (* zero fraction*)
+  stosw
+  stosw
+  stosw
+
+  pop  di
+  ret  0
+
+
+(*INCLUDE E287CNVT.ASM*)
+
+(* procedure to float an integer to yield a long temporary real*)
+
+(* input is an integer at es : [si]*)
+
+(* result is a temporary real at ds : [di]*)
+
+(* no exceptions.*)
+
+
+(*public*) emu_Float  :  (*NEAR*)
+
+  mov  ax, es : [si][w0]
+
+  sub  cx, cx      (* convenient zero*)
+
+  mov  dx, positive_sign
+  or  ax, ax
+  jl  @fl_negative
+  jg  @fl_signed
+
+@fl_zero:
+  mov  bx, zero_exponent
+  jmp  @fl_end
+
+@fl_negative:
+  neg  ax
+  mov  dl, negative_sign
+
+@fl_signed:
+  sub  bx, bx
+  xchg  cx, ax
+@fl_shift:
+  inc  bx
+  shr  cx, 1
+  rcr  ax, 1
+  jcxz  @fl_aligned
+  jmp  @fl_shift
+
+@fl_aligned:
+@fl_end:
+  mov  [di][emu_sign][w0], dx
+  mov  [di][emu_exponent], bx
+  mov  [di][emu_fraction][w3], ax
+  mov  [di][emu_fraction][w2], cx  (* cx = zero*)
+  mov  [di][emu_fraction][w1], cx
+  mov  [di][emu_fraction][w0], cx
+
+  ret  0
+
+
+
+
+(*public*) emu_Round  :  (*NEAR*)
+
+(* Convert a long temporary floating point number to a 16 bit integer*)
+(*      with fraction rounded according to current rounding control.*)
+
+(* Input operand at ds:[si]*)
+
+(* Result at es:[di]*)
+
+(* Side effects:  may exit via exception*)
+
+
+  mov  cx, [si][emu_exponent]
+  cmp  cx, 15
+  jg  @ro_overflow
+  cmp  cx, zero_exponent
+  jg  @ro_standard
+
+@ro_zero:
+  sub  ax, ax
+  jmp  @ro_end
+
+@ro_overflow:
+  mov  ch, fe_Operand_Too_Big
+  call e287_Exception
+  mov  ax, 8000H
+  jmp  @ro_end
+
+
+@ro_standard:
+  mov  bx, [si][emu_fraction][w3]  (* ax:bx holds the*)
+  sub  ax, ax        (*   integer:fraction*)
+  mov  dx, ax        (* dx collects the sticky bits*)
+  cmp  cx, 0
+  jge  @ro_getSticky
+  shr  bx, 1        (* ensure tiny numbers are*)
+  rcr  dx, 1        (*   aligned <= 1/4*)
+
+@ro_getSticky:
+  or  dx, [si][emu_fraction][w0]  (* stick the lesser*)
+  or  dx, [si][emu_fraction][w1]  (*   words all*)
+  or  dx, [si][emu_fraction][w2]  (*     together*)
+
+  cmp  cx, 0
+  jle  @ro_bitAligned
+@ro_bitLoop:
+  shl  bx, 1
+  rcl  ax, 1
+  loop  @ro_bitLoop
+
+@ro_bitAligned:
+  or  bl, dh      (* BL is completely sticky*)
+  or  bl, dl      (* bx is fraction byte + sticky byte*)
+
+  mov  cl, e287_roundingControl
+  and  cl, [emws_control][by1]  (* get rounding control*)
+  cmp  cl, e287_chop
+  je  @ro_chop
+  cmp  cl, e287_round
+  je  @ro_roundNear
+  add  cl, [si][emu_sign][by0]
+  cmp  cl, e287_floor + positive_sign
+  je  @ro_chop
+  cmp  cl, e287_ceiling + negative_sign
+  je  @ro_chop
+
+@ro_roundUp:      (* this is what sticky bits are for !*)
+  neg  bx    (* sets carry if any bit not zero*)
+  adc  ax, 0
+  js  @ro_overflow
+  jmp  @ro_setSign
+
+@ro_roundNear:
+  mov  dl, 1    (* banker's rounding needs test*)
+  and  dl, al    (*   of ls bit of integer*)
+  or  bl, dl
+  add  bx, 7FFFH
+  adc  ax, 0
+  js  @ro_overflow
+
+
+@ro_chop:
+@ro_setSign:
+  cmp  byte [si][emu_sign], negative_sign
+  jne  @ro_end
+  neg  ax
+
+@ro_end:
+  mov  es : [di][w0], ax
+  ret  0
+
+
+
+
+
+(* algorithm notes*)
+
+(* The scaling operation is quite simple, just adding an integer to*)
+(* the exponent of the floating point number.  The complications are*)
+(* that the "integer" is a real in tos(1) which must first be truncated,*)
+(* then to check against scaling zeroes and infinities, and to report*)
+(* on underflows or overflows created.*)
+
+
+(*public*) emu_Scale  :  (*NEAR*)
+
+
+  push bp; mov bp,sp; push si; push di
+
+(* first we truncate sc_n*)
+
+  mov  cx, [si][emu_exponent]
+  cmp  cx, 15
+  jg  sc@overScale
+  or  cx, cx
+  jg  sc@non_zero
+
+  sub  ax, ax
+  jmp  sc@truncated
+
+sc@overScale:
+  mov  ch, fe_Operand_Too_Big
+  call e287_Exception
+  mov  ax, 7FFFH      (* largest signable magnitude*)
+  jmp  sc@signScale
+
+sc@non_zero:
+  mov  ax, [si][emu_fraction][w3]
+  neg  cl
+  add  cl, 16
+  shr  ax, cl
+
+sc@signScale:
+  cmp  byte [si][emu_sign], negative_sign
+  jne  sc@truncated
+  neg  ax
+
+sc@truncated:
+
+(* now apply scale to tos' exponent*)
+
+  mov  cx, [di][emu_exponent]
+  cmp  cx, zero_exponent
+  jle  sc@end        (* zero * anything = zero*)
+
+  cmp  cx, infinite_exponent
+  jge  sc@end        (* infinity cannot be changed*)
+
+  add  cx, ax
+  jo   sc@under_or_overflow
+  cmp  cx, zero_exponent
+  jle  sc@underflow
+  cmp  cx, infinite_exponent
+  jge  sc@overflow
+  mov  [di][emu_exponent], cx
+
+sc@end:
+  pop di; pop si; pop bp
+  ret 0
+
+sc@under_or_overflow:
+  test ax,ax
+  jl @underflow
+sc@overflow:
+  mov  ch, fe_Overflow
+  call e287_Exception
+  mov  ax, infinite_exponent
+  jmp  sc@extreme
+
+sc@underflow:
+  mov  ch, fe_Underflow
+  call e287_Exception
+  mov  ax, zero_exponent
+
+sc@extreme:
+  call emu_Extreme
+  jmp  sc@end
+
+(*
+(*INCLUDE E287COMP1.ASM*)
+
+(* second parameter in cs *)
+(*public*) emu_Compare1  :  (*NEAR*)
+
+co_x_p  =  2+nearParam    (* based on ds*)
+co_y_p  =  0+nearParam    (* based on cs*)
+
+co_paramsize  =  4
+
+(* result in [emws_status]*)
+
+  push bp; mov bp,sp; push si; push di
+
+  mov  si, [bp][co_x_p]
+  mov  di, [bp][co_y_p]
+
+  mov  ax, [si][emu_exponent]
+  cmp  ax, cs:[di][emu_exponent]
+  jge  @1ax_is_greater
+  mov  ax, cs:[di][emu_exponent]
+@1ax_is_greater:
+
+  cmp  ax, zero_exponent
+  jle  @1both_equal      (* both must be zero*)
+
+  cmp  ax, infinite_exponent
+  jge  @1incomparable      (* infinities are incomparable*)
+
+
+  mov  cl, [si][emu_sign]
+  cmp  cl, cs:[di][emu_sign]
+  jl  @1x_greater      (* positive_sign < negative_sign*)
+  jg  @1x_lesser
+
+  mov  ax, [si][emu_exponent]
+  cmp  ax, cs:[di][emu_exponent]
+  jl  @1x_smaller
+  jg  @1x_larger
+
+  mov  ax, [si][emu_fraction][w3]
+  cmp  ax, cs:[di][emu_fraction][w3]
+  jne  co@1notEqual
+
+  mov  ax, [si][emu_fraction][w2]
+  cmp  ax, cs:[di][emu_fraction][w2]
+  jne  co@1notEqual
+
+  mov  ax, [si][emu_fraction][w1]
+  cmp  ax, cs:[di][emu_fraction][w1]
+  jne  co@1notEqual
+
+  mov  ax, [si][emu_fraction][w0]
+  cmp  ax, cs:[di][emu_fraction][w0]
+  jne  co@1notEqual
+
+@1both_equal:
+  mov  ax, e287_equal
+  jmp  @1co_end
+
+co@1notEqual:
+  ja  @1x_larger
+
+@1x_smaller:
+  cmp  cl, positive_sign
+  jne  @1x_greater
+
+@1x_lesser:
+  mov  ax, e287_lesser
+  jmp  @1co_end
+
+
+@1x_larger:
+  cmp  cl, positive_sign
+  jne  @1x_lesser
+
+@1x_greater:
+  mov  ax, e287_greater
+  jmp  @1co_end
+
+
+@1incomparable:
+  mov  ax, e287_incomparable
+
+@1co_end:
+  mov  [emws_status][by1], ah
+
+  pop di; pop si; pop bp
+    ret  co_paramsize
+*)
+
+(*INCLUDE E287COMP.ASM*)
+
+(* algorithm notes:*)
+
+(* first check for infinities.  Infinities are incomparable.*)
+
+(* Next check for sign.  If signs differ, and not both numbers are zero,*)
+(* then the positive number is the greater.*)
+
+(* Check for the greater absolute value, beginning with the exponent then*)
+(* working down through the fraction.  If not both are equal, then if both*)
+(* are positive the greater maginitude is the greater, else if negative*)
+(* the greater magnitude is lesser.*)
+
+(*public*) emu_Compare  :  (*NEAR*)
+
+co_x_p  =  2+nearParam    (* based on ds*)
+co_y_p  =  0+nearParam    (* based on ds*)
+
+co_paramsize  =  4
+
+(* result in [emws_status]*)
+
+  push bp; mov bp,sp; push si; push di
+
+  mov  si, [bp][co_x_p]
+  mov  di, [bp][co_y_p]
+
+  mov  ax, [si][emu_exponent]
+  cmp  ax, [di][emu_exponent]
+  jge  @ax_is_greater
+  mov  ax, [di][emu_exponent]
+@ax_is_greater:
+
+  cmp  ax, zero_exponent
+  jle  @both_equal      (* both must be zero*)
+
+  cmp  ax, infinite_exponent
+  jge  @incomparable      (* infinities are incomparable*)
+
+
+  mov  cl, [si][emu_sign]
+  cmp  cl, [di][emu_sign]
+  jl  @x_greater      (* positive_sign < negative_sign*)
+  jg  @x_lesser
+
+  mov  ax, [si][emu_exponent]
+  cmp  ax, [di][emu_exponent]
+  jl  @x_smaller
+  jg  @x_larger
+
+  mov  ax, [si][emu_fraction][w3]
+  cmp  ax, [di][emu_fraction][w3]
+  jne  co@notEqual
+
+  mov  ax, [si][emu_fraction][w2]
+  cmp  ax, [di][emu_fraction][w2]
+  jne  co@notEqual
+
+  mov  ax, [si][emu_fraction][w1]
+  cmp  ax, [di][emu_fraction][w1]
+  jne  co@notEqual
+
+  mov  ax, [si][emu_fraction][w0]
+  cmp  ax, [di][emu_fraction][w0]
+  jne  co@notEqual
+
+@both_equal:
+  mov  ax, e287_equal
+  jmp  @co_end
+
+co@notEqual:
+  ja  @x_larger
+
+@x_smaller:
+  cmp  cl, positive_sign
+  jne  @x_greater
+
+@x_lesser:
+  mov  ax, e287_lesser
+  jmp  @co_end
+
+
+@x_larger:
+  cmp  cl, positive_sign
+  jne  @x_lesser
+
+@x_greater:
+  mov  ax, e287_greater
+  jmp  @co_end
+
+
+@incomparable:
+  mov  ax, e287_incomparable
+
+@co_end:
+  mov  [emws_status][by1], ah
+
+  pop di; pop si; pop bp
+    ret  co_paramsize
+
+
+
+
+(* A very simple procedure.*)
+
+(* Compare_Zero :=*)
+(*     IF   x = 0        THEN equal*)
+(*     ELSE x = infinity THEN incomparable*)
+(*     ELSE x < 0        THEN lesser*)
+(*     ELSE                   greater;*)
+
+(* with apologies to Algol-68, Prof. Dijkstra, and P. B. Hansen for the syntax.*)
+
+
+(*public*) emu_Compare_Zero  :  (*NEAR*)
+
+(* result in ax and [emws_status]*)
+
+  mov  ax, e287_equal
+  cmp  word [si][emu_exponent], zero_exponent
+  jle  cz@end
+
+  mov  ax, e287_incomparable
+  cmp  word [si][emu_exponent], infinite_exponent
+  jge  cz@end
+
+  mov  ax, e287_lesser
+  cmp  byte [si][emu_sign], negative_sign
+  je  cz@end
+
+  mov  ax, e287_greater
+
+cz@end:
+  mov  [emws_status][by1], ah
+  ret  0
+
+
+
+(* Another simple procedure.*)
+
+(* XAM :=*)
+(*     IF   x = 0        THEN plusZero*)
+(*     ELSE x = infinity THEN plusInfinity*)
+(*     ELSE x < 0        THEN minusNormal*)
+(*     ELSE                   plusNormal;*)
+
+
+
+(*public*) emu_XAM  :  (*NEAR*)
+
+
+(* result in ax and [emws_status]*)
+
+  mov  ax, e287_plusZero
+  cmp  word [si][emu_exponent], zero_exponent
+  jle  xa@end
+
+  mov  ax, e287_plusInfinity
+  cmp  word [si][emu_exponent], infinite_exponent
+  jge  xa@end
+
+  mov  ax, e287_minusNormal
+  cmp  byte [si][emu_sign], negative_sign
+  je  xa@end
+
+  mov  ax, e287_plusNormal
+
+xa@end:
+  mov  [emws_status][by1], ah
+  ret  0
+
+
+
+
+
+(*INCLUDE E287DCML.ASM*)
+
+(* Packed Decimal Format*)
+
+(* The format used by the 8087/287 coprocessors uses 10 bytes to hold a*)
+(* signed 18-digit decimal integer.  The sign occupies the 79th (most*)
+(* significant) bit (1 = negative), the bits 72..78 are don't cares (always*)
+(* generated as zeroes by this software), and the 4-bit groups 68..71,*)
+(* 64..67, .., 0..3 are the decimal digits in decreasing significance.*)
+
+(* The number is an integer, so the least significant digit is always*)
+(* interpreted as the units' digit.  The Intel co-processors do not*)
+(* directly handle decimal fractions or floating points.*)
+
+(*packedDecimal  STRUC*)
+  pdec_digits  = 0 (*db  9 dup (?)*)
+  pdec_sign    = 9 (*db  ?*)
+(*packedDecimal  ENDS*)
+
+
+
+(* FUNCTION  emu_Push_Decimal ( VAR dec : packedDecimal) : emu_temp;*)
+
+(* VAR*)
+(* res    : emu_temp;*)
+
+(*     FUNCTION  WordDecToBin ( posn : cardinal );*)
+(*     BEGIN*)
+(*     WordDecToBin := ((dec.digit [posn + [3] * 10 +*)
+(*      dec.digit [posn + [2]) * 10 +*)
+(*      dec.digit [posn + [1]) * 10 + dec.digit [posn];*)
+(*     END;*)
+
+WordDecToBin  :  (*  posn supplied in si*)
+      (*  result in ax*)
+  push bx
+  push cx
+  push dx
+
+  mov  cl, 4
+  mov  ch, 10
+  mov  bx, es:[si][w0]
+
+  mov  al, bh
+  shr  al, cl
+  mul  ch    (* ax in range 0..90*)
+
+  mov  dl, 0FH
+  and  dl, bh
+  add  al, dl
+  mul  ch    (* ax in range 0..990*)
+
+  mov  dx, 0F0H
+  and  dl, bl
+  shr  dx, cl
+  add  ax, dx
+  mov  cx, 10
+  mul  cx    (* ax in range 0..9990*)
+
+  and  bx, 0FH
+  add  ax, bx
+
+  pop  dx
+  pop  cx
+  pop  bx
+  ret  0
+
+
+(* BEGIN*)
+
+(* res.sign := dec.sign;*)
+
+(* res.fraction := dec.digit [16] + tens [dec.digit [17];*)
+
+(* res.fraction := res.fraction * 10000 + WordDecToBin (12);*)
+(* res.fraction := res.fraction * 10000 + WordDecToBin (8);*)
+(* res.fraction := res.fraction * 10000 + WordDecToBin (4);*)
+(* res.fraction := res.fraction * 10000 + WordDecToBin (0);*)
+
+(* res.exponent := 64;*)
+(* Normalise (res);*)
+(* END;*)
+
+
+(*public*) emu_Push_Decimal  :  (*NEAR*)
+
+(* inputs: packed decimal at es:[si]*)
+
+(* outputs: emu_temp at ds:[di]*)
+
+(* side effects: no exceptions reported.*)
+
+
+  push bp
+  mov  bp, sp
+  push si
+pu?decPtr  =  -2 (* saved value of si*)
+  push di
+pu?resPtr  =  -4 (* saved value of di*)
+
+
+(* res.sign := dec.sign;*)
+
+  mov  al, es : [si][pdec_sign]
+  and  ax, 80H        (* separate the sign bit*)
+  rol  al, 1        (*   into bit 0*)
+  mov  [di][emu_sign][w0], ax
+
+(* res.fraction := dec.digit [16] + tens [dec.digit [17];*)
+
+  mov  cl, 4
+(*  mov  ah, 0      ; done above*)
+  mov  al, es:[si][8][by0]
+  shl  ax, cl
+  shr  al, cl
+  aad        (* AL := AL + 10 * AH,  AH := 0*)
+
+(* res.fraction := res.fraction * 10000 + WordDecToBin (12);*)
+
+  mov  di, 10000
+  mul  di
+  xchg  bx, ax      (* dx:bx in range 0..990000*)
+  lea  si, [si][w3]
+  call WordDecToBin
+  add  ax, bx
+  adc  dl, dh    (* dh=0    dx:ax in range 0..999,999*)
+
+(* res.fraction := res.fraction * 10000 + WordDecToBin (8);*)
+
+  mov  bx, dx
+  mul  di
+  xchg  ax, bx
+  mov  cx, dx
+  mul  di
+  add  cx, ax
+  adc  dl, dh    (* dh=0    dx:cx:bx in range 0..9,999,990,000*)
+  sub  si, 2
+  call WordDecToBin
+  add  ax, bx
+  adc  cx, 0
+  adc  dl, dh    (* dh=0    dx:cx:ax in range 0..9,999,999,999*)
+
+
+(* res.fraction := res.fraction * 10000 + WordDecToBin (4);*)
+
+  push si
+
+  mov  bx, dx      (* bx:cx:ax*)
+  mul  di
+  xchg  ax, cx
+  mov  si, dx      (*       si:cx*)
+  mul  di
+  xchg  ax, bx
+  xchg  di, dx      (*    di:bx*)
+  mul  dx      (* dx:ax*)
+  add  bx, si
+  adc  di, ax    (* dx = 0     di:bx:cx range 0..10^14 < 2^47*)
+
+  pop  si
+  sub  si, 2
+  call WordDecToBin
+  add  ax, cx
+  adc  bx, dx    (* dx = 0*)
+  adc  di, dx      (* di:bx:ax range 0..10^14*)
+
+(* res.fraction := res.fraction * 10000 + WordDecToBin (0);*)
+
+  mov  si, 10000
+  mul  si
+  xchg  ax, bx
+  mov  cx, dx      (*       cx:bx*)
+  mul  si
+  xchg  ax, si
+  xchg  di, dx      (*    di:si*)
+  mul  dx      (* dx:ax*)
+  add  cx, si
+  adc  di, ax
+  adc  dx, 0    (* dx:di:cx:bx range 0..10^18 < 2^60*)
+
+  mov  si, [bp][pu?decPtr]
+  call WordDecToBin
+  add  bx, ax
+  adc  cx, 0
+  adc  di, 0
+  adc  dx, 0
+
+(* res.exponent := 64;*)
+
+  mov  ax, 64
+
+(* Normalise (res);*)
+
+pu@alignWord:
+  or  dx, dx
+  jnz  pu@alignBit
+  sub  ax, 16
+  jz  pu@zero
+  xchg  dx, di
+  xchg  di, cx
+  xchg  cx, bx
+  jmp  pu@alignWord
+
+pu@alignBit:
+  js  pu@finish
+pu@anotherBit:
+  dec  ax
+  shl  bx, 1
+  rcl  cx, 1
+  rcl  di, 1
+  adc  dx, dx
+  jns  pu@anotherBit
+
+pu@finish:
+  mov  si, [bp][pu?resPtr]
+  mov  [si][emu_fraction][w0], bx
+  mov  [si][emu_fraction][w1], cx
+  mov  [si][emu_fraction][w2], di
+  mov  [si][emu_fraction][w3], dx
+  mov  [si][emu_exponent], ax
+
+pu@end:
+  pop  di
+  pop  si
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+
+pu@zero:
+  mov  ax, zero_exponent
+  jmp  pu@finish
+
+
+
+public __emul_fbstp :
+
+TempReal = -10
+locals   =  10
+
+  push bp
+  mov  bp, sp
+  sub  sp, locals
+  push bx
+  push cx
+  push dx
+  push di
+  push si
+  push ds
+  fld st(0), st(0)
+  fstp  tbyte [bp][TempReal], st(0)
+  push ss
+  pop  ds
+  push ss
+  pop  es
+  lea  si, [bp][TempReal]
+  mov  di, ax
+  call emu_Pop_Decimal
+  pop  ds
+  pop  si
+  pop  di
+  pop  dx
+  pop  cx
+  pop  bx
+  mov  sp, bp
+  pop  bp
+  ret  far 0
+
+(*  PROCEDURE  emu_Pop_Decimal  (     z : emu_temp ;*)
+(*                               VAR dec : packedDecimal );*)
+
+(*  Convert a floating point temporary to a packed decimal integer.*)
+
+(* VAR*)
+(* exp  : integer;*)
+(* frac : cardinal64;*)
+(* res  ; packedDecimal;*)
+
+(*     PROCEDURE  PutFourDigits ( rem, posn : cardinal );*)
+(*     BEGIN*)
+(*     res.digits [posn] := rem MOD 10;*)
+(*     rem := rem DIV 10;*)
+(*     res.digits [posn+[1] := rem MOD 10;*)
+(*     rem := rem DIV 10;*)
+(*     res.digits [posn+[2] := rem MOD 10;*)
+(*     res.digits [posn+[3] := rem DIV 10;*)
+(*     END;*)
+
+PutFourDigits  :  (*  rem in dx, posn in di*)
+
+  push ax
+  push cx
+
+  mov  al, 100
+  mov  cl, 4
+  xchg  ax, dx
+
+  div  dl
+  mov  dl, ah
+  aam      (* AH, AL := AL DIV 10, AL MOD 10*)
+  shl  ah, cl
+  or  ah, al
+  xchg  ax, dx
+  aam
+  shl  ah, cl
+  or  al, ah
+  mov  ah, dh
+  stosw
+
+  pop  cx
+  pop  ax
+  ret  0
+
+
+
+(* BEGIN*)
+
+(* exp  := z.exp;*)
+(* frac := z.frac;*)
+
+(* IF exp < 1  THEN res := 0*)
+
+(* ELSE exp > 60 THEN res := +infinity*)
+
+(* ELSE*)
+(*     WHILE exp < 64 DO*)
+(*    frac := frac DIV 2;*)
+(*         exp  := exp + 1;*)
+
+(*     frac := frac + carry; { rounding }*)
+
+(*     res := 0;*)
+
+(*     PutFourDigits (frac MOD 10000, 0);*)
+(*     frac := frac DIV 10000;*)
+(*     PutFourDigits (frac MOD 10000, 4);*)
+(*     frac := frac DIV 10000;*)
+(*     PutFourDigits (frac MOD 10000, 8);*)
+(*     frac := frac DIV 10000;*)
+(*     PutFourDigits (frac MOD 10000, 12);*)
+(*     frac := frac DIV 10000;*)
+
+(*     res.digits [16] := frac MOD 10;*)
+(*     res.digits [17] := frac DIV 10;*)
+
+(*     res.sign := z.sign;*)
+
+(* emu_Pop_Decimal := res;*)
+
+(* END;*)
+
+(*public*) emu_Pop_Decimal  :  (*NEAR*)
+
+  push bp
+  mov  bp, sp
+  push si      (* ds:si points to input*)
+  push di      (* es:di used to point to result*)
+
+  cld        (* forward string direction*)
+
+(* exp  := z.exp;*)
+(* frac := z.frac;*)
+
+  mov  ax, [si][emu_exponent]
+
+  mov  bx, [si][emu_fraction][w0]
+  mov  cx, [si][emu_fraction][w1]
+  mov  dx, [si][emu_fraction][w3]
+  mov  si, [si][emu_fraction][w2]
+
+
+(* IF exp < 1  THEN res := 0*)
+
+(* { will the result exceed 999,999,999,999,999,999 ? }*)
+(* ELSE z > [3C, DE0B 6B3A 763F [FFF0] THEN res := +infinity*)
+
+  cmp  ax, 0
+  jl  po@underflowJmp
+
+  sub  ax, 3CH
+  jl  po@inRange
+  jg  po@overflowJmp
+  cmp  dx, 0DE0BH
+  jb  po@inRange
+  ja  po@overflowJmp
+  cmp  si, 06B3AH
+  jb  po@inRange
+  ja  po@overflowJmp
+  cmp  cx, 0763FH
+  jb  po@inRange
+  ja  po@overflowJmp
+  cmp  bx, 0FFF0H
+  ja  po@overflowJmp
+
+
+(* ELSE*)
+(*     WHILE exp < 64 DO*)
+(*    frac := frac DIV 2;*)
+(*         exp  := exp + 1;*)
+
+po@inRange:
+  mov  ah, 0        (* excess precision for rounding*)
+  sub  al, 4
+
+po@wordAlign:
+  add  al, 16
+  jg  po@bitAlign
+
+  mov  ah, bh
+  mov  bx, cx
+  mov  cx, si
+  mov  si, dx
+  sub  dx, dx
+  jmp  po@wordAlign
+
+(*----*)
+po@underflowJmp:  jmp  po@underflow
+po@overflowJmp:    jmp  po@overflow
+(*----*)
+
+po@bitAlign:
+  sub  al, 16
+  jnl  po@aligned
+po@anotherBit:
+  shr  dx, 1
+  rcr  si, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ah, 1
+  inc  al
+  jl  po@anotherBit
+
+po@aligned:
+
+(*     frac := frac + carry; { rounding }*)
+
+  add  ah, ah
+  adc  bx, 0
+  adc  cx, 0
+  adc  si, 0
+  adc  dx, 0    (* dx:si:cx:bx is now an integer < 2^60*)
+
+(*     PutFourDigits (frac MOD 10000, 0);*)
+(*     frac := frac DIV 10000;*)
+
+        (* dx < 4096 since 2^60 = 4096 * 2^48*)
+  xchg  ax, si
+  mov  si, 10000
+  div  si
+  xchg  ax, cx
+  div  si
+  xchg  ax, bx
+  div  si    (* frac = cx:bx:ax < 2^47, dx = mod 10000*)
+
+  call PutFourDigits  (* dx is parameter*)
+
+(*     PutFourDigits (frac MOD 10000, 4);*)
+(*     frac := frac DIV 10000;*)
+
+  sub  dx, dx
+  xchg  ax, cx
+  div  si
+  xchg  ax, bx
+  div  si
+  xchg  ax, cx
+  div  si    (* frac = bx:cx:ax < 2^34, dx = mod 10000*)
+
+  call PutFourDigits  (* dx is parameter*)
+
+(*     PutFourDigits (frac MOD 10000, 8);*)
+(*     frac := frac DIV 10000;*)
+
+  mov  dx, bx
+  xchg  ax, cx
+  div  si
+  xchg  ax, cx
+  div  si    (* frac = cx:ax < 2^20, dx = mod 10000*)
+
+  call PutFourDigits  (* dx is parameter*)
+
+
+(*     PutFourDigits (frac MOD 10000, 12);*)
+(*     frac := frac DIV 10000;*)
+
+  mov  dx, cx
+  div  si    (* frac = ax < 2^7, dx = mod 10000*)
+
+  call PutFourDigits  (* dx is parameter*)
+
+(*     res.digits [16] := frac MOD 10;*)
+(*     res.digits [17] := frac DIV 10;*)
+
+  aam      (* AH, AL := AL DIV 10, AL MOD 10*)
+  mov  cl, 4
+  shl  ah, cl
+  or  al, ah
+  stosb
+
+po@end:
+
+(*     res.sign := z.sign;*)
+
+  mov  si, [bp][-2][w0]
+  mov  al, [si][emu_sign]
+  ror  al, 1
+  stosb
+
+  pop  di
+  pop  si
+  pop  bp
+  ret  0
+
+(* ----*)
+
+po@underflow:
+  mov  al, 0
+
+po@extreme:
+  mov  cx, 9
+rep;  stosb
+  jmp  po@end
+
+
+po@overflow:
+  mov  ch, fe_Overflow
+  call e287_Exception
+  mov  al, 99H
+  jmp  po@extreme
+
+
+(* ----*)
+
+
+
+
+
+
+(*INCLUDE E287DIV.ASM*)
+
+
+(* algorithm notes.*)
+
+(* We are looking for the solution to the ratio:*)
+
+(*  aNNN + bNN + cN + d*)
+(*      ---------------------- = (vNNN +wNN + xN + y) / K*)
+(*  pNNN + qNN + rN + s*)
+
+(* Where  a, p, v are in the range N/2 .. N-1 and the other lower-case*)
+(* symbols range from  0..N-1 , and K is either NNNN or NNNN/2.*)
+
+(* The machine provides a primitive for NN / N division.*)
+
+(* Knuth proposed a method for double length divide which uses an*)
+(* approximation:*)
+
+(*     AN + B   AN + B     PN      AN + B*)
+(*     ------ = ------ x ------ =  ------ x ( 1 - Q/PN + (Q/PN)^2 ...)*)
+(*     PN + Q     PN     PN + Q      PN*)
+
+(* We can use the same algebra, noting that B = bcd, Q = qrs.*)
+(* The algebra is better changed into a finite equation:*)
+
+(*   AN + B  = ((PN + Q) * V) - error*)
+(*           = (PN*V + QV) - error*)
+
+(* Now if V = (AN + B) / PN then we have*)
+
+(*   error   = QV*)
+
+(* Unfortunately, calculating QV is not likely to be fast enough, as*)
+(* in our case it involves roughly 12 multiplications plus some additions.*)
+(* A faster method is to be more crude, and accept only a rounded*)
+(* version of V such that*)
+
+(*     V + Ev = (AN + B) / PN*)
+
+(* This gives the equation*)
+
+(*     error = (PN + Q)*V - (AN + B)*)
+
+(* It will be convenient for the error to have a predictable sign, so*)
+(* V is always rounded up.  The truncation PN also causes an error in*)
+(* the same direction.  It saves code to know which direction to correct*)
+(* at each stage, and will not actually change speed.*)
+
+(* If another stage is applied, so that*)
+
+(*     W = error / P*)
+
+(* is the next estimate, then a new error will remain*)
+
+(*     error(2) = error(1) - (PN + Q) * W*)
+
+(* and that can be substituted to give*)
+
+(*     (PN + Q)*W + error(2) = (PN + Q)*V - (AN + B)*)
+
+(*     error(2) = (PN + Q)(V - W) - (AN + B)*)
+
+(* Generalised to 5 stages the result is*)
+
+(*     error(5) = (PN + Q)(V - W + X - Y + Z) - (AN + B)*)
+
+(* The crucial question is, how large are the error terms at each stage ?*)
+
+(* If we look at the first stage, it can be seen that the error term is*)
+(* made up of two parts.  Let us introduce the symbol*)
+
+(*     V' = (AN + B) / P       accurately*)
+
+(*     V = RoundUp(V')*)
+
+(* Then the error has two components:*)
+
+(*     error(1) = V'*Q   +   (V - V') * (PN + Q)*)
+
+(* For the floating point fractions we have:*)
+
+(*   NNNN/2  <=  AN + B  <  NNNN   and   N/2  <=  P  <  N*)
+
+(* (don't forget to normalise by dividing products by NNNN).*)
+
+(* so the first component of  V  has bounds*)
+
+(*   NNNN/2  <  V  <  2NNNN*)
+
+(* and that leads to a first error term of*)
+
+(*     0  <  V * Q  <  2NNN*)
+
+(* The second component depends on (V - V'), which ranges over*)
+
+(*     0  <=   V' - V  <  NNN*)
+
+(* so the second component of the error ranges*)
+
+(*     0  <=  (PN + Q) * (V' - V)  <  NNN*)
+
+(* The two terms are almost independent, so the total error range will*)
+(* be*)
+
+(*     0  <  error  < 3NNN*)
+
+(* More succinctly, the error is up to 3 times the least bit.*)
+
+(* In fact, that will be our error at every stage since the code uses*)
+(* a double length estimate for V, W, X, Y, Z, where the most significant*)
+(* word acts as a guard so that later stages are not complicated by over-*)
+(* flow from early stages.  The 4'th stage will thus have an error of*)
+(* up to 3 LSB and biased positive, which is acceptable if intended for*)
+(* use only to support an HLL which does not provide temporary-precision*)
+(* variables accessible to the user.*)
+
+
+numP  =  4+nearParam    (* based on ds*)
+dvrP  =  2+nearParam    (* based on ds*)
+quoP  =  0+nearParam    (* based on es*)
+
+div_paramsize =  6
+
+quoExp    =  -2
+quoSign   =  -3
+excess    =  -4
+result    =  -12
+temp      =  -16
+guard     =  -18
+
+(* note that temp and result, both quad-word objects, overlap by two words.*)
+(* This is allowed because the most significant words of temp are discarded*)
+(* as the least significant words of result are generated.*)
+
+(*public*) emu_Divide  :  (*NEAR*)
+
+  push bp; mov bp,sp;
+  lea  sp, [bp][temp][w3][w1]
+  mov  bx, [bp][numP]
+  push [bx][emu_fraction][w3]  (* copy fraction to*)
+  push [bx][emu_fraction][w2]
+  push [bx][emu_fraction][w1]  (*   temp  work area*)
+  push [bx][emu_fraction][w0]
+  sub  ax, ax
+  push ax    (* zero guard*)
+  push si
+  push di
+  cld
+
+  mov  di, [bp][dvrP]
+
+  mov  si, [di][emu_exponent]
+  mov  ax, [bx][emu_exponent]
+
+
+(* first check for all the extreme cases*)
+
+  cmp  si, zero_exponent
+  jle  @div_by_zero
+  cmp  ax, infinite_exponent
+  jge  @div_infinite_result
+
+  cmp  ax, zero_exponent
+  jle  @div_result_zero
+  cmp  si, infinite_exponent
+  jge  @div_underflow
+  sub  ax, si
+  cmp  ax, infinite_exponent
+  jge  @div_overflow
+  cmp  ax, zero_exponent
+  jg  @ordinary_division
+
+
+@div_underflow:
+  mov  ch, fe_Underflow
+  call e287_Exception
+
+@div_result_zero:
+  mov  si, zero_exponent
+  jmp  @div_extreme_result
+
+@div_overflow:
+  mov  ch, fe_Overflow
+  jmp  @div_infinite_excep
+
+@div_by_zero:
+  mov  ch, fe_Divide_By_Zero
+
+@div_infinite_excep:
+  call e287_Exception
+
+@div_infinite_result:
+  mov  si, infinite_exponent
+
+@div_extreme_result:
+  sub  ax, ax
+  mov  di, [bp][quoP]
+  stosw
+  stosw
+  stosw
+  stosw
+  xchg  ax, si
+  stosw
+  mov  ax, positive_sign  (* zero/infinity always positive*)
+  stosw
+  jmp  near  @div_emu_end
+
+
+
+(* here begin the non-extreme cases*)
+
+@ordinary_division:
+  mov  [bp][quoExp], ax
+  mov  al, [bx][emu_sign]
+  xor  al, [di][emu_sign]
+  mov  [bp][quoSign], al
+
+  sub  cx, cx
+  mov  dx, [bp][bp][temp][w3]
+  mov  si, [di][emu_fraction][w3]
+  cmp  si, dx
+  ja  div_noExcess
+  sub  dx, si
+  inc  cx
+div_noExcess:
+
+  mov  ax, [bp][temp][w2]
+  div  si
+  adc  ax, 1    (* round up always !*)
+  adc  cl, ch
+  mov  [bp][excess], cl
+  mov  [bp][bp][result][w3], ax
+  push ax
+
+(*  Now we have  V = excess:[bp][result][w3], up to 18 bits in size.  Next*)
+(*  calculate  V * (pqrs)*)
+
+  mov  ax, [di][emu_fraction][w0]
+  mov  bx, [di][emu_fraction][w1]
+  jcxz  w3excessSubtracted
+  mov  dx, [di][emu_fraction][w2]
+w3subExcess:
+  sub  [bp][temp][w0], ax      (* anticipate calculation*)
+  sbb  [bp][temp][w1], bx      (* of  (abcd) - V * (pqrs)*)
+  sbb  [bp][temp][w2], dx      (* by subtracting*)
+  sbb  [bp][temp][w3], si      (*     excess * (pqrs)*)
+  loop  w3subExcess      (* V <= 2:0000H*)
+            (* result may be negative*)
+w3excessSubtracted:
+
+(* Calculate [bp][result][w3] (= si) * (pqrs)*)
+
+  pop  si
+  mul  si
+  mov  [bp][guard], ax
+  xchg  ax, dx
+  xchg  ax, bx
+  mul  si
+  add  bx, ax
+  adc  cx, dx    (* cx = 0 since excessSubtracted*)
+  mov  ax, [di][emu_fraction][w2]
+  mul  si
+  add  cx, ax
+  adc  dx, 0
+  xchg  ax, dx
+  xchg  ax, si
+  mul  word [di][emu_fraction][w3]
+  add  ax, si
+  adc  dx, 0
+
+(* We know that V * (pqrs>= (abcd)  since  V = Roundup ( (abcd) / p )*)
+(* Therefore, subtract  abcd  from  (V * (pqrs))  so that we can work*)
+(*  with a conveniently positive remainder.*)
+
+  sub  bx, [bp][temp][w0]
+  sbb  cx, [bp][temp][w1]
+  sbb  ax, [bp][temp][w2]
+  sbb  dx, [bp][temp][w3]
+  mov  [bp][temp][w0], bx
+  mov  [bp][temp][w1], cx
+  mov  [bp][temp][w2], ax
+(*  mov  [bp][temp][w3], dx  not needed, use only dx copy*)
+
+(* Now the next stage begins.  Calculate W = Roundup (temp / p).*)
+
+  mov  si, [di][emu_fraction][w3]
+  div  si
+  xchg  cx, ax
+  div  si
+  sub  dx, dx
+  stc
+  adc  ax, dx    (* rounded up always !*)
+  adc  cx, dx    (* cx:ax = W*)
+  sub  dx, ax
+  mov  [bp][result][w2], dx  (* result = V - W*)
+  sbb  [bp][result][w3], cx
+  sbb  byte [bp][excess], 0
+
+(* The error from the previous stage was up to 3NNN, so W <= 6:0000H.*)
+(* However, W is typically < 3:0000, so we will get the fastest times*)
+(* by using subtraction loops to do the effect of*)
+(*  temp - W[w1] * pqrs*)
+
+  push ax    (* save W[w0]*)
+  mov  ax, [di][emu_fraction][w0]
+  mov  bx, [di][emu_fraction][w1]
+  jcxz  w2excessSubtracted
+  mov  dx, [di][emu_fraction][w2]
+w2subExcess:
+  sub  [bp][guard], ax
+  sbb  [bp][temp][w0], bx
+  sbb  [bp][temp][w1], dx
+  sbb  [bp][temp][w2], si
+(*  sbb  [bp][temp][w3], 0  ignore [bp][temp][w3], it will always be 0*)
+  loop  w2subExcess
+
+(* Now calculate  W[w0] * pqrs.*)
+w2excessSubtracted:
+  pop  si    (* retrieve W[w0]*)
+  mul  si
+  xchg  ax, dx    (* forget contents of ax, too insignificant*)
+  xchg  ax, bx
+  mul  si
+  add  bx, ax
+  adc  cx, dx    (* ASSERT cx = 0*)
+  mov  ax, [di][emu_fraction][w2]
+  mul  si
+  add  cx, ax
+  adc  dx, 0
+  xchg  ax, dx
+  xchg  si, ax
+  mul  word [di][emu_fraction][w3]
+  add  ax, si
+  adc  dx, 0
+
+(* Again, we know that  temp < W[w0] * pqrs,  and we want to continue*)
+(*  with a positive remainder, so  temp := W[w0] * pqrs - temp*)
+
+(* The approximation is now accurate enough that [bp][temp][w3] is always 0.*)
+
+  sub  bx, [bp][guard]
+  sbb  cx, [bp][temp][w0]
+  sbb  ax, [bp][temp][w1]
+  sbb  dx, [bp][temp][w2]
+  mov  [bp][guard], bx
+  mov  [bp][temp][w0], cx
+  mov  [bp][temp][w1], ax
+(*  mov  [bp][temp][w2], dx    not needed, use only the dx copy*)
+
+(* Next we calculate  X = RoundUp ( temp / p );*)
+
+  mov  si, [di][emu_fraction][w3]
+  div  si
+  xchg  cx, ax
+  div  si
+  sub  dx, dx
+  stc
+  adc  ax, dx    (* round up always !*)
+  adc  cx, dx    (* cx:ax = X*)
+  mov  [bp][result][w1], ax
+  add  [bp][result][w2], cx  (* result = V - W + X*)
+  adc  [bp][result][w3], dx
+  adc  [bp][excess], dl
+
+(* Again,  V <= 6:0000H  but typically  V < 3:0000, so we will*)
+(*   use a subtraction loop to do the effect of*)
+(*  temp - V[w1] * pqrs*)
+
+(* A new feature at this stage is that we ignore the least word of*)
+(*  pqrs, because it is 16 bits below significance.*)
+
+  xchg  si, ax
+  mov  dx, [di][emu_fraction][w1]
+  xchg  ax, dx
+  mov  bx, [di][emu_fraction][w2]
+  jcxz  w1excessSubtracted
+w1subExcess:
+  sub  [bp][guard], ax
+  sbb  [bp][temp][w0], bx
+  sbb  [bp][temp][w1], dx
+(*  sbb  [bp][temp][w2], 0  ignore [bp][temp][w2], it will always be 0*)
+  loop  w1subExcess
+
+(* Now calculate  V[w0] * pqr.*)
+
+w1excessSubtracted:
+  mul  si
+  xchg  ax, dx    (* forget contents of ax, too insignificant*)
+  xchg  ax, bx
+  mul  si
+  add  bx, ax
+  adc  cx, dx    (* ASSERT cx = 0 from excessSubtracted*)
+  mov  ax, [di][emu_fraction][w3]
+  mul  si
+  add  ax, cx
+  adc  dx, 0
+
+(* As usual, calculate  temp := V[w0] * pqr - temp.*)
+
+(* Temp[w2] is now always zero.*)
+
+  sub  bx, [bp][guard]
+  sbb  ax, [bp][temp][w0]
+  sbb  dx, [bp][temp][w1]
+  mov  [bp][guard], bx
+  mov  [bp][temp][w0], ax
+(*  mov  [bp][temp][w1], dx  not needed, use only the dx copy*)
+
+
+(* Lastly we calculate  Y = temp / p, rounded to nearest.*)
+
+  mov  si, [di][emu_fraction][w2]
+  add  si, si
+  mov  si, [di][emu_fraction][w3]
+  adc  si, 0
+  jnc  calcY
+
+(* if carry occured, then P rounded to 1:0000, so Y = temp.  Rearrange*)
+(*  the registers to look as if division has occured:*)
+
+  xchg  bx, dx    (* temp = Y = bx:ax:DH*)
+  jmp  finalCombine
+
+calcY:
+  shl  bx, 1
+  rcl  ax, 1
+  rcl  dx, 1
+  div  si
+  xchg  bx, ax
+  div  si
+  shr  bx, 1
+  rcr  ax, 1
+  rcr  dh, 1    (* least 7 bits of DH are don't cares*)
+
+finalCombine:
+  mov  cx, -1
+  mov  si, cx
+  mov  dl, cl
+  not  bx
+  not  ax
+  neg  dh
+  cmc      (* negate Y*)
+  adc  ax, 0
+
+  adc  bx, [bp][result][w1]
+  adc  cx, [bp][result][w2]  (* result = V - W + X - Y*)
+  adc  si, [bp][result][w3]
+  adc  dl, [bp][excess]  (* result is now in DL:si:cx:bx:ax:DH*)
+
+div_align:
+  shr  dl, 1
+  jnc  div_round
+  rcr  si, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  rcr  dh, 1
+
+  inc  word [bp][quoExp]
+
+div_round:
+  sub  di, di
+  add  dh, dh
+  adc  ax, di
+  adc  bx, di
+  adc  cx, di
+  adc  si, di
+  adc  dl, 0
+  mov  dx, [bp][quoExp]
+  jz  div_checkExp
+
+  mov  si, 8000H  (* result must be 8000:0:0:0H*)
+  inc  dx
+
+div_checkExp:
+  cmp  dx, infinite_exponent
+  jl  div_store
+  jmp  near  @div_infinite_result
+
+div_store:
+  mov  di, [bp][quoP]
+  mov  [di][emu_fraction][w0], ax
+  mov  [di][emu_fraction][w1], bx
+  mov  [di][emu_fraction][w2], cx
+  mov  [di][emu_fraction][w3], si
+  mov  [di][emu_exponent], dx
+  mov  al, [bp][quoSign]
+  mov  [di][emu_sign], al
+
+@div_emu_end:
+  pop di; pop si; mov sp,bp; pop bp
+  ret  div_paramsize
+
+
+
+
+
+(*INCLUDE E287EXPS.ASM*)
+
+(* CONST*)
+
+(* { coeffs for range -Ln2/2 .. +Ln2/2, magnified twice. }*)
+
+(* exp_polycount = 13;*)
+(* exp_polycoeffs = ARRAY [0..[14] OF emu_temp;*)
+
+exp_polycount :  dw  13
+
+exp_polycoeffs :
+dw      0,      0,      0,     0, 0; db positive_sign, 0
+dw 00003H, 00000H, 00000H, 4000H, 0; db positive_sign, 0
+dw 0AAA9H, 0AAAAH, 0AAAAH, 0AAAH, 0; db positive_sign, 0
+dw 05578H, 05555H, 05555H, 0155H, 0; db positive_sign, 0
+
+dw 02326H, 02222H, 02222H, 0022H, 0; db positive_sign, 0
+dw 02B1CH, 082D8H, 0D82DH, 0002H, 0; db positive_sign, 0
+dw 0F9FCH, 04033H, 03403H, 0000H, 0; db positive_sign, 0
+dw 05214H, 03403H, 00340H, 0000H, 0; db positive_sign, 0
+
+dw 06C1EH, 03BC7H, 0002EH, 0000H, 0; db positive_sign, 0
+dw 0B04CH, 04FC9H, 00002H, 0000H, 0; db positive_sign, 0
+dw 00E91H, 01AE6H, 00000H, 0000H, 0; db positive_sign, 0
+dw 07651H, 0011FH, 00000H, 0000H, 0; db positive_sign, 0
+
+dw 02CC5H, 0000BH, 00000H, 0000H, 0; db positive_sign, 0
+
+
+
+(* FUNCTION  emu_2XM1 ( x : emu_temp ) : emu_temp;*)
+
+(* BEGIN*)
+
+(* x := x * LogEof2;*)
+(* emu_2XM1 := x * Polynomial ( FixedPoint (x), exp_polycount, exp_polycoeffs);*)
+
+(* END;*)
+
+
+(*public*) emu_2XM1  :  (*NEAR*)
+
+  push bp; mov bp,sp; push si; push di
+
+  sub  sp, emu_temp_size
+  mov  di, sp
+  call emu_LogEof2
+
+  push di
+  push si
+  push si
+  call emu_Multiply
+
+  add  sp, emu_temp_size  (* discard LogEof2*)
+
+  mov  di, [si][emu_exponent]
+  cmp  di, -32
+  jle  e@end    (* linear domain, answer = x * LogEof2*)
+
+  mov  ax, [si][emu_fraction][w0]
+  mov  bx, [si][emu_fraction][w1]
+  mov  cx, [si][emu_fraction][w2]
+  mov  dx, [si][emu_fraction][w3]
+
+
+e@notLinear:
+  inc  di
+  jnl  e@fixed    (* fix point for Poly*)
+e@fix:
+  shr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  inc  di
+  jl  e@fix
+
+  adc  ax, 0    (* round after shift*)
+  adc  bx, 0
+  adc  cx, 0
+  adc  dx, 0
+
+e@fixed:
+  mov  di, positive_sign
+  push di
+  sub  di, di    (* exponent has been fixed at zero*)
+  push di
+  push dx
+  push cx
+  push bx
+  push ax    (* fixed ?x now tos*)
+
+  push cs:[exp_polycount]
+  push cs
+  mov  ax, (*offset*) exp_polycoeffs
+  push ax
+  call emup_Polynomial
+
+  mov  ax, sp
+  push ax
+  push si
+  push si
+  call emu_Multiply
+
+  add  sp, emu_temp_size  (* discard polynomial result*)
+
+e@end:
+  pop di; pop si; pop bp
+  ret 0
+
+
+
+
+
+(*INCLUDE E287LOGS.ASM*)
+
+(* CONST*)
+
+(* invLn2 = 1 / Ln (2);*)
+
+
+(* polycount = 9;*)
+(* log_polycoeffs = ARRAY [0..(log_polycount - [1)] OF emu_temp;*)
+
+log_polycount : dw  9
+log_polycoeffs :
+dw 0,0,0,0, 0; db positive_sign, 0
+dw 05568H, 05555H, 05555H,  0555H, 0; db positive_sign, 0
+dw 034BAH, 03333H, 03333H,   033H, 0; db positive_sign, 0
+dw 0C3A7H, 09248H, 04924H,    02H, 0; db positive_sign, 0
+dw 05D4DH, 0C722H, 01C71H,     0H, 0; db positive_sign, 0
+dw 05624H, 05CEBH,  0174H,     0H, 0; db positive_sign, 0
+dw 0AD39H, 0B1ECH,   013H,     0H, 0; db positive_sign, 0
+dw 0D6FDH, 00F80H,    01H,     0H, 0; db positive_sign, 0
+dw 07AB5H, 010E4H,     0H,     0H, 0; db positive_sign, 0
+
+
+(* FUNCTION  emu_YL2X ( y, x : emu_temp ) : emu_temp;*)
+(* VAR*)
+(* frac      : emu_temp;*)
+
+(* BEGIN*)
+
+(* frac := x.fraction;*)
+
+(* { We convert frac to a domain symmetric around 0, as required for the domain*)
+(*  of LnXP1. }*)
+
+(* IF frac <= Sqrt (1/2) THEN*)
+(*      frac := (2 * frac) - 1;*)
+(*      x.exponent := x.exponent - 1;*)
+(* ELSE*)
+(*      frac := frac - 1;*)
+
+(* emu_YL2X := ( LnXP1 (frac) * invLn2 + x.exponent ) * Y;*)
+
+(* END;*)
+
+
+(*public*) emu_YL2X  :  (*NEAR*)
+
+_exponent  =  -2
+_yPtr    =    -4
+_xPtr    =    -6
+
+  push bp
+  mov  bp, sp
+  push [di][emu_exponent]
+  push si
+  push di
+
+  mov  ax, [di][emu_fraction][w0]
+  mov  bx, [di][emu_fraction][w1]
+  mov  cx, [di][emu_fraction][w2]
+  mov  dx, [di][emu_fraction][w3]
+
+  cmp  dx, 0B505H    (* approx. Sqrt (1/2)*)
+  ja  x@else
+
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  rcl  dx, 1    (* ignoring carry achieves subtraction of 1*)
+
+  mov  si, positive_sign
+
+  dec  word [bp][_exponent]    (* frac * 2^exp  = 2 * frac * 2^(exp-1)*)
+  jmp  x@endIf
+
+x@else:
+  not  dx
+  not  cx
+  not  bx
+  neg  ax
+  cmc
+  adc  bx, 0
+  adc  cx, 0
+  adc  dx, 0
+
+  mov  si, negative_sign
+
+x@endIf:
+
+  sub  di, di    (* di will be exponent for frac, begin = 0*)
+
+x@wordNorm:
+  or  dx, dx
+  jnz  x@bitNorm
+  xchg  ax, bx
+  xchg  ax, cx
+  xchg  ax, dx
+  sub  di, 16
+  cmp  di, -64
+  jg  x@wordNorm
+
+(*  drop through to here if fraction is very tiny*)
+
+  sub  sp, emu_temp_size
+  mov  di, sp
+  call emu_0      (* if frac <= 2^-64 then LnXP1 = 0*)
+  jmp  x@logDone  (*   so take a -cut*)
+
+
+x@bitNorm:
+  js  x@normalised
+x@bitNormLoop:
+  dec  di
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  adc  dx, dx
+  jns  x@bitNormLoop
+x@normalised:
+
+  push si    (* sign*)
+  push di    (* exponent*)
+  push dx
+  push cx
+  push bx
+  push ax    (* pushed frac*)
+
+  mov  si, sp
+  call LnXP1    (* result at [si], which is stack*)
+
+  mov  ax, (*offset*) invLn2
+  push ax
+  push si
+  push si
+  call emu_Multiply  (* tos := LnXP1 (frac) * invLn2*)
+
+
+x@logDone:
+  lea  si, [bp][_exponent]
+  sub  sp, emu_temp_size  (* temp on stack*)
+  mov  di, sp
+  call emu_Float
+
+  lea  si, [di][emu_temp_size]
+  push si
+  push di
+  push di
+  call emu_Add    (* (temp) := LnXP1 (frac) * invLn2 + x.exponent*)
+
+  push di
+  push [bp][_yPtr]
+  push [bp][_yPtr]      (* result overwrites _y*)
+  call emu_Multiply    (* emu_YL2X := temp * Y*)
+
+  add  sp, 2 * emu_temp_size  (* clear operands from stack*)
+
+x@end:
+  pop  di
+  pop  si
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+
+
+
+(* FUNCTION  emu_YL2XP1 ( y, x : emu_temp ) : emu_temp;*)
+
+(* X is limited by 8087/287 rules to        0  <=  x  <  (1 - Sqrt (1/2))*)
+(*  which is comfortably within  (1 - Sqrt (2))  <=  x  <=  (Sqrt(2) - 1),*)
+(*  the domain of LnXP1.*)
+
+(* BEGIN*)
+
+(* emu_YL2XP1 := LnXP1 (x) * invLn2 * Y;*)
+
+(* END;*)
+
+
+(*public*) emu_YL2XP1  :  (*NEAR*)
+
+(* parameters arranged same as YLn2X*)
+
+p1_yPtr  =  -2
+p1_xPtr  =  -4
+
+  push bp
+  mov  bp, sp
+  push si
+  push di
+
+  mov  si, di
+  call emup_Push  (* Do not overwrite _x -- the 8087 doesn't.*)
+  mov  si, sp
+  call LnXP1    (* parameter at [si], result overwrites param.*)
+
+  mov  ax, (*offset*) invLn2
+  push ax
+  push si
+  push si
+  call emu_Multiply
+
+  push si
+  push [bp][p1_yPtr]
+  push [bp][p1_yPtr]    (* result overwrites _y*)
+  call emu_Multiply
+
+  add  sp, emu_temp_size  (* pop temporary from stack*)
+
+xp1@end:
+  pop  di
+  pop  si
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+
+
+
+(* FUNCTION  LnXP1 ( frac : emu_temp ) : emu_temp;*)
+
+
+
+(* Input domain is   (1 - Sqrt(2))  <=  frac  <=  (Sqrt(2) - 1)*)
+
+(* We first transform frac into a more linear domain*)
+(* which is easier to use with polynomials.*)
+
+
+(*   ln (frac) := 2 * y * (1 + y^2/3 + y^4/5 + ...)*)
+
+(* The polynomial is prepared for * 4 scaling.*)
+
+
+
+(* VAR*)
+(* interval, step : cardinal;*)
+
+(* BEGIN*)
+
+(* y := frac / (2 + frac);*)
+
+(* LnXP1 := 2 * y * Poly (Square_Fix (4 * y), log_polycount, log_polycoeffs);*)
+
+(* END;*)
+
+
+
+LnXP1  :
+
+  push bp
+  mov  bp, sp
+  push si
+  push di
+
+  cmp  word [si][emu_exponent], -32  (* in linear domain of small fracs,*)
+  jle  LnXP1@end    (*   LnXP1 (frac) = frac*)
+
+  sub  sp, emu_temp_size
+  mov  di, sp
+  call emu_1
+
+  inc  word ss : [di][emu_exponent]  (* tos now = 2.0*)
+  push si
+  push di
+  push di
+  call emu_Add
+  push si
+  push di
+  push di
+  call emu_Divide  (* [di] = tos = y = frac / (2 + frac)*)
+
+  call emu_Duplicate_tos
+
+  mov  bx, sp
+  add  word ss : [bx][emu_exponent], 2  (* * 4*)
+
+  call emup_Square_Fix    (* uses and overwrites tos*)
+
+  push cs:[log_polycount]
+  push cs
+  mov  ax, (*offset*) log_polycoeffs
+  push ax
+  call emup_Polynomial    (* Poly (Sqfx (y * 4), count, coeffs*)
+          (* uses and overwrites tos*)
+
+  mov  ax, sp      (* push sp is incompatible 8086/80286 !!*)
+  push ax
+  push di      (* points to duplicate of y*)
+  push si      (* result overwrites _x*)
+  call emu_Multiply
+
+  inc  word ss : [si][emu_exponent]    (* * 2*)
+
+  add  sp, 2 * emu_temp_size  (* clear intermediate values from stack*)
+
+LnXP1@end:
+  pop  di
+  pop  si
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+
+
+
+
+  arith_Add:
+    push ax
+    push bx
+    push dx
+    push cx    (* return address = arith_end*)
+    jmp  near  emu_Add
+
+  arith_Multiply:
+    push ax
+    push bx
+    push dx
+    push cx    (* return address = arith_end*)
+    jmp  near  emu_Multiply
+
+  arith_CompareP:
+    add  si, emu_temp_size
+  arith_Compare:
+    push ax
+    push bx
+    push cx    (* return address = arith_end*)
+    jmp  near  emu_Compare
+
+  arith_SubtractR:
+    xchg  ax, bx
+  arith_Subtract:
+    push ax
+    push bx
+    push dx
+    push cx    (* return address = arith_end*)
+    jmp  near  emu_Subtract
+
+  arith_DivideR:
+    xchg  ax, bx
+  arith_Divide:
+    push ax
+    push bx
+    push dx
+    call emu_Divide
+
+arith_end:
+  add  sp, si    (* popAfter*)
+  jmp  near  e287_Exit
+
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*    load / store    typ.1    mod.0.S.P. r/m .*)
+
+
+(* IF (CH & 20H) = 0 THEN*)
+
+(*     IF (CH.S) = 0 THEN*)
+(*         IF CH.P = 0 THEN*)
+(*        CASE CL.typ OF*)
+(*      0 : iees_Push   (es:si);*)
+(*      1 : emu_Float32 (es:si);*)
+(*      2 : ieel_Push   (es:si);*)
+(*      3 : emu_Float   (es:si);*)
+(*         ELSE*)
+(*        { reserved, logically these are No-Op's }*)
+(*     ELSE*)
+(*         IF (CH.P) = 0 THEN emu_Duplicate_tos;*)
+(*         CASE CL.typ OF*)
+(*        0 : iees_Pop    (es:si);*)
+(*        1 : emu_Round32 (es:si);*)
+(*        2 : ieel_Pop    (es:si);*)
+(*        3 : emu_Round   (es:si);*)
+
+(* ELSE {*)
+(*        - - -    - - - - - - - -*)
+(*      -- " -- extended    xtp.1    mod.1.S.x. r/m .*)
+
+(*     IF CH.S = 0 THEN*)
+(*    CASE (x|xtp) OF    { load NDP from memory }*)
+(*        0 : FLDENV;*)
+(*        1 : { reserved }*)
+(*        2 : { Restore }*)
+(*        3 : emu_Push_Decimal (es:si);*)
+
+(*        4 : FLDCW;*)
+(*        5 : emu_Push_Temp87 (es:si);*)
+(*        6 : { reserved, would be "FLDSW" }*)
+(*        7 : emu_Float64 (es:si);*)
+
+(*     ELSE*)
+(*         di := si;*)
+(*         CASE (x|xtp) OF    { store NDP to memory }*)
+(*        0 : FSTENV;*)
+(*        1 : { reserved };*)
+(*        2 : { Save }*)
+(*        3 : emu_Pop_Decimal (es:di);*)
+
+(*        4 : [es:[di] := [emws_control];*)
+(*        5 : emu_Pop_Temp87 (es:di);*)
+(*        6 : [es:[di] := [emws_status];*)
+(*        7 : emu_Round64 (es:di);*)
+
+(* END;*)
+
+
+
+ldst_loadCase :
+  dw  iees_Push,  emu_Float32,  ieel_Push,  emu_Float
+
+ldst_storeCase :
+  dw  iees_Pop,  emu_Round32,  ieel_Pop,  emu_Round
+
+
+ldst_notEmulated:
+ldst_reserved    :
+  mov  ch, fe_Invalid_Operation
+  call e287_Exception
+  ret  0
+
+
+(*environment  STRUC*)
+  env_control   = 0  (*dw  ?*)
+  env_status    = 2  (*dw  ?*)
+  env_tag       = 4  (*dw  ?*)
+  env_instrnPtr = 6  (*dd  ?*)
+  env_dataPtr   = 10 (*dd  ?*)
+  environment_size = 14
+(*environment  ENDS*)
+
+ldst_ldEnv  :
+
+  mov  cl, 4
+  mov  ax, es:[si][env_status]
+  mov  [emws_status], ax
+
+(* instrnPtr not supported
+  mov  ax, env_instrnPtr+w0 (*!!!???*) (*george*)
+  mov  [emws_instrnPtr][w0], ax
+  mov  ax, env_instrnPtr+w1 (*!!!???*)
+  mov  bx, 7FFH
+  and  bx, ax
+  xor  ax, bx
+  xchg  bh, bl      (* emws_instruction bytes are swapped*)
+  mov  [emws_instruction], bx  (*   for speed of normal operations*)
+  rol  ax, cl
+  mov  [emws_instrnPtr][w1], ax
+  mov  ax, env_dataPtr+w0
+  mov  [emws_dataPtr][w0], ax
+  mov  ax, env_dataPtr+w1
+  rol  ax, cl
+  mov  [emws_dataPtr][w1], ax
+*)
+
+(*  jmp   ldst_loadControl*)
+
+
+
+ldst_loadControl  :
+
+(*  note keep ldEnv just above here !!!*)
+
+  mov  ax, es : [si][env_control]
+  mov     [emws_control], ax
+  mov  ch, 0
+  jmp  near  e287_Exception    (* any exceptions newly unmasked ?*)
+          (* Exception returns to our caller.*)
+
+
+
+ldst_Float64  :
+
+  pop  dx      (* return address*)
+  sub  sp, emu_temp_size  (* make space on stack*)
+  mov  di, sp
+  push dx
+  jmp  near  emu_Float64    (* will return to this routine's caller*)
+
+
+
+ldst_Push_Decimal  :
+
+  pop  dx      (* return address*)
+  sub  sp, emu_temp_size  (* make space on stack*)
+  mov  di, sp
+  push dx
+  jmp  near  emu_Push_Decimal    (* will return to this routine's caller*)
+
+
+
+ldst_Push_Temp87  :
+
+  pop  dx      (* return address*)
+  sub  sp, emu_temp_size  (* make space on stack*)
+  mov  di, sp
+  push dx
+  jmp  near  emu_Push_Temp87    (* will return to this routine's caller*)
+
+
+
+
+ldst_xPushCase :
+    dw  ldst_ldEnv,     ldst_reserved
+    dw  ldst_Restore,     ldst_Push_Decimal
+
+    dw  ldst_loadControl,  ldst_Push_Temp87
+    dw  ldst_reserved,     ldst_Float64
+
+
+ldst_stEnv  :
+
+  call ldst_storeControl
+  call ldst_storeStatus
+
+  mov  ax, (*offset*) emws_initialSP
+  sub  ax, sp
+  mov  dl, emu_temp_size
+  div  dl        (* AL = count of regs in use*)
+  mov  cx, -1
+  xchg  cx, ax
+  add  cx, cx        (* 2 bits per tag*)
+  shr  ax, cl        (* simulate the tag word*)
+  stosw
+
+(*rest  not supported
+  mov  ax, 16
+  mul  word [emws_instrnPtr][w1]
+  add  ax, [emws_instrnPtr][w0]
+  adc  dl, dh
+  stosw
+  mov  cl, 4
+  ror  dx, cl
+  mov  ax, [emws_instruction]
+  xchg  ah, al    (* bytes are swapped as Emu287 does decode*)
+  or  ax, dx
+  stosw
+
+  mov  ax, 16
+  mul  word [emws_dataPtr][w1]
+  add  ax, [emws_dataPtr][w0]
+  adc  dl, dh
+  stosw
+  ror  dx, cl
+  xchg  ax, dx
+  stosw
+*)
+  add di,8 (* Skip *)
+
+  ret  0
+
+ldst_Save  :
+  call ldst_stEnv
+  mov  si, sp
+  add  si, 2
+  mov  bp, es:[di][-10][w0]  (* retrieve the tags*)
+  mov  cx, 8
+  or   bp, bp
+  jz   ldst_sv_Full
+  mov  cl, -1
+decLoop:
+  inc  cl
+  shl  bp, 1
+  shl  bp, 1
+  jnc  decLoop
+ldst_sv_Full:
+  mov  bp, 8
+  sub  bp, cx
+  jcxz ldst_sv_loop2
+
+(* The first loop copies non-empty registers.*)
+
+ldst_sv_loop:
+  push cx
+  call emu_Pop_Temp87
+  pop  cx
+  add  si, emu_temp_size
+  add  di, 10
+  loop ldst_sv_loop
+
+(* The second loop writes out zeroes in place of unused registers.*)
+  or   bp, bp
+  jz   ldst_sv_done
+  sub  ax, ax
+ldst_sv_loop2:
+  mov  cx, 5
+rep;  stosw
+  dec  bp
+  jnz  ldst_sv_loop2
+
+ldst_sv_done:
+  ret 0
+
+
+
+ldst_Restore  :
+
+  pop  [emws_tos]    (* remember return address*)
+          (*   in a convenient location*)
+
+  mov  sp, (*offset*) emws_initialSP  (* stack wiped !!*)
+
+  mov  bp, es:[si][env_tag]
+  add  si, (7 * 10) + environment_size  (* last stack element*)
+  or  bp, 5555H
+
+(* The first loop skips empty registers.*)
+
+ldst_rs_loop:
+  shr  bp, 1
+  shr  bp, 1
+  jnc  ldst_rs_loop2
+  sub  si, 10
+
+  or  bp, bp
+  jnz  ldst_rs_loop
+  jmp  ldst_rs_allPushed
+
+(* The second loop reads in the defined registers.*)
+
+ldst_rs_moreRegs:
+  shr  bp, 1
+ldst_rs_loop2:
+  sub  sp, emu_temp_size
+  mov  di, sp
+  call emu_Push_Temp87    (* from es:[si] to ds:[di]*)
+  sub  si, 10
+  shr  bp, 1
+  jc  ldst_rs_moreRegs
+
+(* when reach here si is pointing one temp87 below the register save vector.*)
+
+ldst_rs_allPushed:
+  mov  ax, sp
+  xchg  ax, [emws_tos]      (* fix the stack depth*)
+  push ax        (*   and restore return address*)
+
+  add  si, (10) - environment_size  (* si = & environment*)
+
+  jmp  near  ldst_ldEnv      (* will return to our caller*)
+
+
+
+ldst_storeControl  :
+
+  mov     ax, [emws_control]
+  stosw
+  ret  0
+
+
+
+ldst_storeStatus  :
+
+  mov  ax, (*offset*) emws_initialSP
+  sub  ax, sp
+  mov  cl, emu_temp_size
+  div  cl
+  neg  al
+  and  al, 7
+  mov  cl, 3
+  shl  al, cl
+  mov     cx, [emws_status]
+  and  ch, 0C7H
+  or  ch, al
+  xchg  ax, cx
+  stosw
+  ret  0
+
+
+
+ldst_Round64  :
+
+  mov  si, sp
+  add  si, 2
+  call emu_Round64
+  ret  emu_temp_size
+
+
+
+ldst_Pop_Decimal  :
+
+  mov  si, sp
+  add  si, 2
+  call emu_Pop_Decimal
+  ret  emu_temp_size
+
+
+
+ldst_Pop_Temp87  :
+
+  mov  si, sp
+  add  si, 2
+  call emu_Pop_Temp87
+  ret  emu_temp_size
+
+
+
+ldst_xStoreCase :
+    dw  ldst_stEnv,        ldst_reserved
+    dw  ldst_Save,     ldst_Pop_Decimal
+
+    dw  ldst_storeControl, ldst_Pop_Temp87
+    dw  ldst_storeStatus,  ldst_Round64
+
+
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*    register moves    opa.1    1 1 0.opc. reg .*)
+
+
+(* CASE opc|opa OF*)
+(*     0           : emu_Push;        { FLD  reg }*)
+(*     1, 5, 9, 13 : reserved;*)
+(*     2           : FFREE;*)
+(*     3           : FFREEP;*)
+(*     4, 6, 7     : emu_Push;  emu_Swap_tos;  emu_Pop;  { FXCHG  tos, reg }*)
+(*     8           : IF reg = 0 THEN  FNOP*)
+(*             ELSE  reserved;*)
+(*     10          : emu_Duplicate_tos;  emu_Pop;  { FST  reg }*)
+(*  11, 12, 14, 15 : emu_Pop;        { FSTP  reg }*)
+
+(* END;*)
+
+
+remo_case :
+    dw  remo_push, remo_res, remo_free,  remo_freep
+    dw  remo_xch,  remo_res, remo_xch,   remo_xch
+    dw  remo_nop,  remo_res, remo_st,    remo_stp
+    dw  remo_stp,  remo_res, remo_stp,   remo_stp
+
+
+remo_push:
+  sub  sp, emu_temp_size
+  mov  di, sp
+rep;  movsw
+  jmp  remo_end
+
+
+remo_freep:
+  mov  di, emu_temp_size
+  jmp  remo_freeMayPop
+
+remo_free:
+  xchg di, si
+  mov  ax, infinite_exponent
+  call emu_Extreme
+  jmp  remo_end
+
+remo_freeMayPop:
+  xchg    di, si
+  mov     ax, infinite_exponent
+  call   emu_Extreme
+  add  sp, di
+  jmp  remo_end
+
+remo_notEm:
+remo_res:
+  mov  ch, fe_Invalid_Operation
+  call e287_Exception
+  jmp  remo_end
+
+
+remo_xch:
+  mov  di, sp
+remo_xchgLoop:
+  mov  ax, [di]
+  xchg  ax, [si]
+  stosw
+  add  si, 2
+  loop  remo_xchgLoop
+  jmp  remo_end
+
+remo_nop:
+  test  ch, 7
+  jnz  remo_res
+  jmp  remo_end
+
+remo_st:
+  mov  di, si
+  mov  si, sp
+rep;  movsw
+  jmp  remo_end
+
+remo_stp:
+  mov  di, si
+  mov  si, sp
+rep;  movsw
+  mov  sp, si
+
+remo_end:
+  jmp  near  e287_Exit
+
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*    tos functions    0 0 1    1 1 1.  fun    .*)
+
+
+(* CASE CH.fun OF*)
+(*      0 : [tos][emu_sign] := -[tos][emu_sign]  {=FCHS}*)
+(*      1 : [tos][emu_sign] := positive_sign;  {=FABS}*)
+(*   2..3 : reserved;*)
+(*      4 : emu_Compare_Zero;    {=FTST}*)
+(*      5 : emu_XAM;*)
+(*   6..7 : reserved;*)
+(*      8 : emu_1;*)
+(*      9 : emu_Log2of10;*)
+(*     10 : emu_Log2ofE;*)
+(*     11 : emu_PI;*)
+(*     12 : emu_Log10of2;*)
+(*     13 : emu_LogEof2;*)
+(*     14 : emu_0;*)
+(*     15 : reserved;*)
+
+(*     16 : emu_2XM1;*)
+(*     17 : emu_YL2X;*)
+(*     18 : emu_PTan;*)
+(*     19 : emu_PAtan;*)
+
+(*     20 : tosf_Xtract;*)
+(*     21 : reserved;*)
+(*     22 : emu_DecStP;*)
+(*     23 : emu_IncStP;*)
+
+(*     24 : emu_PRem;*)
+(*     25 : emu_YL2XP1;*)
+(*     26 : emu_Square_Root;*)
+(*     27 : reserved;*)
+
+(*     28 : emu_RndInt;*)
+(*     29 : emu_Scale;*)
+(* 30..31 : reserved;*)
+
+(* END;*)
+
+
+tosf_pat01  =  0
+tosf_pat10  =  2
+tosf_pat11  =  4
+tosf_pat12  =  6
+tosf_pat21  =  8
+tosf_pat22  =  10
+
+tosf_pattern :
+  db  tosf_pat11,tosf_pat11     (* tosf_Negate, tosf_Absolute*)
+  db  tosf_pat11,tosf_pat11     (* tosf_Reserved, tosf_Reserved*)
+  db  tosf_pat11                (* emu_Compare_Zero*)
+  db  tosf_pat11                (* emu_XAM*)
+  db  tosf_pat11,tosf_pat11     (* tosf_Reserved, tosf_Reserved*)
+
+  db  tosf_pat01,tosf_pat01,tosf_pat01 (* emu_1,  emu_Log2of10, emu_Log2ofE*)
+  db  tosf_pat01,tosf_pat01,tosf_pat01 (* emu_Pi, emu_Log10of2, emu_LogEof2*)
+  db  tosf_pat01  (* emu_0*)
+  db  tosf_pat11  (* tosf_Reserved*)
+
+  db  tosf_pat11  (* emu_2XM1*)
+  db  tosf_pat21  (* emu_YL2X*)
+  db  tosf_pat12  (* emu_PTan*)
+  db  tosf_pat21  (* emu_PAtan*)
+
+  db  tosf_pat12  (* tosf_Xtract*)
+  db  tosf_pat11  (* tosf_Reserved*)
+  db  tosf_pat10  (* emu_DecStP*)
+  db  tosf_pat01  (* emu_IncStP*)
+
+  db  tosf_pat22  (* emu_PRem*)
+  db  tosf_pat21  (* emu_YL2XP1*)
+  db  tosf_pat11  (* emu_Square_Root*)
+  db  tosf_pat11  (* tosf_Reserved*)
+
+  db  tosf_pat11  (* emu_RndInt*)
+  db  tosf_pat22  (* emu_Scale*)
+  db  tosf_pat11  (* tosf_Reserved*)
+  db  tosf_pat11  (* tosf_Reserved*)
+
+
+tosf_case :
+    dw  tosf_Negate, tosf_Absolute
+    dw  tosf_Reserved, tosf_Reserved
+    dw   emu_Compare_Zero
+    dw  emu_XAM
+    dw  tosf_Reserved, tosf_Reserved
+
+    dw  emu_1,  emu_Log2of10, emu_Log2ofE
+    dw  emu_Pi, emu_Log10of2, emu_LogEof2
+    dw  emu_0,  tosf_Reserved
+
+  dw  emu_2XM1
+  dw  emu_YL2X
+  dw  emu_PTan
+  dw  emu_PAtan
+
+  dw  tosf_Xtract
+  dw  tosf_Reserved
+  dw  tosf_NoOp  (* emu_DecStP*)
+  dw  tosf_NoOp  (* emu_IncStP*)
+
+  dw  emu_PRem
+  dw  emu_YL2XP1
+  dw  emu_Square_Root
+  dw  tosf_Reserved
+
+  dw  emu_RndInt
+  dw  emu_Scale
+  dw  tosf_Reserved
+  dw  tosf_Reserved
+
+
+tosf_Negate  :
+
+  xor  byte [si][emu_sign], negative_sign
+  ret  0
+
+
+tosf_Absolute  :
+
+  mov  byte [si][emu_sign], positive_sign
+  ret  0
+
+
+tosf_Xtract  :
+
+  push si
+  push di
+
+  push si
+  push di
+  cld
+  mov  cx, emu_temp_size/2
+rep;  movsw
+  pop  di
+  pop  si
+
+  xchg  si, di      (* swap so [si] = fraction, [di] = exp*)
+  lea  si, [si][emu_exponent]
+  cmp  word [si][w0], zero_exponent
+  jle  toxt_end
+  cmp  word [si][w0], infinite_exponent
+  jge  toxt_infinite
+
+  dec  word [si][w0]      (* e287 binary point aligned*)
+  call emu_Float
+  mov  word [si][w0], 1    (*   differently to 80287*)
+
+toxt_end:
+  pop  di
+  pop  si
+  ret  0
+
+toxt_infinite:
+  mov  word [si][w0], zero_exponent    (* infinity.fraction = 0.0*)
+  mov  word [di][emu_exponent], 0DH
+  mov  byte [di][emu_fraction][w3][by1], 80H  (* infinity.exponent = 4000H*)
+  jmp  toxt_end
+
+
+
+tosf_Reserved  :
+  mov  ch, fe_Invalid_Operation
+  jmp  near  e287_Exception
+(*  ret*)
+
+
+tosf_NoOp  :
+ret 0
+
+
+
+tosf_patternSwitch :
+  dw  tosf_in0out1, tosf_in1out0
+  dw  tosf_in1out1, tosf_in1out2, tosf_in2out1
+  dw  tosf_in2out2
+
+
+(*public*) e287_tos_Function  :
+
+mov  bx, 1FH
+and  bl, ch
+
+mov  cl, cs:[tosf_pattern][bx]
+mov  ch, 0
+
+shl  bx, 1    (* ready for indexing a word table*)
+
+mov  di, cx
+jmp  near  cs:[tosf_patternSwitch][di]
+
+tosf_in0out1:
+  sub  sp, emu_temp_size
+  mov  di, sp    (* no input, output pushed to tos*)
+  jmp  tosf_viaCase
+
+tosf_in1out1:
+  mov  si, sp    (* input and output are both tos element*)
+  jmp  tosf_viaCase
+
+tosf_in1out2:
+  mov  si, sp      (* tos input*)
+  sub  sp, emu_temp_size  (* push...*)
+  mov  di, sp      (* tos1 and tos output*)
+  jmp  tosf_viaCase
+
+tosf_in1out0:        (* only used for DecStP*)
+  add  sp, emu_temp_size
+  jmp  near  e287_Exit
+
+tosf_in2out1:
+  mov  di, sp
+  lea  si, [di][emu_temp_size]
+  call cs:[tosf_case][bx]
+  add  sp, emu_temp_size
+  jmp  near  e287_Exit
+
+tosf_in2out2:
+  mov  di, sp
+  lea  si, [di][emu_temp_size]
+(*  jmp  tosf_via_case*)
+
+
+tosf_viaCase:
+  call cs:[tosf_case][bx]
+  jmp  near  e287_Exit
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*    FPU control    0 1 1    1 1 1.  ctl    .*)
+
+
+(* CASE CH.ctl OF*)
+(*      0 : { FENI -- no-op on 80287 };*)
+(*      1 : { FDISI -- no-op on 80287 };*)
+(*      2 : FCLEX;*)
+(*      3 : FINIT;*)
+(*      4 : { FSETPM };*)
+(*  5..31 : reserved;*)
+
+(* END;*)
+
+
+(*public*) e287_FPU_Control  :
+
+  and  ch, 31
+  cmp  ch, 3      (* FINIT ?*)
+  jne  fpuc_notInit
+
+(*  Set infinite values into 9 registers, corresponding to 1 underflow*)
+(*    guard and 8 normal.*)
+
+  mov  sp, (*offset*) emws_initialSP
+  mov  di, sp
+
+  mov  ax, infinite_exponent
+  call emu_Extreme    (* set the underflow guard*)
+
+  lea  si, [di][emu_temp_size][-2]
+  sub  di, 2
+  std        (* reverse string direction*)
+  sub  sp, 8 * emu_temp_size
+  mov  cx, (8 * emu_temp_size) / 2
+rep;  movsw        (* make 8 infinite (undefined) temps*)
+
+  mov  sp, (*offset*) emws_initialSP
+  mov  word [emws_status], 0
+  mov  word [emws_control], 033FH  (* precision = temp real,*)
+          (* all exceptions masked.*)
+  jmp  fpuc_end
+
+fpuc_notInit:
+  cmp  ch, 2      (* FCLEX ?*)
+  jne  Reserved
+
+  mov  byte [emws_status][by0], 0  (* clear exceptions*)
+  jmp  fpuc_end
+
+
+(*-------  This label is called from several nearby groups*)
+
+e287_Reserved_1:
+e287_Reserved_2:
+Reserved:
+  mov  ch, fe_Invalid_Operation
+  call e287_Exception
+(*-------*)
+
+
+fpuc_end:
+  jmp  near  e287_Exit
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*  reserved    1 0 1    1 1 1.- - - - -.*)
+
+
+(* reserved;*)
+
+(* END;*)
+
+
+(*
+
+(*public*) e287_Reserved_1  :
+
+  jmp  Reserved
+
+
+
+
+(*    format name  op number  modr/m*)
+(*        - - -    - - - - - - - -*)
+(*  reserved    1 1 1    1 1 1.- - - - -.*)
+
+
+(* IF (CH & 1Fh) = 0 THEN  { FSTSW ax }*)
+(*                   ELSE  reserved;*)
+
+(* END;*)
+
+(*public*) e287_Reserved_2  :
+
+  test  ch, 1FH
+  jnz  Reserved
+
+  mov  ax, (*offset*) emws_initialSP
+  sub  ax, sp
+  mov  cl, emu_temp_size
+  div  cl
+  and  al, 7
+  mov  cl, 3
+  shl  al, cl
+  mov     cx, [emws_status]
+  and  ch, 0C7H
+  or  ch, al
+  mov  [bp][oldAX], cx
+
+  jmp  near  e287_Exit
+*)
+
+
+
+
+(*INCLUDE E287MULT][ASM*)
+
+(* Multiplication first involves checks for the special cases of zero*)
+(* and infinity][  If these are encountered, an exception may be raised*)
+(* and a special value is returned][  Otherwise, a subroutine is called*)
+(* to perform a fixed point 64-bit multiplication][  This is then*)
+(* normalised and rounded, and the result and flags set][*)
+
+
+(*public*) emu_Multiply :
+x_p   = 4+nearParam
+y_p   = 2+nearParam
+z_p   = 0+nearParam
+
+mul_paramsize  =  6
+
+  push bp; mov bp,sp; push si; push di
+  cld
+
+  mov  si, [bp][x_p]
+  mov  di, [bp][y_p]
+
+  mov  bx, [di][emu_exponent]
+  mov  ax, [si][emu_exponent]
+  cmp  ax, bx
+  jl  @exponents_ordered
+  xchg  ax, bx
+@exponents_ordered:
+  cmp  bx, infinite_exponent
+  jge  @mult_infinite
+  cmp  ax, zero_exponent
+  jle  @mult_zero
+
+  add  ax, bx
+  cmp  ax, infinite_exponent
+  jge  @mult_overflow
+  cmp  ax, zero_exponent
+  jg  @mult_ordinary
+
+@mult_underflow:
+  mov  ch, fe_Underflow
+  call  e287_Exception
+
+@mult_zero:
+  mov  bx, zero_exponent
+  jmp     @mult_extreme_result
+
+@mult_overflow:
+  mov  ch, fe_Overflow
+  call  e287_Exception
+
+@mult_infinite:
+  mov  bx, infinite_exponent
+
+@mult_extreme_result:
+  sub  ax, ax
+  mov  di, [bp][z_p]
+  stosw
+  stosw
+  stosw
+  stosw
+  xchg  ax, bx
+  stosw
+  mov  al, positive_sign
+  stosb
+  jmp     @mult_end
+
+
+@mult_ordinary:
+  mov  bl, [si][emu_sign]
+  xor  bl, [di][emu_sign]
+  push  bx      (* save result's sign*)
+  push  ax      (* save result's exponent*)
+
+  call  emup_Push
+  xchg  si, di
+  call  emup_Push
+
+  mov  bx, sp
+  push  bp
+  lea  bp, [bx][-nearParam]  (* Inner@Mult caller sets BP*)
+  call  Inner@Multiply      (* result in DX:CX:BX:AX:SI*)
+  pop  bp
+
+  add  sp, 2 * emu_temp_size  (* Inner routine does not pop parameters*)
+
+  pop  di      (* retrieve result's exponent*)
+
+  or  dx, dx      (* result must be normalised*)
+  js  @round
+
+  dec  di
+
+  shl  si, 1
+  rcl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  rcl  dx, 1      (* 1 bit shift is the most ever needed*)
+
+@round:
+  shl  si, 1
+  adc  ax, 0
+  adc  bx, 0
+  adc  cx, 0
+  adc  dx, 0
+  jnc  @ready
+  rcr  dx, 1      (* here, result is 8000:0:0:0H*)
+  inc  di
+
+@ready:
+  mov  si, di
+  mov  di, [bp][z_p]
+  stosw
+  xchg  ax, bx
+  stosw
+  xchg  ax, cx
+  stosw
+  xchg  ax, dx
+  stosw
+  xchg  ax, si
+  stosw
+  pop  ax
+  mov  ah, 0
+  stosw
+
+@mult_end:
+
+  pop di; pop si; pop bp
+  ret  mul_paramsize
+
+
+
+(* Fraction multiplication ignores the exponent and sign and returns the*)
+(* non-aligned 5-word result of fraction multiplication, the 5th word*)
+(* being only significant in the top two bits, used for rounding][*)
+
+
+(*public*) emup_Fraction_Multiply :
+
+?x  = emu_temp_size+nearParam    (* emu_temp*)
+?y  = 0+nearParam                (* emu_temp*)
+
+?paramsize  =  2 * emu_temp_size
+
+?res = emu_temp_size+nearParam  (* result overwrites [bp][?x]*)
+
+  push bp; mov bp,sp; push si; push di
+
+  mov  al, [bp][?y][emu_sign]
+  xor  [bp][bp][?res][emu_sign], al  (* multiply the signs together*)
+
+  call  Inner@Multiply    (* result in DX:CX:BX:AX:SI*)
+
+  mov  [bp][?res][emu_fraction][w0], ax
+  mov  [bp][?res][emu_fraction][w1], bx
+  mov  [bp][?res][emu_fraction][w2], cx
+  mov  [bp][?res][emu_fraction][w3], dx
+  mov  ax, si
+
+  pop di; pop si; pop bp
+  ret  ?paramsize - emu_temp_size  (* result on stack and in AX*)
+
+
+Inner@Multiply :
+
+
+(* Algorithm:*)
+
+(* let N = 2^32*)
+
+(* the problem to multiply  abcd * uvwx, where each letter represents 16 bits][*)
+
+(* use the transforms:*)
+
+(* abcd = (ab + i)N + (cd - iN),    where i = Ord (cd >= N/2)*)
+
+(* uvwx = (uv + j)N + (wx - jN),          j = Ord (wx >= N/2)*)
+
+(* The useful aspect of this transform is that the trailing terms*)
+
+(* |(cd - iN)| <= N/2,  and |(wx - jN)| <= N/2*)
+
+(* are limited in magnitude, and the product of those terms <= NN/4*)
+
+(* On the other hand, both leading terms*)
+
+(* (ab + i) >= N/2,  and (uv + j) >= N/2,  since both are left-normalised,*)
+
+(* and the product of the leading terms is therefore >= NNNN/4][*)
+
+(* The consequence of ignoring the lesser terms' mutual product is to cause*)
+(* a maximum error of 1/NN, and a probable error of 1/4NN, unbiased][  The*)
+(* gain is to avoid four 16-bit multiplications][*)
+
+(*  It turns out that the "i" and "j" terms can easily be added to the result,*)
+(* given a bit more algebraic juggling:*)
+
+(* result = (ab+i)N * (uv+j)N + (ab+i)N * (wx-jN) + (uv+j)N * (cd-iN)*)
+(*   = (ab)(uv)NN + abjNN + uviNN + ijNN*)
+(*     (ab)(wx)N  - abjNN         - ijNN + wxiN*)
+(*     (uv)(cd)N          - uviNN - ijNN        + cdjN*)
+(*   -----------------------------------------------------------*)
+(*   = (ab)(uv)NN + (ab)(wx)N + (uv)(cd)N + wxiN + cdjN - ijNN*)
+
+(* and so, fortunately, the calculation can be done in terms of the*)
+(* unsigned 16-bit integers a,b,c,d,u,v,w,x, with the terms using i or j*)
+(* calculated conditionally if i or j <> 0][*)
+
+(* A further optimisation relates to the evaluation of polynomials][*)
+(* This procedure is used for the multiplication of fixed point*)
+(* coefficients of polynomials, and many of these have 1,2, or even 3*)
+(* zeroed most significant words][  The method of coefficient evaluation*)
+(* ensures that the first of the two multiplicands will be the coeffs,*)
+(* so checks for leading zeroes can look at ?x and ignore ?y][*)
+
+(*   The accumulation of products begins with the least significant][  As*)
+(* more significant products are introduced, the least significant bits*)
+(* of the accumulation are truncated, so that only the most significant*)
+(* 80 bits are kept][  These are then normalised and rounded to 64 bits][*)
+  
+(* the multiplication terms are aligned as follows:*)
+
+(*          |w x -- * iN*)
+(* +        |c d -- * jN*)
+(* -       1|    -- * ijNN*)
+(* +        |d v*)
+(* +        |b x*)
+(* +       d|u*)
+(* +       c|v*)
+(* +       b|w*)
+(* +       a|x*)
+(* +     c u|*)
+(* +     b v|*)
+(* +     a w|*)
+(* +   b u  |*)
+(* +   a v  |*)
+(* + a u    |*)
+(*   - - - -*)
+(*  (64 bits)*)
+
+
+(* The four registers DI:SI:CX:BX act as a 64-bit accumulator][  However,*)
+(* since the terms produce results spanning 96 bits, the alignment of the*)
+(* "accumulator" changes by 16 bits between each group of similarily*)
+(* aligned terms][  The 6th, least significant word is discarded when no*)
+(* longer of use][  The 5th word is kept as it is significant for rounding][*)
+
+  sub  di, di
+
+  mov  cx, di
+  mov  si, di
+
+  test  byte [bp][?x][emu_fraction][w1][by1], 80H
+  jz  @i_skip
+  mov  cx, [bp][?y][emu_fraction][w0]    (* + wxiN*)
+  mov  si, [bp][?y][emu_fraction][w1]
+@i_skip:
+
+  test  byte [bp][?y][emu_fraction][w1][by1], 80H
+  jz  @j_skip
+  add  cx, [bp][?x][emu_fraction][w0]    (* + cdjN*)
+  adc  si, [bp][?x][emu_fraction][w1]
+  adc  di, di
+
+  test  byte [bp][?x][emu_fraction][w1][by1], 80H
+  jz  @ij_skip
+  dec  di        (* - ijNN*)
+@ij_skip:
+@j_skip:
+
+
+  sub  bx, bx
+
+  (*mulAdd  [w0], [w2], cx, si, di*)    (* + d*v N*)
+  mov  ax, [bp][?x][emu_fraction][w0];
+  mul word [bp][?y][emu_fraction][w2]
+  add  cx, ax; adc  si, dx; adc  di, 0
+
+  (*mulAdd  [w2], [w0], cx, si, di, @skip1*)  (* + b*x N*)
+  mov  ax, [bp][?x][emu_fraction][w2];
+  or  ax, ax
+  jz  @skip1
+  mul word [bp][?y][emu_fraction][w0]
+  add  cx, ax; adc  si, dx; adc  di, 0
+
+  (*mulAdd  [w2], [w1], si, di, bx*)    (* + b*w N*)
+  mov  ax, [bp][?x][emu_fraction][w2];
+  mul word [bp][?y][emu_fraction][w1]
+  add  si, ax; adc  di, dx; adc  bx, 0
+
+@skip1:
+
+  (*mulAdd  [w0], [w3], si, di, bx*)    (* + d*u N*)
+  mov  ax, [bp][?x][emu_fraction][w0];
+  mul word [bp][?y][emu_fraction][w3]
+  add  si, ax; adc  di, dx; adc  bx, 0
+
+  (*mulAdd  [w1], [w2], si, di, bx*)    (* + c*v N*)
+  mov  ax, [bp][?x][emu_fraction][w1];
+  mul word [bp][?y][emu_fraction][w2]
+  add  si, ax; adc  di, dx; adc  bx, 0
+
+  (*mulAdd  [w3], [w0], si, di, bx, @skip2*)  (* + a*x N*)
+  mov  ax, [bp][?x][emu_fraction][w3];
+  or  ax, ax
+  jz  @skip2
+  mul word [bp][?y][emu_fraction][w0]
+  add  si, ax; adc  di, dx; adc  bx, 0
+@skip2:
+
+  sub  cx, cx        (* discard bits 80 downwards*)
+  push  si        (* save bits 64][][79 for later rounding*)
+  mov  si, cx
+
+  (*mulAdd  [w1], [w3], di, bx, cx*)    (* + c*u N*)
+  mov  ax, [bp][?x][emu_fraction][w1];
+  mul word [bp][?y][emu_fraction][w3]
+  add  di, ax; adc  bx, dx; adc  cx, 0
+
+  (*mulAdd  [w2], [w2], di, bx, cx, @skip3*)  (* + b*v NN*)
+  mov  ax, [bp][?x][emu_fraction][w2];
+  or  ax, ax
+  jz  @skip3
+  mul word [bp][?y][emu_fraction][w2]
+  add  di, ax; adc  bx, dx; adc  cx, 0
+
+  (*mulAdd  [w2], [w3], bx, cx, si*)    (* + b*u NN*)
+  mov  ax, [bp][?x][emu_fraction][w2];
+  mul word [bp][?y][emu_fraction][w3]
+  add  bx, ax; adc  cx, dx; adc  si, 0
+@skip3:
+  (*mulAdd  [w3], [w1], di, bx, cx, @skip4*)  (* + a*w N*)
+  mov  ax, [bp][?x][emu_fraction][w3];
+  or  ax, ax
+  jz  @skip4
+  mul word [bp][?y][emu_fraction][w1]
+  add  di, ax; adc  bx, dx; adc  cx, 0
+  adc  si, 0
+
+  (*mulAdd  [w3], [w2], bx, cx, si*)    (* + a*v NN*)
+  mov  ax, [bp][?x][emu_fraction][w3];
+  mul word [bp][?y][emu_fraction][w2]
+  add  bx, ax; adc  cx, dx; adc  si, 0
+
+(* final product added in as a special case*)
+
+  mov  ax, [bp][?x][emu_fraction][w3]    (* + a*u NN*)
+  mul word [bp][?y][emu_fraction][w3]
+  add  cx, ax
+  adc  si, dx    (* never a carry-out at the end, maximum*)
+@skip4:        (*  possible is ][FFFF:FFFF:FFFF:FFFFh*)
+
+
+  mov  dx, si
+  xchg  ax, di
+
+  pop  si    (* result now in dx:cx:bx:ax:si*)
+  ret  0
+
+
+
+(*INCLUDE E287POLY.ASM*)
+
+(* algorithm notes:*)
+
+(* The polynomial is rearranged in the usual way (due to Horner ?):*)
+
+(*    poly := (..(c [N] * x + c [N-[1]) * x + c [N-[2])..) * x + c [0];*)
+
+(* which minimises the number of calculations needed.*)
+(* The procedure is a loop of the form:*)
+
+
+
+(* poly = coeff [terms-[1];*)
+
+(* FOR i := terms-2 DOWNTO 0 DO  poly := poly * x + coef [i]*)
+
+(* result := 1.0 +  poly;*)
+
+
+
+(* The calculations are fixed point.  The largest error is that introduced*)
+(* by the final stage of multiplication and addition, since  x  is usually*)
+(* small and multiplication by  x  therefore shrinks the prior error in*)
+(* the calculation.*)
+
+
+(*public*) emup_Polynomial  :  (*NEAR*)
+
+_x       =  6+nearParam      (* emu_temp*)
+_terms   =  4+nearParam
+_coef_p  =  0+nearParam
+
+_result =   6+nearParam    (* overwrites parameter*)
+
+_paramsize =    18
+
+  push bp; mov bp,sp; push si; push di
+  push ds
+  push es
+
+  mov  al, emu_temp_size
+  mul  byte [bp][_terms]
+  sub  ax, emu_temp_size
+  lds  si, [bp][_coef_p]
+  add  si, ax
+
+  push ss
+  pop  es        (* es = ss until @end*)
+
+  sub  sp, emu_temp_size
+  mov  di, sp
+  cld
+  mov  cx, emu_temp_size
+
+rep;  movsb          (* poly now on Top Of Stack*)
+
+  mov  di, si
+  dec  byte [bp][_terms]
+  sub  di, emu_temp_size
+
+
+@for:
+  dec  byte [bp][_terms]
+  jl  @forEnd
+
+  lea  si, [bp][_x]
+  call emu_Push
+
+  call emup_Fraction_Multiply
+
+  sub  di, emu_temp_size  (* ds:di points to coeff [terms - [2]*)
+
+  push bp
+  mov  bp, sp
+_poly  =  2      (* access to tos*)
+
+  mov  bx, [di][emu_fraction][w0]
+  mov  cx, [di][emu_fraction][w1]
+  mov  dx, [di][emu_fraction][w2]
+  mov  si, [di][emu_fraction][w3]  (* coeff now in si:dx:cx:bx*)
+
+
+  mov  al, [di][emu_sign]
+  cmp  al, [bp][_poly][emu_sign]
+  je  @add
+
+@subtract:    (* note that the coeff to be subtracted is almost*)
+      (*   always larger than the accumulated lesser*)
+      (*     terms of the polynomial.  Hence subtract*)
+      (*       poly from coeff to keep a positive fraction.*)
+
+  sub  bx, [bp][_poly][emu_fraction][w0]
+  sbb  cx, [bp][_poly][emu_fraction][w1]
+  sbb  dx, [bp][_poly][emu_fraction][w2]
+  sbb  si, [bp][_poly][emu_fraction][w3]
+  jnc  @storePoly
+
+@negate:    (* carry flag = borrow when subtracting,*)
+      (* so we have now a negative fraction.  This*)
+      (* must be restored to positive.*)
+  not  si
+  not  dx
+  not  cx
+  neg  bx    (*  -x  =  (not x) + 1*)
+  cmc
+  adc  cx, 0
+  adc  dx, 0
+  adc  si, 0
+  xor  al, negative_sign
+
+@storePoly:
+  mov  [bp][_poly][emu_fraction][w0], bx
+  mov  [bp][_poly][emu_fraction][w1], cx
+  mov  [bp][_poly][emu_fraction][w2], dx
+  mov  [bp][_poly][emu_fraction][w3], si
+  mov  [bp][_poly][emu_sign], al
+  pop  bp
+  jmp  @for
+
+
+@add:
+  add  [bp][_poly][emu_fraction][w0], bx
+  adc  [bp][_poly][emu_fraction][w1], cx
+  adc  [bp][_poly][emu_fraction][w2], dx
+  adc  [bp][_poly][emu_fraction][w3], si  (* it is a requirement that*)
+            (* the polynomial partial sum*)
+            (* never exceeds 1, so there*)
+            (* is no carry.*)
+  pop  bp
+  jmp  @for
+
+
+
+@forEnd:      (* pop [bp][_poly] from tos into registers*)
+  pop  bx  (* w0*)
+  pop  cx  (* w1*)
+  pop  dx  (* w2*)
+  pop  si  (* w3*)
+  pop  ax  (* ignore exponent*)
+  pop  ax  (* sign in al*)
+
+  sub  di, di      (* convenient zero*)
+
+  cmp  al, negative_sign  (* result above or below 1.0 _*)
+  jne  @above
+
+
+@below:
+  not  si      (* res := 1.0 - poly;*)
+  not  dx
+  not  cx
+  neg  bx
+  cmc        (* -poly = (not poly) + 1*)
+  adc  cx, di
+  adc  dx, di
+  adc  si, di
+          (* di = 0 is the exponent, conveniently*)
+  jmp  @log_polyend
+
+
+@above:
+  stc        (* res := 1.0 + poly;*)
+  rcr  si, 1
+  rcr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  adc  bx, di      (* round off*)
+  adc  cx, di
+  adc  dx, di
+  adc  si, di
+  inc  di      (* di = 1 is the exponent*)
+
+@log_polyend:
+  mov  [bp][_result][emu_exponent], di
+  mov  byte [bp][_result][emu_sign], positive_sign
+  mov  [bp][_result][emu_fraction][w0], bx
+  mov  [bp][_result][emu_fraction][w1], cx
+  mov  [bp][_result][emu_fraction][w2], dx
+  mov  [bp][_result][emu_fraction][w3], si
+
+  pop  es
+  pop  ds
+  pop di; pop si; pop bp
+  ret  _paramsize - emu_temp_size
+
+
+
+
+
+(*INCLUDE E287PTAN.ASM*)
+
+(* Polynomial coefficients for Chebyshev approx. to Sine (x) / x,*)
+(*    in terms of every second power.*)
+
+sine_terms : dw  8
+sine_coeffs : dw 0H, 0H, 0H, 0H,   0H; db positive_sign, 0
+dw 0AAB6H, 0AAAAH, 0AAAAH,  2AAAH,   0H; db negative_sign, 0
+dw 2403H,   2222H,  2222H,  0222H,   0H; db positive_sign, 0
+dw 0E4B3H,  0D00H,  00D0H,    0DH,   0H; db negative_sign, 0
+dw 086EH,   0C74BH, 2E3BH,     0H,   0H; db positive_sign, 0
+dw 40C6H,    9916H,   6BH,     0H,   0H; db negative_sign, 0
+dw 450CH,   0B092H,    0H,     0H,   0H; db positive_sign, 0
+dw 45D5H,     0D6H,    0H,     0H,   0H; db negative_sign, 0
+
+
+(* Coeffs converted into hexadecimals, Cosine (-pi/4 .. pi/4)*)
+
+
+cosine_terms : dw  8
+cosine_coeffs : dw 0H, 0H, 0H, 0H,   0H; db positive_sign, 0 (* 1.0*)
+dw 0FF88H, 0FFFFH, 0FFFFH, 07FFFH,   0H; db negative_sign, 0
+dw  9AA6H, 0AAAAH, 0AAAAH,  0AAAH,   0H; db positive_sign, 0
+dw 0E67FH,  5B04H,  05B0H,   05BH,   0H; db negative_sign, 0
+dw  26EFH,  019BH, 0A01AH,    01H,   0H; db positive_sign, 0
+dw 0CE1DH,  93DCH,   49FH,     0H,   0H; db negative_sign, 0
+dw 0B10FH, 0F74BH,     8H,     0H,   0H; db positive_sign, 0
+dw 0D803H,  0C7BH,     0H,     0H,   0H; db negative_sign, 0
+
+
+(* algorithm notes*)
+
+(*  Two Chebyshev series expansions are used.  The first series calculates*)
+
+(*       y = Sine (x)    for  0  <=  x  <  pi/4*)
+
+(* and the second:*)
+
+(*       y = Cosine (x)  for  0  <=  x  <=  pi/4*)
+
+(* Tangent is represented as a Sine, Cosine pair left on top of the stack.*)
+
+(* BEGIN*)
+
+(*   fix := Square_Fix (x);*)
+
+(*   cos := Polynomial (fix, cosine_terms, cosine_coeffs);*)
+(*   sin := x * Polynomial (fix, sine_terms, sine_coeffs);*)
+
+(*   emu_PTan := (sin, cos);*)
+(*   END;*)
+
+
+(*public*) emu_PTan  :  (*NEAR*)
+
+  push bp; mov bp,sp; push si; push di
+
+  call emup_Push
+
+  call emup_Square_Fix    (* tos = fix*)
+  call emu_Duplicate_tos  (* save a copy for sine*)
+
+  push cs:[cosine_terms]    (* number of terms to evaluate*)
+  mov  ax, (*offset*) cosine_coeffs
+  push cs
+  push ax
+  call emup_Polynomial    (* cosine now on tos*)
+
+  call emu_Pop      (* put cos in its place in result.*)
+          (* "fix" is now tos*)
+
+  push cs:[sine_terms]    (* number of terms to evaluate*)
+  mov  ax, (*offset*) sine_coeffs
+  push cs
+  push ax
+  call emup_Polynomial    (* tos = polynomial result*)
+
+  mov  ax, sp    (* caution : push sp  8086/286 incompatible*)
+  push ax      (*       *  poly (fix)*)
+  push si      (*   x*)
+  push si      (* x  :=  *)
+  call emu_Multiply    (* sine now in tan?x*)
+
+  add  sp, emu_temp_size  (* discard Sine poly result*)
+
+tan@end:
+  pop di; pop si; pop bp
+  ret 0
+
+
+
+
+
+(*INCLUDE E287REM.ASM*)
+
+(* algorithm notes*)
+
+(*   The method is similar to division, but the process stops when the*)
+(* numerator is or becomes less than the divisor.  Only the least significant*)
+(* 16 bits of the quotient are retained.*)
+
+(*   The procedure ignores operand signs and does not guard against 0 divisor,*)
+(* trusting the caller, so is not suitable for carefree use.*)
+
+(* In detail:*)
+(*    We seek to find (Remainder, Quotient)  such that*)
+(*           Q * Y + R = X    exactly*)
+
+
+(*       X = j.x.2^m       1/2  <=  x  <  1*)
+(*       Y = y.2^n         1/2  <=  y  <  1*)
+(*       R = j.r.2^p       1/2  <=  r  <  1*)
+
+(* j is either +1 or -1, and  m, n, p and Q are integers.*)
+
+(* Initially, R = X,  Q = 0.*)
+
+(* The eventual goal is for 0 <= R <  Y  if 0 < Y,*)
+(*                     ELSE Y <  R <= 0.*)
+
+
+(* STAGE 1 :*)
+
+(* IF p > n THEN GOTO end;  { X = R is the answer }*)
+
+(* ELSE*)
+
+(* introduce Y' = y.2^p*)
+
+(* transform Y' -> Y , maintaining invariant  Q * Y' + R = X :*)
+
+
+(* WHILE*)
+(*     (p > n) AND (r < y)*)
+(*         r, p, Q  :=  2r, p-1, 2Q    { A }*)
+
+(*     (p >= n) AND (r >= y)*)
+(*         r, Q  :=  (r - y), Q + 1    { B }*)
+
+
+(* Transform { A } does not change the value of R or of (Q * Y'), it merely*)
+(*  re-aligns their representation.*)
+
+(* Transform { B } increases the magnitude of (Q * Y') and decreases that*)
+(* of R.  We can further prove that R will eventually become less than Y:*)
+
+(*    If {A} is used, then  p  is reduced towards  n, while  r < 2*y*)
+(*    IF {B} is used, then  p  is constant but since  r < 2*y (initial*)
+(*  condition invariant under A and B),  r  is reduced to less than*)
+(*  half its present magnitude.*)
+
+(*    Now, either R < Y, or there are a finite number of applications of {A}*)
+(*  possible before  r >= y  (a fundamental property of floating point*)
+(*  representation).  We can set an upper limit on the number of uses of*)
+(*  {A}, N{A} <= (p-n).  Therefore no more than (p-n) uses of {A} can*)
+(*  occur.*)
+
+(*    Similarily, there are a finite number of applications of {B} possible*)
+(*  before R < Y (given R is not infinite), since X < Y * 2^(p+1-n).*)
+(*  Each application of {B} at least halves R from its initial value X,*)
+(*  so N{B} <= (p+1-n).*)
+
+(*    Since only {A} or {B} is possible at each turn of the WHILE loop, at*)
+(*  most N{A} + N{B} loops are possible, and we therefore have proof*)
+(*  that R < Y obtains within a strictly bounded time.*)
+
+(* Implementation note:*)
+(*   It is crucial that there be no rounding error in this algorithm.  The*)
+(*   transform {A} can produce an carry of one bit.  The implementation*)
+(*   will use the carry flag to give the extra bit of precision.  This is*)
+(*   possible because if an carry occurs during {A} we know that r > y,*)
+(*   and also p >= n, so we know that the guard of {B} will be satisfied and*)
+(*   can immediately apply {B}.  After {B} we know that  r < y, so we are*)
+(*   again safely within the bounds of normal precision.*)
+
+
+(* STAGE 2 : { normalisation }*)
+
+(*    After stage 1, we have the correct value of R but it is not properly*)
+(*    normalised.  Therefore normalise in the usual way, shifiting left until*)
+(*    the most significant bit is in the MS bit of the MS word.*)
+
+(* IF r <> 0*)
+(*     WHILE |r| < .5*)
+(*         r, p  :=  2r, p-1*)
+
+(* After normalisation, we are finished.*)
+
+
+(* The 8087/287 delivers the least significant three bits of the remainder,*)
+(*       and scrambles them into the Condition bits of the status word.*)
+
+conditions : db  0H, 02H, 40H, 42H, 01H, 03H, 41H, 43H
+
+
+(*public*) emu_PRem  :  (*NEAR*)
+
+
+?sign  =  -2
+Q_     =  -4
+?incr  =  -6
+
+dvrP  =  -8
+resP  =  -10
+
+  push bp
+  mov  bp, sp
+  push [di][emu_sign][w0]
+  lea  sp, [bp][?incr]
+  push si
+  push di
+
+  mov  ax, [di][emu_fraction][w0]  (* fetch the numerator*)
+  mov  bx, [di][emu_fraction][w1]
+  mov  cx, [di][emu_fraction][w2]
+  mov  dx, [di][emu_fraction][w3]
+
+  mov  word [bp][Q_], 0      (* initial quotient := 0*)
+
+(* NOTE p_ overwrites numerator pointer, which we no longer need.*)
+
+  mov  di, [di][emu_exponent]
+  sub  di, [si][emu_exponent]  (* compare the exponents*)
+  jge  @while
+  jmp  @finish
+
+(* The WHILE statement is re-ordered to minimise the number of (slow) jumps*)
+(*  needed.  It is optimal to place the WHILE following clause {A}.*)
+
+@isA:        (* assert  p >= n,  r < y*)
+  dec  di
+  jl  @overshootA  (* quit if was  p = n, maintain p now >= n.*)
+  shl  word [bp][Q_], 1
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  adc  dx, dx
+  jc  @isB      (* carry implies  r >= 1.0 > y*)
+  jns  @isA      (* optimise if  r < .5 <= y*)
+
+
+@while:          (* assert  p >= n,  1.0 > r >= .5*)
+  cmp  dx, [si][emu_fraction][w3]
+  ja  @isB
+  jb  @isA
+  cmp  cx, [si][emu_fraction][w2]
+  ja  @isB
+  jb  @isA
+  cmp  bx, [si][emu_fraction][w1]
+  ja  @isB
+  jb  @isA
+  cmp  ax, [si][emu_fraction][w0]
+  ja  @isB
+  jb      @isA
+  jmp @isZero
+
+
+@overshootA:
+  inc  di    (* assert  p=n  and  r < y, therefore finished*)
+  jmp  @normalise
+
+
+
+@isB:        (* assert  y < r < 2y,  p >= n*)
+  inc  word [bp][Q_]
+  sub  ax, [si][emu_fraction][w0]
+  sbb  bx, [si][emu_fraction][w1]
+  sbb  cx, [si][emu_fraction][w2]
+  sbb  dx, [si][emu_fraction][w3]
+  or  di, di
+  jg  @isA    (* optimise, since  r < y,  if p > n*)
+(*          ELSE  r < y,  p = n, so finished.*)
+
+
+@normalise:
+  or  dx, dx
+  js  @finish
+  jz  @check_zero
+
+@align_loop:
+  dec  di
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  adc  dx, dx
+  jns  @align_loop
+
+
+@finish:
+  add  di, [si][emu_exponent]
+
+@end:                                           (* result overwrites ?dvr*)
+  push di    (* p_*)
+  mov  di, [bp][resP]
+  stosw      (* ax*)
+  xchg  ax, bx
+  stosw      (* bx*)
+  xchg  ax, cx
+  stosw      (* cx*)
+  xchg  ax, dx
+  stosw      (* dx*)
+  pop  ax
+  stosw      (* di*)
+  mov  al, [bp][?sign]  (* result sign = numerator sign*)
+  cbw
+  stosw      (* sign*)
+
+  and  byte [emws_status][by1], ~47H (* ggfb - fixed 31/5/88 *)
+  mov  di, 7
+  mov  ax, [bp][Q_]
+  cmp  byte [bp][?sign], negative_sign
+  jne  @scramble
+  neg  ax
+@scramble:
+  and  di, ax      (* iNDP delivers only three quotient*)
+  mov  dl, cs:[conditions][di]  (*   bits, scrambled into*)
+  or  [emws_status][by1], dl  (*     a condition code*)
+
+  pop  di
+  pop  si
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+
+@check_zero:
+  xchg  dx, cx
+  xchg  cx, bx
+  xchg  bx, ax
+  sub  di, 16
+  or  dx, dx
+  jnz  @normalise
+
+  xchg  dx, cx
+  xchg  cx, bx
+  sub  di, 16
+
+  xchg  dx, cx
+  sub  di, 16
+  or  dx, dx
+  jnz  @normalise
+
+@isZero:
+  inc  word [bp][Q_] (* ggfb added 15/2/90 *)
+  mov  di, zero_exponent
+  sub  dx, dx
+  sub  cx, cx
+  sub  bx, bx
+  sub  ax, ax
+  jmp    @end
+
+
+
+
+
+(*INCLUDE E287SQFX.ASM*)
+
+
+(* Squaring can be almost twice as fast as multiplying two different*)
+(* numbers together, since most terms are duplicated.*)
+
+(* Fixing the point is done at the start, since the number of bit-shifts*)
+(* necessary will be doubled after the multiplication.  It might seem that*)
+(* this causes a loss of accuracy.  However, consider that the least bit*)
+(* is to be multiplied by the overall fraction.  If the fraction is more*)
+(* than .5 , in other words if there are no shifts anyway, the least bit*)
+(* will account for up to one bit of the result.  If the fraction is less*)
+(* than .5, then the least bit will count for less than 1/2 bit of error.*)
+(* If this is combined with rounding after the shift, then the error due*)
+(* to shifting first is at most 1/4 bit, which isworth sacrificing for the*)
+(* speed.*)
+
+
+(*public*) emup_Square_Fix    :  (*NEAR*)
+
+sf_x    =  0+nearParam
+
+sf_result  =  0+nearParam    (* result overwrites parameter*)
+
+  push bp; mov bp,sp; push si; push di
+
+  mov  ax, [bp][sf_x][emu_fraction][w0]
+  mov  bx, [bp][sf_x][emu_fraction][w1]
+  mov  cx, [bp][sf_x][emu_fraction][w2]
+  mov  dx, [bp][sf_x][emu_fraction][w3]
+  sub  di, di        (* hold the rounding bits*)
+
+  mov  si, [bp][sf_x][emu_exponent]
+  cmp  si, -16
+  jg  sf@bitShift
+  mov  di, ax
+  mov  ax, bx
+  mov  bx, cx
+  mov  cx, dx
+  sub  dx, dx
+  add  si, 16
+
+sf@bitShift:
+  inc  si
+  jg  sf@aligned
+  shr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  rcr  di, 1
+  jmp  sf@bitShift
+
+sf@aligned:
+  shl  di, 1
+  mov  di, 0      (* di is ZERO throughout.*)
+
+  adc  ax, di
+  adc  bx, di
+  adc  cx, di
+  adc  dx, di
+
+
+(* let the factors be  (a:b:c:d) ^2*)
+
+(* We apply the usual  cut to rounding (see emu_Multiply), which*)
+(* works even better for squares:*)
+
+(* Let  i = Ord (c > 8000H)*)
+
+(* then  a:b:c:d = (ab + i)N : (cd - iN)*)
+
+(* square = (ab+i)N ^2  +  2 * (ab+i)N * (cd-iN)  +  (cd-iN)^2*)
+
+(* If the final term is ignored, on the grounds that it has a maximum*)
+(* error of 1/4 least bit (biased positive unfortunately, but the average*)
+(* value is 1/12 which can be tolerated)*)
+
+(* approx = (ab)^2 NN   +  2 abiNN             +   iiNN*)
+(*    2(ab)(cd)N   -  2 abiNN  +  2 cdiN  - 2 iiNN*)
+(*   -----------------------------------------------------------*)
+(*   = (ab)^2NN  +  2(ab)(cd)N +  2 cdiN  - iiNN*)
+
+
+(* the multiplication terms are aligned as follows:*)
+
+(*           | 2c d -- * iN*)
+(* -        1|      -- * iN*)
+(* +        2|b d*)
+(* +      2b |c*)
+(* +      2a |d  *)
+(* +     b b |*)
+(* +    2a c |*)
+(* +  2a b   |*)
+(* + a a     |*)
+(*   - - - - |- - - -*)
+
+
+(* put the shifted value back into the parameter area, clearing the*)
+(* registers for work space:*)
+
+  mov  [bp][sf_x][emu_fraction][w0], ax
+  mov  [bp][sf_x][emu_fraction][w1], bx
+  mov  [bp][sf_x][emu_fraction][w2], cx
+  mov  [bp][sf_x][emu_fraction][w3], dx
+
+
+(* si:cx:bx will serve as a 48-bit accumulator which scans from right to left*)
+(* building up the product.  It accumulates the sum of partial products of*)
+(* the same alignment, then shifts the accumulation right and adds in the sum*)
+(* of the next, more significant group.  Since only a small mumber of 32-bit*)
+(* numbers are being added to the accumulator, si will be a small number and*)
+(* carry never overflows si.  This greatly simplifies matters.  Rounding can*)
+(* be done at an early stage, as soon as all remaining products are to be*)
+(* more significant than the rounding position.*)
+
+
+  mov  bx, di
+  mov  cx, di
+  mov  si, di
+
+  test  byte [bp][sf_x][emu_fraction][w1][by1], 80H
+  jz  @sf_i_skip
+  mov  bx, [bp][sf_x][emu_fraction][w0]  (* + c D*)
+  mov  cx, [bp][sf_x][emu_fraction][w1]
+  shl  bx, 1        (* * 2*)
+  rcl  cx, 1        (* ignore the carry, equivalent*)
+            (* to -iN*)
+@sf_i_skip:
+
+  mov  ax, [bp][sf_x][emu_fraction][w0]
+  mul  word [bp][sf_x][emu_fraction][w2]
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (* + b d*)
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (*   * 2*)
+
+
+  mov  bx, cx      (* discard bx since below 80 bit level*)
+  mov  cx, si      (*  and move the rest "right" one word*)
+  sub  si, si      (*   to match next group's alignment*)
+
+
+  mov  ax, [bp][sf_x][emu_fraction][w1]
+  mul  word [bp][sf_x][emu_fraction][w2]
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (* + b c*)
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (*   * 2*)
+
+  mov  ax, [bp][sf_x][emu_fraction][w0]
+  mul word  [bp][sf_x][emu_fraction][w3]
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (* + a d*)
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (*   * 2*)
+
+  shl  bx, 1      (* round off at bit 64*)
+  adc  cx, di
+  adc  si, di
+
+  mov  bx, cx
+  mov  cx, si      (*  and move the rest "right" one word*)
+  sub  si, si      (*   to match next group's alignment*)
+
+
+  mov  ax, [bp][sf_x][emu_fraction][w2]
+  mul word  ax
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (* + b b*)
+
+  mov  ax, [bp][sf_x][emu_fraction][w3]
+  mul word  [bp][sf_x][emu_fraction][w1]
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (* + a c*)
+  add  bx, ax
+  adc  cx, dx
+  adc  si, di    (*   * 2*)
+
+
+          (* henceforth di:si:cx:bx = sum*)
+
+  mov  ax, [bp][sf_x][emu_fraction][w3]
+  mul word  [bp][sf_x][emu_fraction][w2]
+  add  cx, ax
+  adc  si, dx
+  adc  di, di    (* + a b*)
+
+      (* zero = di, so "zero" is no longer available.*)
+
+  add  cx, ax
+  adc  si, dx
+  adc  di, 0      (*   * 2*)
+
+
+(* final product added in as a special case*)
+
+  mov  ax, [bp][sf_x][emu_fraction][w3]
+  mul  ax      (* + a a*)
+  add  si, ax
+  adc  di, dx      (* never a carry-out at the end.*)
+          (*  max result is .FFFF:FFFF:..h*)
+
+          (* result now in di:si:cx:bx*)
+
+  mov  [bp][sf_result][emu_fraction][w0], bx
+  mov  [bp][sf_result][emu_fraction][w1], cx
+  mov  [bp][sf_result][emu_fraction][w2], si
+  mov  [bp][sf_result][emu_fraction][w3], di
+  mov  byte [bp][sf_result][emu_sign], positive_sign
+  mov  word [bp][sf_result][emu_exponent], 0
+
+@sf_end:
+  pop di; pop si; pop bp
+  ret 0
+
+
+
+
+
+(*INCLUDE E287SQRT.ASM*)
+
+
+(* Algorithm notes.*)
+
+(* 25 May 84  -- Preliminary comments.*)
+
+(*   I was rather partial to the earlier algorithm, but it really didn't*)
+(*   suit the iAPX-86.  It required rather too much shifting and ideally*)
+(*   needed two extended shift registers to hold the intermediate values.*)
+(*   Given a machine such as the Z-8000 or AMD-2903 (or, presumably, the*)
+(*   i8087) it was an algorithm of about the same speed as division.*)
+(*   However, for the iAPX-86 there is a quicker way.*)
+
+(* It was shown in the algorithm notes for  square root that the*)
+(* formula*)
+
+(*   x [n] := (y / x [n-[1] + x [n-[1]) / 2*)
+
+(* converges rapidly to Sqrt (y), indeed more than doubling the number*)
+(* of significant bits if x [n-[1] is already a fair estimate.  Using*)
+(* this method has yielded a very fast  precision square root,*)
+(* typically faster than single precision divide.*)
+
+(* We will use a  precision Square root to provide the estimate*)
+(* for the long precision version.  Applying the above formula once*)
+(* should double the accuracy.  This is about 10% faster than the bit-*)
+(* shift algorithm was, but requires only 1/3 as much code.*)
+
+
+(*public*) emu_Square_Root  :  (*NEAR*)
+
+
+  push bp; mov bp,sp; push si; push di
+
+  mov     ax, [si][emu_exponent]
+
+(* Square roots of zero or infinity are zero or infinity, respectively.*)
+
+  cmp     ax, zero_exponent
+  jng     @noChange
+
+  cmp     ax, infinite_exponent
+  jnl  @noChange
+
+(* Square root only valid on positive numbers*)
+
+  cmp  byte [si][emu_sign], positive_sign
+  je  @isPositive
+
+  mov  ch, fe_Imaginary
+  call e287_Exception
+  mov  di, si
+  call emu_0
+  mov  word [di][emu_exponent], infinite_exponent  (* mark bad result*)
+  jmp  @sq_end
+
+
+@isPositive:
+  lea  si, [si][by0]
+  call emup_Push
+
+  call Inner_Square_Root  (* x [n-[1] now on tos*)
+  mov  di, sp      (* [di] := x [n-[1]*)
+
+  push si
+  push di
+  push si
+  call emu_Divide    (* (y / x [n-[1]*)
+  push di
+  push si
+  push si
+  call emu_Add      (*              + x [n-[1])*)
+  dec  word [si][emu_exponent]  (*                          / 2*)
+
+  add  sp, emu_temp_size  (* discard x [n-[1]*)
+
+@noChange:
+@sq_end:
+  pop di; pop si; pop bp
+  ret 0
+
+
+
+
+
+(* Algorithm Notes*)
+
+(*   The method is simple first-order successive approximation,*)
+(* based on the refinement:*)
+
+(*  x' = (x + z/x)/2*)
+
+(* where the aim is to generate x = Sqrt (z).*)
+
+(* let y = Sqrt (z) exactly, and x = (1 + a) y { approximately }*)
+
+(* then  x' = y (1 + a + 1 - a + a**2 - a**3) / 2*)
+(*     = y (1 + a*a/2 - a**3/2...)*)
+
+(* which, if abs (a) < 1, gives*)
+
+(*  a' < a*a/2*)
+
+(* Actually, the convergence is excellent even when 1 = a:*)
+
+(* let z = 1/4, y = 1/2, x = 1, a = 1*)
+
+(* x' = (1 + 1/4)/2= 5/8,  a' = 1/4*)
+(* x'' = (5/8 + 8/20)/2 = 41/80, a'' = 1/40*)
+
+(* and we can predict  a''' < 1/3200, a'''' < 1/(2**24)*)
+
+(* Incidentally, that was the worst-case, since the range we*)
+(* will cover is  1/4 <= z < 1.  It converged to better than*)
+(* 17 bits in 4 iterations.  This is important, because we*)
+(* break the 32-bit process into two stages.  The first stage*)
+(* finds the most significant 16 bits, then one final iteration*)
+(* extends that to 32 bits.*)
+
+(*   In order to stop the iteration after the optimal number of*)
+(* stages, we simply check the difference between x and z/x.*)
+(* When the difference is one or less, it is time to finish the*)
+(* calculation to 32 bits.*)
+
+
+Inner_Square_Root  :  (*NEAR*)
+
+s?x  =  0+nearParam
+
+s?res  = 0+nearParam  (* result overlays [bp][s?x]*)
+
+  push bp; mov bp,sp; push di
+
+  mov  bx, [bp][s?x][emu_exponent]
+  mov  dx, [bp][s?x][emu_fraction][w3]
+  mov  ax, [bp][s?x][emu_fraction][w2]
+  mov  cx, [bp][s?x][emu_fraction][w1]    (* cx will act as guard bits.*)
+
+  sar  bx, 1
+  jnc  s@aligned
+  inc  bx
+  shr  dx, 1
+  rcr  ax, 1
+  rcr  cx, 1
+
+s@aligned:
+  cmp  dx, 0FFFEH
+  jae  s@nearly_one
+
+  push bx    (* save exponent*)
+  push cx    (* save guard bits*)
+
+  mov  cx, dx
+  mov  bx, ax    (* save fraction in cs:bx*)
+
+  mov  di, dx
+  stc
+  rcr  di, 1    (* di = (1 + z) / 2, first approximation.*)
+
+
+s@loop:
+  div  di
+  dec  di
+  cmp  di, ax
+  jna  s@stage_2
+  inc  di
+  add  di, ax
+  rcr  di, 1
+  mov  dx, cx
+  mov  ax, bx
+  jmp  s@loop
+
+
+(*  When the input aligned fraction is greater than .FFFE0001 it must be*)
+(* a special case, since the square root is greater than .FFFF and thus*)
+(* stage 1 (16 bit precision) would overflow.  Fortunately, no 16 bit*)
+(* iterations are necessary since the estimate (1 + z) / 2 is accurate*)
+(* to 32 bits within this range.*)
+
+s@nearly_one:
+  stc
+  rcr  dx, 1
+  rcr  ax, 1
+  jmp  s@end
+
+
+
+s@stage_2:
+  inc  di
+  cmp  di, ax
+  jae  s@balanced
+
+  xchg  ax, di    (* minimise the difference.  The remainder*)
+        (* is not alterred by the swap.*)
+s@balanced:
+
+  pop  cx    (* retrieve guard bits*)
+  pop  bx    (* retrieve exponent*)
+
+  xchg  ax, cx
+  div  di
+
+  sub  dx, dx    (* dx insignificant, use as convenient zero*)
+  
+  add  di, cx
+  rcr  di, 1
+  rcr  ax, 1
+  adc  ax, dx    (* .. dx is conveniently zero.*)
+  adc  dx, di
+
+
+s@end:
+  mov  word [bp][s?res][emu_fraction][w0], 0
+  mov  word [bp][s?res][emu_fraction][w1], 0
+  mov  [bp][s?res][emu_fraction][w2], ax
+  mov  [bp][s?res][emu_fraction][w3], dx
+  mov  [bp][s?res][emu_exponent], bx
+  mov  byte [bp][s?res][emu_sign], positive_sign
+
+  pop di; pop bp
+  ret 0
+
+
+
+
+
+
+(*INCLUDE E287STAK.ASM*)
+
+(*public*) emu_Push : (*NEAR*)  (* push ES:[si].emu_temp*)
+
+  pop  ax
+  push es : [si][emu_sign][w0]
+  push es : [si][emu_exponent]
+  push es : [si][emu_fraction][w3]
+  push es : [si][emu_fraction][w2]
+  push es : [si][emu_fraction][w1]
+  push es : [si][emu_fraction][w0]
+  jmp  near  ax
+
+
+
+(*public*) emup_Push  :  (*NEAR*)    (* push ds:[si][emu_temp*)
+
+  pop  ax
+  push [si][emu_sign][w0]
+  push [si][emu_exponent]
+  push [si][emu_fraction][w3]
+  push [si][emu_fraction][w2]
+  push [si][emu_fraction][w1]
+  push [si][emu_fraction][w0]
+  jmp  near  ax
+
+
+
+
+(*public*) emu_Pop  :  (*NEAR*)      (* pop emu_temp to es:[di]*)
+
+  pop  dx      (* save the return address*)
+  cld
+  pop  ax
+  stosw    (* fraction[w0]*)
+  pop  ax
+  stosw    (* fraction[w1]*)
+  pop  ax
+  stosw    (* fraction[w2]*)
+  pop  ax
+  stosw    (* fraction[w3]*)
+  pop  ax
+  stosw    (* exponent*)
+  pop  ax
+  stosb    (* sign*)
+  sub  di, 11
+  jmp  near  dx      (* return*)
+
+
+
+
+(*public*) emu_Duplicate_tos  :  (*NEAR*)
+
+  pop  ax      (* save the return address*)
+  mov  dx, bp      (* save old BP*)
+
+  mov  bp, sp
+  push [bp][emu_sign][w0]
+  push [bp][emu_exponent]
+  push [bp][emu_fraction][w3]
+  push [bp][emu_fraction][w2]
+  push [bp][emu_fraction][w1]
+  push [bp][emu_fraction][w0]
+
+  mov  bp, dx
+  jmp  near  ax
+
+
+
+
+(* Swap the two emu_temps currently in tos and tos[1]*)
+
+(*public*) emu_Swap_tos  :  (*NEAR*)
+
+  pop  cx      (* save the return address*)
+  mov  dx, bp      (* save old BP*)
+  mov  bp, sp
+
+  mov  al, [bp][emu_sign]
+  xchg al, [bp][emu_temp_size][emu_sign]
+  mov  [bp][emu_sign], al
+
+  mov  ax, [bp][emu_exponent]
+  xchg  ax, [bp][emu_temp_size][emu_exponent]
+  mov  [bp][emu_exponent], ax
+
+  mov  ax, [bp][emu_fraction][w3]
+  xchg  ax, [bp][emu_temp_size][emu_fraction][w3]
+  mov  [bp][emu_fraction][w3], ax
+
+  mov  ax, [bp][emu_fraction][w2]
+  xchg  ax, [bp][emu_temp_size][emu_fraction][w2]
+  mov  [bp][emu_fraction][w2], ax
+
+  mov  ax, [bp][emu_fraction][w1]
+  xchg  ax, [bp][emu_temp_size][emu_fraction][w1]
+  mov  [bp][emu_fraction][w1], ax
+
+  mov  ax, [bp][emu_fraction][w0]
+  xchg  ax, [bp][emu_temp_size][emu_fraction][w0]
+  mov  [bp][emu_fraction][w0], ax
+
+  mov  bp, dx
+  jmp  near  cx
+
+
+
+
+
+(*INCLUDE E287TEMP.ASM*)
+
+
+
+
+(* input    Intel 8087 temp at es:[si]*)
+
+(* output  emu_temp at ds:[di]*)
+
+(* no exceptions.*)
+
+
+(*public*) emu_Push_Temp87  :  (*NEAR*)
+
+  push si
+  push di
+  push ds
+  push es
+
+  mov  ax, ds
+  mov  bx, es
+  mov  es, ax
+  mov  ds, bx
+
+  std        (* reverse directions*)
+  lea  si, [si][8][w0]
+  lea  di, [di][emu_sign]
+
+  lodsw
+  xchg  bx, ax      (* bx = sign bit : exponent*)
+  sub  ax, ax
+  shl  bx, 1
+  jz  put_zeroExponent
+  rcl  ax, 1
+  stosw        (* write the sign*)
+  shr  bx, 1
+  sub  bx, temp_exponent_bias
+  xchg  ax, bx
+  stosw        (* write the exponent*)
+  movsw        (* copy 4 fraction words*)
+  movsw
+  movsw
+  movsw
+
+put_end:
+  cld        (* default is forward strings*)
+  pop  es
+  pop  ds
+  pop  di
+  pop  si
+  ret  0
+
+put_zeroExponent:      (* interpret denormals as zeroes.*)
+  stosw        (* sign = 0, zero always positive*)
+
+  mov  ax, zero_exponent
+  stosw
+
+  sub  ax, ax
+  stosw
+  stosw
+  stosw
+  stosw          (* fraction = 0*)
+  jmp  put_end
+
+
+
+
+(*public*) emu_Pop_Temp87   :  (*NEAR*)
+
+(* input  :  Emu temp at ds:[si]*)
+
+(* output:  Intel 8087 Temp format at es:[di]*)
+
+  push si
+  push di
+  cld
+  movsw  (* fractions are the same*)
+  movsw
+  movsw
+  movsw
+
+  lodsw
+  mov  cx, [si]
+  cmp  ax, infinite_exponent
+  jge  pot_infinite
+  add  ax, temp_exponent_bias
+  jl  pot_zero
+  shl  ax, 1
+  shr  cx, 1
+  rcr  ax, 1
+
+pot_exit:
+  stosw    (* exponent and sign together*)
+  pop  di
+  pop  si
+  ret  0
+
+
+pot_infinite:
+  mov  bx, 7FFFH  (* biased infinite exponent*)
+  jmp  pot_extreme
+
+pot_zero:
+  sub  bx, bx    (* biased zero exponent*)
+
+pot_extreme:
+  sub  ax, ax    (* make sure a zero fraction is written*)
+  sub  di, 8
+  stosw
+  stosw
+  stosw
+  stosw
+  xchg  ax, bx
+  jmp  pot_exit
+
+
+
+
+
+(*INCLUDE E287XCVT.ASM*)
+
+
+(* procedure to float an integer to yield a long temporary real*)
+
+(* input is a 32-bit integer at es:[si]*)
+
+(* result is an emu_temp real at ds:[di]*)
+
+(* No exceptions.*)
+
+
+(*public*) emu_Float32  :  (*NEAR*)
+
+  mov  bx, es : [si][w0]
+  mov  dx, es : [si][w1]
+  sub  ax, ax
+
+  mov  cx, positive_sign
+  or  dx, dx
+  jns  @fl32_signed
+
+@fl32_negative:
+  not  dx
+  neg  bx
+  sbb  dx, -1      (* negate dx:bx*)
+  mov  cl, negative_sign
+
+@fl32_signed:
+  mov  [di][emu_sign][w0], cx
+
+  mov  cx, 16
+
+  or  dx, dx
+  jnz  @fl32_shift
+  xchg  bx, dx
+  mov  cl, 0
+
+@fl32_shift:
+  or  dx, dx
+  jz  @fl32_aligned
+  inc  cx
+  shr  dx, 1
+  rcr  bx, 1
+  rcr  ax, 1
+  jmp  @fl32_shift
+
+@fl32_zero:
+  mov  cx, zero_exponent
+(*  jmp  @fl32_end*)
+
+@fl32_aligned:
+  jcxz  @fl32_zero
+
+@fl32_end:
+  mov  [di][emu_exponent], cx
+  mov  [di][emu_fraction][w3], bx
+  mov  [di][emu_fraction][w2], ax
+  mov  [di][emu_fraction][w1], dx  (* dx is zero*)
+  mov  [di][emu_fraction][w0], dx
+
+  ret  0
+
+
+
+
+(*public*) emu_Round32  :  (*NEAR*)
+
+(* Convert a long temporary floating point number to a 32 bit integer*)
+(*      with fraction rounded according to current rounding mode.*)
+
+(* Input operand an emu_temp at ds:[si]*)
+
+(* Result at es:[di]*)
+
+(* Side effects may exit via exception*)
+
+  mov  cx, [si][emu_exponent]
+  cmp  cx, 31
+  jg  @ro32_overflow
+  or  cx, cx
+  jge  @ro32_non_zero
+
+(* -.5..+.5 may round to -1, 0, or 1, according to rounding control*)
+
+  cmp  cx, zero_exponent
+  jle  @ro32_zero
+
+  mov  bl, e287_roundingControl
+  and  bl, [emws_control][by1]  (* get rounding control*)
+  add  bl, [si][emu_sign][by0]
+  cmp  bl, e287_floor + negative_sign
+  je  @ro32_one
+  cmp  bl, e287_ceiling + positive_sign
+  je  @ro32_one
+
+@ro32_zero:
+  sub  dx, dx
+  mov  ax, dx
+  jmp  @ro32_endJmp
+
+@ro32_one:
+  sub  dx, dx
+  mov  ax, 1
+  cmp  bl, e287_floor + negative_sign
+  jne  @ro32_endJmp
+  neg  ax
+  not  dx
+  jmp  @ro32_endJmp
+
+@ro32_overflow:
+  mov  ch, fe_Operand_Too_Big
+  call e287_Exception
+  mov  dx, 8000H
+  sub  ax, ax
+
+@ro32_endJmp:
+  jmp  near  @ro32_end
+
+
+@ro32_non_zero:
+  mov  bx, [si][emu_fraction][w1]  (* bx will be sticky,*)
+  or  bl, [si][emu_fraction][w0][by0]  (*   used for rounding up*)
+  or  bl, [si][emu_fraction][w0][by1]
+  mov  ax, [si][emu_fraction][w2]
+  mov  dx, [si][emu_fraction][w3]
+
+  sub  cl, 16
+  ja  @ro32_wordAligned
+@ro32_below_1:
+  or  al, bl
+  or  al, bh
+  xchg  bx, ax      (* sticky bx*)
+  xchg  ax, dx
+  sub  dx, dx
+  add  cl, 16
+  jng  @ro32_below_1    (* if 0.5 <= x < 1 go round twice*)
+  and  cl, 0FH
+
+@ro32_wordAligned:
+  jcxz  @ro32_noBitShift
+
+  push si
+
+  mov  si, 0FFFFH
+  rol  dx, cl
+  rol  ax, cl    (* align the fraction*)
+  shl  si, cl
+  mov  cx, si    (*   and two copies of a mask*)
+
+  and  cx, ax
+  xor  ax, cx    (* mask out the low-end shift-out*)
+
+  and  si, dx
+  xor  dx, si
+  or  ax, si    (* transfer bits from msw to lsw*)
+
+  or  bl, bh
+  or  bl, cl    (* bl is a "sticky" byte for rounding up.*)
+  mov  bh, ch    (* bh is sticky + 1/2 ls bit.*)
+
+  pop  si
+
+@ro32_noBitShift:
+  mov  cl, e287_roundingControl
+  and  cl, [emws_control][by1]  (* get rounding control*)
+  cmp  cl, e287_chop
+  je  @ro32_chop
+  cmp  cl, e287_round
+  je  @ro32_roundNear
+  add  cl, [si][emu_sign][by0]
+  cmp  cl, e287_floor + positive_sign
+  je  @ro32_chop
+  cmp  cl, e287_ceiling + negative_sign
+  je  @ro32_chop
+
+@ro32_roundUp:      (* this is what sticky bits are for !*)
+  neg  bx    (* sets carry if any bit not zero*)
+  jc  @ro32_addCarry
+  jmp  @ro32_setSign
+
+@ro32_roundNear:
+  mov  cl, 1
+  and  cl, al
+  or  bl, cl    (* apply banker's rounding if sticky was 8000H*)
+  add  bx, 7FFFH
+
+@ro32_addCarry:
+  adc  ax, 0
+  adc  dx, 0
+  jns  @ro32_setSign
+  jmp  near  @ro32_overflow
+
+@ro32_chop:
+@ro32_setSign:
+  cmp  byte [si][emu_sign], negative_sign
+  jne  @ro32_end
+  not  dx
+  neg  ax
+  sbb  dx, -1      (* negate dx:ax*)
+
+@ro32_end:
+  mov  es:[di][w0], ax
+  mov  es:[di][w1], dx
+  ret  0
+
+
+
+
+(* procedure to float an integer to yield a long temporary real*)
+
+(* input is a 64-bit signed integer at es:[si]*)
+
+(* result is an emu_temp at ds:[di]*)
+
+(* No exceptions.*)
+
+
+(*public*) emu_Float64  :  (*NEAR*)
+
+  push bp
+  push si
+
+  mov  ax, es : [si][w0]
+  mov  bx, es : [si][w1]
+  mov  cx, es : [si][w2]
+  mov  dx, es : [si][w3]
+
+  mov  bp, positive_sign
+  or  dx, dx
+  jl  @fl64_negative
+  jg  @fl64_signed
+  or  cx, cx
+  jnz  @fl64_signed
+  or  bx, bx
+  jnz  @fl64_signed
+  or  ax, ax
+  jnz  @fl64_signed
+
+@fl64_zero:
+  mov  si, zero_exponent
+  jmp  @fl64_end
+
+@fl64_negative:
+  not  dx
+  not  cx
+  not  bx
+  not  ax
+  add  ax, 1
+  adc  bx, 0
+  adc  cx, 0
+  adc  dx, 0      (* negate dx:cx:bx:ax*)
+  mov  bp, negative_sign
+
+@fl64_signed:
+  mov  si, 64
+
+@fl64_maybeTiny:
+  or  dx, dx
+  jnz  @fl64_notTiny
+  xchg  dx, cx
+  xchg  cx, bx
+  xchg  bx, ax
+  sub  si, 16
+  jmp  @fl64_maybeTiny
+
+@fl64_notTiny:
+  js  @fl64_aligned
+
+@fl64_shift:
+  dec  si
+  add  ax, ax
+  adc  bx, bx
+  adc  cx, cx
+  adc  dx, dx
+  jns  @fl64_shift
+
+@fl64_aligned:
+@fl64_end:
+  mov  [di][emu_sign][w0], bp
+  mov  [di][emu_exponent], si
+  mov  [di][emu_fraction][w3], dx
+  mov  [di][emu_fraction][w2], cx
+  mov  [di][emu_fraction][w1], bx
+  mov  [di][emu_fraction][w0], ax
+
+  pop  si
+  pop  bp
+  ret  0
+
+
+
+
+(*public*) emu_Round64  :  (*NEAR*)
+
+(* Convert a long temporary floating point number to a 64 bit integer*)
+(*      with fraction rounded as specified in [emws_control].*)
+
+(* Input operand an emu_temp at ds:[si]*)
+
+(* Result at es:[di]*)
+
+(* May generate an exception.*)
+
+
+
+  push bp
+  push di
+
+  mov  cx, [si][emu_exponent]
+  cmp  cx, 63
+  jg  @ro64_overflow
+  or  cx, cx
+  jge  @ro64_non_zero
+
+(* small fractions may round to 1 or -1, according to rounding control*)
+
+  cmp  cx, zero_exponent
+  jle  @ro64_zero    (* true zero rounds to zero*)
+
+  mov  bl, e287_roundingControl
+  and  bl, [emws_control][by1]  (* get rounding control*)
+  add  bl, [si][emu_sign][by0]
+  cmp  bl, e287_floor + negative_sign
+  je  @ro64_one
+  cmp  bl, e287_ceiling + positive_sign
+  je  @ro64_one
+
+@ro64_zero:
+  sub  bp, bp
+  jmp  @ro64_extreme
+
+@ro64_one:
+  sub  bp, bp
+  mov  dx, bp
+  mov  ax, 1
+  cmp  bl, e287_floor + negative_sign
+  mov  bx, bp
+  jne  @ro64_endJmp
+  neg  ax
+  not  bx
+  not  dx
+  not  bp
+  jmp  @ro64_endJmp
+
+@ro64_overflow:
+  mov  ch, fe_Operand_Too_Big
+  call e287_Exception
+  mov  bp, 8000H
+
+@ro64_extreme:
+  sub  dx, dx
+  mov  bx, dx
+  mov  ax, bx
+@ro64_endJmp:
+  jmp  near  @ro64_end
+
+@ro64_non_zero:
+  mov  bp, [si][emu_fraction][w3]
+  mov  dx, [si][emu_fraction][w2]
+  mov  bx, [si][emu_fraction][w1]
+  mov  di, [si][emu_fraction][w0]
+
+  sub  ax, ax      (* ax will act as sticky collector*)
+
+  sub  cl, 48
+  ja  @ro64_wordAligned
+@ro64_wordShift:
+  or  al, ah      (* AL is completely sticky*)
+  mov  ah, 0
+  or  ax, di      (* AH is 1/2 ls bit + sticky*)
+  mov  di, bx
+  mov  bx, dx
+  mov  dx, bp
+  sub  bp, bp
+  add  cl, 16
+  jng  @ro64_wordShift
+  and  cl, 0FH
+
+@ro64_wordAligned:
+  neg  cl
+  jz  @ro64_bitAligned
+  add  cl, 16
+@ro64_bitShift:
+  or  al, ah
+  shr  bp, 1
+  rcr  dx, 1
+  rcr  bx, 1
+  rcr  di, 1
+  rcr  ah, 1
+  loop  @ro64_bitShift
+
+@ro64_bitAligned:
+  mov  cl, e287_roundingControl
+  and  cl, [emws_control][by1]
+  cmp  cl, e287_chop
+  je   @ro64_chop
+  cmp  cl, e287_round
+  je   @ro64_roundNear
+  add  cl, [si][emu_sign][by0]
+  cmp  cl, e287_floor + positive_sign
+  je   @ro64_chop
+  cmp  cl, e287_ceiling + negative_sign
+  je   @ro64_chop
+
+@ro64_roundUp:
+  neg  ax    (* set carry if any sticky or rounding bit = 1*)
+  jc   @ro64_addCarry
+  jmp  @ro64_setsign
+
+@ro64_overflowJmp:
+  jmp  @ro64_overflow
+
+@ro64_roundNear:
+  mov  cl, 1
+  and  cx, di    (* bankers' rounding, add the odd integer bit*)
+  or   al, cl    (*   to sticky, force 8000H to 8001H*)
+  add  ax, 7FFFH
+
+@ro64_addCarry:
+  mov  cx, 0    (* convenient zero*)
+  adc  di, cx
+  adc  bx, cx
+  adc  dx, cx
+  adc  bp, cx
+  js   @ro64_overflowJmp
+
+@ro64_chop:
+@ro64_setsign:
+  xchg ax, di    (* ax is now more convenient than di*)
+  cmp  byte [si][emu_sign], negative_sign
+  jne  @ro64_end
+  not  bp
+  not  dx
+  not  bx
+  neg  ax
+  cmc                   (* Fixed 12/11/91 *)
+  adc  bx, 0
+  adc  dx, 0
+  adc  bp, 0
+
+
+@ro64_end:
+  pop  di
+  mov  es:[di][w0], ax
+  mov  es:[di][w1], bx
+  mov  es:[di][w2], dx
+  mov  es:[di][w3], bp
+
+  pop  bp
+  ret  0
+
+
+
+
+
+(*public*) emu_RndInt  :  (*NEAR*)
+
+(* Round the tos contents to the nearest integer, although the number remains*)
+(*  in emu_temp format on tos.*)
+
+(* Input operand at [si], but we change to more convenient [bp]*)
+
+(* Output overwrites input.*)
+
+(* may report exceptions.*)
+
+
+  push bp
+  push si
+  push di
+  xchg  bp, si
+
+  mov  cx, [bp][emu_exponent]
+  cmp  cx, 64      (* note this is wider range than int64*)
+  jg  rndi_overflow
+  or  cx, cx
+  jge  rndi_normalRange
+
+  cmp  cx, zero_exponent
+  jle  rndi_zero
+  mov  cl, e287_roundingControl
+  and  cl, [emws_control][by1]
+  add  cl, [bp][emu_sign][by0]
+  cmp  cl, e287_floor + negative_sign
+  je  rndi_one
+  cmp  cl, e287_ceiling + positive_sign
+  je  rndi_one
+
+rndi_zero:
+  sub  bx, bx
+  mov  si, zero_exponent
+  jmp  rndi_special
+
+rndi_one:
+  mov  si, 1
+  mov  bx, 8000H
+  jmp  rndi_special
+
+rndi_overflow:
+  mov  ch, fe_Precision
+  call e287_Exception
+  jmp  near  rndi_end
+
+rndi_special:
+  sub  ax, ax
+  mov  [bp][emu_fraction][w0], ax
+  mov  [bp][emu_fraction][w1], ax
+  mov  [bp][emu_fraction][w2], ax
+  mov  [bp][emu_fraction][w3], bx
+  mov  [bp][emu_exponent], si
+  jmp  near  rndi_end
+
+
+rndi_normalRange:
+(*  locate the byte where the most significant fraction bits lie.*)
+
+  mov  si, 7
+rndi_nextByte:
+  sub  cl, 8
+  jl  rndi_split
+  dec  si
+  jge  rndi_nextByte
+
+(*  if you fall through here, then there are no fraction bits.  The*)
+(*  value in X is effectively an integer.*)
+
+  jmp  near  rndi_end
+
+rndi_split:
+(*  byte [si] of the fraction has at least one MS bit of the fraction.*)
+(*  load registers  AH = least sig all integer byte*)
+(*      AL = split integer/fraction byte*)
+(*      BL = sticky fraction bits*)
+
+  cmp  si, 7
+  jne  rndi_notMSbyte
+  mov  ah, 0
+  mov  al, [bp][si][by0]
+  jmp  rndi_AXloaded
+
+rndi_notMSbyte:
+  mov  ax, [bp][si][w0]
+
+rndi_AXloaded:
+  sub  bx, bx
+  mov  di, si
+rndi_nextSticky:
+  dec  di
+  jl  rndi_stickyLoaded
+  or  bl, [bp][di][by0]
+  mov  [bp][di][by0], bh    (* clear x.fraction*)
+  jmp  rndi_nextSticky
+
+rndi_stickyLoaded:
+  mov  dx, 0FFH
+  and  cl, 07H
+  shr  dx, cl    (* zeroes = integers, ones = fractions*)
+  mov  di, dx
+  inc  di    (* di = fraction carry / least integer bit*)
+  and  dx, ax    (* dx = fraction MS bits*)
+  xor  ax, dx    (* ax = integer LS bits*)
+
+  or bl, dl
+  jz rndi_maskAligned
+  push cx
+  mov ch, fe_Precision
+  call e287_Exception
+  pop cx
+
+rndi_maskAligned:
+  mov  cl, e287_roundingControl
+  and  cl, [emws_control][by1]
+  cmp  cl, e287_chop
+  je  rndi_chop
+  cmp  cl, e287_round
+  je  rndi_roundNear
+  add  cl, [bp][emu_sign][by0]
+  cmp  cl, e287_floor + positive_sign
+  je  rndi_chop
+  cmp  cl, e287_ceiling + negative_sign
+  je  rndi_chop
+
+rndi_roundUp:
+  or  bl, dl    (* were there any fraction bits ?*)
+  jnz  rndi_oneUp
+  jmp  rndi_end  (* if not, number already is an integer*)
+
+
+rndi_chop:
+  mov  [bp][si][by0], al
+  cmp  byte [bp][emu_fraction][w3][by1], 0  (* did we chop to zero ?*)
+  jne  rndi_end
+  jmp  near  rndi_zero
+
+rndi_roundNear:
+  or  bl, bl
+  jnz  rndi_bankersUp
+
+
+(* Banker's rounding aims to balance out the rounding of exact halves by*)
+(*  rounding always towards the nearest even integer.  Thus half the*)
+(*  halves round up, and half down, on average cancelling.*)
+
+rndi_bankersBit:
+  test  ax, di      (* test for even/odd integer*)
+  jnz  rndi_bankersUp
+rndi_bankersDown:
+  add  dx, dx
+  cmp  dx, di
+  jna  rndi_chop
+  jmp  rndi_oneUp
+rndi_bankersUp:
+  add  dx, dx      (* was fraction at least half ?*)
+  cmp  dx, di      (*   if so, carry will be found*)
+  jb  rndi_chop
+
+rndi_oneUp:
+  sub  si, 7
+  jl  rndi_severalBytes
+
+  add  ax, di
+  mov  [bp][si][7], al
+  neg  ah      (* set carry if not zero*)
+  jmp  rndi_oneUpped
+
+rndi_severalBytes:
+  add  ax, di
+  mov  [bp][si][7], ax
+  inc  si
+
+rndi_oneUpLoop:
+  inc  si
+  jg  rndi_oneUpped
+  adc  byte [bp][si][7][by0], 0
+  jc  rndi_oneUpLoop
+
+rndi_oneUpped:
+  jnc  rndi_end  (* is there an overflowed carry ?*)
+  stc      (* if carry, then result has form 8000:0:0:0H*)
+  rcr  word [bp][emu_fraction][w3], 1
+  inc  word [bp][emu_exponent]
+
+
+rndi_end:
+  pop  di
+  pop  si
+  pop  bp
+  ret  0
+
+
+
+
+
+
+
+(*INCLUDE IEELSTAK.ASM*)
+
+(* An IEEE long real is packed into 64 bits.*)
+
+(*    -------- ---- ---- -------- -------- -------- -------- -------- --------*)
+(*   |seeeeeee eeee.ffff ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff|*)
+(*    -------- ----.---- -------- -------- -------- -------- -------- --------*)
+(*   63            .                                                         0*)
+(*                1.*)
+
+(* The three parts of the number are its sign, exponent, and fraction.*)
+(* If the number is denoted by the triple (sign, exponent, fraction) then*)
+(* its value is:*)
+(*               (-1)^sign * 2^(exponent-1023) * 1.fraction*)
+
+(* with the exception of the special cases with all-zeroes exponents.*)
+
+(* The sign is in the most significant bit and is "1" if negative.*)
+
+(* The exponent occupies the next 11 bits.  It represents powers of 2, biased*)
+(* so that an exponent of 3FFH is used for numbers in the range 1.0 to 1.999...*)
+(* If the exponent is all ones, then the number is either "infinity" or*)
+(* "Not A Number" (NAN), described below.  If the exponent is all zeroes, then*)
+(* the number is either zero or a "denormal", as described below.*)
+
+(* The fraction is the remaining 52 bits.  Excepting "denormal" special cases,*)
+(* numbers are normalised into the triple form shown above.  Since the final*)
+(* term is a number in the range 1.0 to 1.999... it is predictable that the*)
+(* first bit of the final term shoul be "1" (the "integer bit"), and this*)
+(* need not be packed into the 64 bits.  However, this bit is necessary for*)
+(* calculation, and so whenever the number is unpacked into temporary format*)
+(* the integer bit is restored.  The 52 bits of packed IEEE fraction are*)
+(* therefore equivalent to 53 bits of temporary fraction.*)
+
+(* If the exponent is all ones and the fraction is all zeroes, then the number*)
+(* represented is infinite.  IEEE makes allowance for both positive and*)
+(* negative infinities, but both are treated as positive by the Combinatorics*)
+(* algorithms.  If the exponent is all ones but the fraction not zeroes, then*)
+(* the value is a "NAN", an illegal combination.  A huge range of NAN values*)
+(* is possible, and one suggested use is as distinct space-fill values for use*)
+(* in detecting uninitialised variables in programs.  When a NAN is found*)
+(* an overflow status is generated and an infinite temporary used.*)
+
+(* If the exponent and fraction are all zeroes then the number represented is*)
+(* zero.  Zero can have either sign, but Combinatorics treats either as if*)
+(* positive.  If the exponent is zeroes but the fraction is not, then the*)
+(* number is a denormal, normally a value with an exponent in the range from*)
+(* -1024 to -1075.  Combinatorics algorithms do not use denormals, instead*)
+(* flagging them with underflow status and substituting zero.  It is an*)
+(* extremely insignificant range.*)
+
+
+
+(* convert a  temporary floating-point number to an IEEE 64-bit real.*)
+
+(* inputs*)
+(* - a long temporary floating point (emu format) at ds : [si]*)
+
+(* outputs*)
+(* - a long IEEE real at es:[di]*)
+
+(* side effects*)
+(* - instruction may quit in case of exception*)
+
+
+(*public*) ieel_Pop  :  (*NEAR*)
+
+  push di
+
+(*  move fraction to  DL:cx:di:ax:DH.   The strange choice of registers*)
+(*    is the result of forward planning to minimise register*)
+(*    shuffling and shifting at the pack-and-align stage.*)
+
+  mov  ax, [si][emu_fraction][by1][w0]
+  mov  di, [si][emu_fraction][by1][w1]
+  mov  cx, [si][emu_fraction][by1][w2]
+  mov  dl, [si][emu_fraction][w3][by1]
+
+  mov  bx, [si][emu_exponent]
+
+  mov  dh, 3
+  and  dh, al
+  or  dh, [si][emu_fraction][w0][by0]    (* sticky rounding..*)
+
+  jnz  @lpop_isSticky
+  test  al, 8    (* bankers' rounding to nearest-even*)
+  jz  @lpop_rounded  (*   means alternate round up/down of exact .5*)
+@lpop_isSticky:
+
+  add  ax, 4    (* round off at the 53rd bit*)
+  adc  di, 0
+  adc  cx, 0
+  adc  dl, 0
+  jnc  @lpop_rounded
+  rcr  dl, 1    (* carry overflow implies 8000:0:0:0 result*)
+  inc  bx
+@lpop_rounded:
+
+  add  bx, ieel_exponent_bias
+  jle  @lpop_small
+  cmp  bx, 7FFH
+  jl  @lpop_normal_range
+
+
+(* All numbers too large for IEEE range will be given as positive infinity.*)
+(* If the number was already infinity, then ok, but if it becomes an*)
+(* infinity through limitations in representation, give overflow status.*)
+
+@lpop_large:
+  cmp  word [si][emu_exponent], infinite_exponent
+  jge  @lpop_infinite
+  mov  ch, fe_Overflow
+  call e287_Exception
+@lpop_infinite:
+  mov  dx, 07FF0H  (* note clear sign bit = positive*)
+  jmp   @lpop_extreme
+
+
+(* All number too small for IEEE normal range will be given as zeroes.*)
+(* If the number was already zero, this is no problem.  However, if the*)
+(* number is zeroed because it falls outside IEEE range, an underflow*)
+(* status is reported.*)
+
+@lpop_small:
+  cmp  word [si][emu_exponent], zero_exponent
+  jle  @lpop_zero
+  mov  ch, fe_Underflow
+  call e287_Exception
+@lpop_zero:
+  sub  dx, dx
+
+@lpop_extreme:
+  sub  cx, cx    (* both zero and infinity have zero fraction*)
+  mov  bx, cx
+  mov  ax, bx
+  jmp   @lpop_end
+  
+
+(* For normal range numbers, we must do some rotations and pack the three*)
+(* parts into their correct positions.*)
+
+@lpop_normal_range:
+  and  al, 0F8H  (* Discard least bits of fraction.*)
+  shl  dl, 1    (* Discard integer bit*)
+  shr  bx, 1
+  rcr  dl, 1
+  or  al, bh    (* Replace with upper bits of exponent.*)
+  mov  dh, bl    (* Move lower byte of exponent into place.*)
+
+  mov  bx, di    (* di will be consumed to prime the carry flag.*)
+        (* Number is now in dx:cx:bx:ax, but lacks*)
+        (* sign and needs rotation.*)
+  shr  di, 1
+  rcr  ax, 1
+  rcr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+
+  shr  di, 1
+  rcr  ax, 1
+  rcr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+
+  or  al, [si][emu_sign]  (* Put the sign bit into place.*)
+
+  shr  di, 1
+  rcr  ax, 1
+  rcr  dx, 1
+  rcr  cx, 1
+  rcr  bx, 1
+
+
+@lpop_end:
+  pop     di
+  cld        (* store dx:cx:bx:ax at es:[di]*)
+  stosw
+  xchg  ax, bx
+  stosw
+  xchg  ax, cx
+  stosw
+  xchg  ax, dx
+  stosw
+  sub  di, 8      (* preserve original di value*)
+
+  ret  0
+
+
+
+
+(* procedure to unpack a long IEEE real yielding a long temporary*)
+
+(* inputs*)
+(* - a long IEEE real in four words at es : [si]*)
+
+(* outputs*)
+(* - a long temporary floating point in Emu287 format at ds:[di]*)
+
+(* side effects*)
+(* - may cause exit via exception for NANs and Denormals*)
+
+
+(*public*) ieel_Push        :    (*NEAR*)
+
+  push di
+
+(* more convenient to have ds and es the other way around, so swap*)
+  mov  ax, ds
+  mov  bx, es
+  mov  ds, bx
+  mov  es, ax
+
+  mov  dx, [si][w3]    (* word 3 contains sign,*)
+  sub  ax, ax      (*  exponent, and*)
+  shl  dx, 1      (*   top 4 bits of fraction*)
+  rcl  ax, 1      (* ax is sign*)
+
+  mov  cl, 5
+  shr  dx, cl      (* dx now holds only the exponent*)
+  jz  @lpush_small
+  cmp  dx, 7FFH
+  je  @lpush_large
+
+
+@lpush_normal_range:
+  std                             (* reverse string direction*)
+  lea  di, [di][emu_sign]  (* result "pushed" in reverse order*)
+
+  stosw        (* push the sign*)
+  sub  dx, ieel_exponent_bias
+  xchg  ax, dx
+  stosw        (* push the exponent*)
+
+  mov  dx, [si][1][w2]
+  mov  cx, [si][1][w1]
+  mov  bx, [si][1][w0]
+  mov  ah, [si][by0]
+  mov  al, 0      (* fraction now in dx:cx:bx:ax*)
+  and  dh, 0FH      (*  but needs alignment*)
+
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  rcl  dx, 1
+
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  rcl  dx, 1
+
+  shl  ax, 1
+  rcl  bx, 1
+  rcl  cx, 1
+  rcl  dx, 1
+
+  or  dh, 80H      (* set the integer bit*)
+
+  xchg  ax, dx
+  stosw
+  xchg  ax, cx
+  stosw
+  xchg  ax, bx
+  stosw
+  xchg  ax, dx
+  stosw    (* the fraction is now pushed*)
+
+@lpush_end:
+  mov  ax, ds      (* swap segments back as they were*)
+  mov  bx, es
+  mov  ds, bx
+  mov  es, ax
+
+  pop  di
+  ret  0
+
+
+(* handle extreme values here.*)
+
+@lpush_small:
+  mov  dx, zero_exponent
+  mov  ch, fe_Operand_Too_Small  (* anticipate a Denormal*)
+  jmp   @lpush_extreme
+
+@lpush_large:
+  mov  dx, infinite_exponent
+  mov  ch, fe_Operand_Too_Big    (* anticipate a NAN*)
+
+@lpush_extreme:
+  mov  al, [si][w3][by0]   (* Check for NAN's or Denormals*)
+  and  ax, 000FH    (*  which will not have*)
+  or  ax, [si][w2]    (*   all-zeroes*)
+  or  ax, [si][w1]    (*    fractions.*)
+  or  ax, [si][w0]
+  jz  @lpush_extremeCorrect
+
+  call e287_Exception
+
+@lpush_extremeCorrect:
+  xchg    ax, dx
+  call emu_Extreme
+  jmp   @lpush_end
+
+
+
+
+
+
+(*INCLUDE IEESSTAK.ASM*)
+
+
+
+
+(* An IEEE  real is packed into 32 bits.*)
+
+(*       byte 3                      byte 0*)
+(*       - ------- - ------- -------- --------*)
+(*      |s eeeeeee|e.fffffff|ffffffff|ffffffff|*)
+(*       - ------- -.------- -------- --------*)
+(*  bit 32          .                        0 bit*)
+(*                 1.*)
+
+(* The most significant bit is the sign bit, one if negative.*)
+
+(* The next 8 bits are the exponent, "biased" so that a value of 7Fh*)
+(* is used for numbers from 1.0 to 1.999..., and the extreme values*)
+(* 00H and FFH represent zero and infinity respectively.  The exponent*)
+(* is in powers of 2.*)
+
+(* The remaining 23 bits are the normalised fraction.  When the fraction*)
+(* is normalised its leftmost bit is always "1", so it can be ignored*)
+(* and only the 23 next, unpredictable, bits are kept.  The 24th bit is*)
+(* restored before any calculations.  For both infinities and zero the*)
+(* fraction part is all zeroes.*)
+
+(* If the number is denoted by the triple (sign, exponent, fraction) then*)
+(* its value is*)
+(*             (-1)^sign * 2^(exponent-127) * 1.fraction*)
+
+(* There are in addition some special values.  NAN's (Not A Number) are*)
+(* variations on infinity, having an exponent of FFH but fraction parts*)
+(* which are not all zeroes.  NAN's have various uses the most likely of*)
+(* which is use as memory-fill values when checking for non-initialisation*)
+(* errors.  When a NAN is encountered, an overflow status is generated.*)
+
+(* The other special values are denormals, which are underflows.  These*)
+(* have zero exponent but non-zero fraction, while true zero has an*)
+(* all-zeroes fraction.  They represent numbers in the marginal range*)
+(* too small to be represented normally but close enough to the edge*)
+(* of normal to allow partial representation.  Here no attempt is made*)
+(* to interpret de-normals, which are of marginal utility, and they*)
+(* give rise to underflow status if they are encountered.*)
+
+
+
+
+(*public*) iees_Pop  :  (*NEAR*)
+
+(* FUNCTION  iees_Pop  (x : emu_temp) : IEEE_short;*)
+
+
+(* convert a temporary floating-point number to an IEEE 32-bit real.*)
+
+(* input:*)
+(* - a temporary floating point number at ds:[si]*)
+
+(* output:*)
+(* - an IEEE  real at es:[di]*)
+
+(* side effects*)
+(* - may exit via exception*)
+
+  mov  ax, [si][emu_fraction][w2]
+  mov  dx, [si][emu_fraction][w3]
+  mov  bx, [si][emu_exponent]
+  mov  cl, [si][emu_sign]
+
+  cmp  word [si][emu_fraction][w0], 0
+  jnz  @spop_isSticky
+  cmp  word [si][emu_fraction][w1], 0
+  jnz  @spop_isSticky
+  test  al, 7FH
+  jnz  @spop_isSticky
+
+  test  ah, 1    (* bankers' rounding causes alternate*)
+  jz  @spop_carried  (*   round up/down of exact .5 fraction.*)
+
+@spop_isSticky:
+  add  al, al    (* round off least 8 bits*)
+  adc  ah, 0
+  adc  dx, 0
+  jnc  @spop_carried  (* rounding can force renormalisation*)
+  rcr  dx, 1
+  rcr  ax, 1
+  inc  bx
+@spop_carried:
+
+  add  bx, iees_exponent_bias  (* IEEE exponent is biased*)
+  jle  @spop_underflow
+  cmp  bx, 255
+  jnl  @spop_overflow
+
+
+(* If the number is not to be zero or infinite, then pack the three*)
+(* parts into 32 bits as per IEEE.*)
+
+@spop_normal:
+  shl  dx, 1    (* throw away the integer bit (always = 1)*)
+
+  shr  cl, 1    (* get the sign bit*)
+  rcr  bl, 1    (* which becomes most sig bit of result*)
+  rcr  dx, 1    (* .. and exponent shuffles up fraction*)
+
+  mov  al, ah
+  mov  ah, dl
+  mov  dl, dh
+  mov  dh, bl
+
+@spop_end:
+  stosw      (* store result at es:di*)
+  xchg  ax, dx
+  stosw
+  sub  di, 4    (* restore original value of di*)
+
+  ret  0
+  
+
+(* Note that status warning need be generated only if the number has*)
+(* just become infinite or zero due to change in representation.  If*)
+(* the input was already zero or infinite, the status remains OK.*)
+
+@spop_overflow:      (* all overflows become positive infinity*)
+  cmp  word [si][emu_exponent], infinite_exponent
+  jge  @spop_prior_infinity
+  mov  ch, fe_Overflow
+  call e287_Exception
+
+@spop_prior_infinity:
+  mov  dx, 7F80H
+  sub  ax, ax
+  jmp  @spop_end
+
+
+@spop_underflow:      (* all underflows become positive zero*)
+  cmp  word [si][emu_exponent], zero_exponent
+  jle  @spop_prior_zero
+  mov  ch, fe_Underflow
+  call e287_Exception
+
+@spop_prior_zero:
+  sub  dx, dx
+  mov  ax, dx
+  jmp   @spop_end
+
+
+
+
+
+(*public*) iees_Push  :  (*NEAR*)
+
+(* FUNCTION  iees_Push  (x : IEEE_short) : emu_temp;*)
+
+
+(* Procedure to take a  IEEE real and push the equivalent*)
+(*  temporary format number onto stack.*)
+
+(* inputs*)
+(* - short IEEE real at es:si*)
+
+(* outputs*)
+(* - temp floating point at ds:di*)
+
+(* side effects*)
+(* - can set exception exit*)
+
+
+  push si
+  push di
+  push es
+
+  cld        (* forward string direction*)
+
+  mov  ax, es : [si][w0]
+  mov  dx, es : [si][w1]
+
+  sub  si, si
+  shl  dx, 1      (* carry := sign, DH := exponent*)
+  rcl  si, 1      (* si is sign*)
+
+  or  dh, dh
+  jz  @spush_small    (* check for extreme exponents*)
+  cmp  dh, 0FFH
+  je  @spush_large
+
+
+@spush_normal:
+  mov  bl, dh      (* get the exponent byte*)
+  mov  bh, 0
+  sub  bx, iees_exponent_bias  (* bx is exponent*)
+
+  stc        (* set carry = integer bit*)
+  rcr  dl, 1
+
+  mov  dh, dl
+  mov  dl, ah
+  mov  ch, al
+  mov  cl, 0      (* dx:cx is now the fraction*)
+
+
+@spush_result:
+  push ds
+  pop  es      (* arrange so es:[di] points to result*)
+  sub  ax, ax
+  stosw      (* extended to 64 bits with zeroes*)
+  stosw
+  xchg  ax, cx
+  stosw
+  xchg  ax, dx
+  stosw
+  xchg  ax, bx
+  stosw
+  xchg  ax, si
+  stosw
+
+@spush_end:
+  pop  es
+  pop  di
+  pop  si
+  ret  0
+
+
+(* special treatment for extreme values.*)
+
+@spush_large:
+  inc  dh      (* convert FFH to 00H*)
+  mov  bx, infinite_exponent
+  mov  ch, fe_Operand_Too_Big    (* anticipate a NAN*)
+  jmp  @spush_extreme
+
+
+@spush_small:
+  mov  bx, zero_exponent
+  mov  ch, fe_Operand_Too_Small  (* anticipate a Denormal*)
+
+
+@spush_extreme:
+  or  dx, ax      (* check for de-normals*)
+  jz  @spush_continue
+
+  call e287_Exception
+
+@spush_continue:
+  mov  si, positive_sign  (* extremes always positive*)
+  sub  dx, dx
+  sub  cx, cx      (* zero or infinite, fraction = 0*)
+  jmp  @spush_result
+
+
+(*INCLUDE EMUINIT.ASM*)
+
+(*public*) e287_Exception :
+
+(*  called when exception detected.  Exception status in CH.  Process *)
+(*  CH against mask.  If masked, then return to caller to continue with *)
+(*  default exception processing, otherwise do exception exit.  If *)
+(*       allowed, then stop the current instruction and forget all partial *)
+(*  calculations, just return. *)
+
+(*  Precision Errors do not stop completion of the current operation, *)
+(*  being considered a "mild" error, and often being signalled with the *)
+(*  default action of a harsher masked error, though this if unmasked *)
+(*  does cause error interrupt when the next instruction is attempted. *)
+
+(*  The routine is designed also to be called with CH=0 after the Control *)
+(*  Word (and hence the mask) is changed, and can thus clear Error Summary *)
+(*  as well as set it. *)
+
+(*  The error is actually detected when the program tries to execute the *)
+(*  next numerics instruction.  Presumably the iNDP-87 is designed like *)
+(*  that because the iAPX-?86 may have switched into unrelated code by *)
+(*  the time the exception occurs, and the iNDP-87 can't be sure the *)
+(*  CPU will be in the correct context until the next numeric instruction. *)
+
+  push  ax      (* must not upset caller's registers *)
+  push  cx
+  push  ds
+
+  push  ss
+  pop  ds      (* some callers may use other ds values *)
+
+  mov  al, [emws_status]
+  mov  cl, [emws_control]
+  and  cl, 3FH      (* select the exception mask bits *)
+  xor  cl, 3FH      (* invert the mask for convenience *)
+  or  al, ch      (* add in new exceptions *)
+
+  mov  ah, al
+  and  ah, cl
+  xor  ah, al      (* AH shows masked exceptions. *)
+  test  ah, fe_Overflow    (* if Overflow but masked, *)
+  jz  notMaskedOver
+  or  al, 20H      (*   then convert into Precision error *)
+notMaskedOver:
+
+  test  al, cl      (* any unmasked exceptions ? *)
+  jz  resumeDefault
+
+  or  al, 80H      (* set Error Summary *)
+  mov  [emws_status], al
+  and  al, cl
+  cmp  al, 20H      (* if only a precision error, resume. *)
+(*ifndef  instantException
+  jne  ExceptionExit    (*     else abort current instruction. *)
+else*)
+  jne  QuitException    (*     emulate exception interrupt now. *)
+(*endif*)
+
+  pop  ds
+  pop  cx
+  pop  ax
+  ret 0      (* resume if precision error. *)
+
+resumeDefault:
+  and  al, 7FH      (* clear Error Summary *)
+  mov  [emws_status], al
+  pop  ds
+  pop  cx
+  pop  ax
+  ret 0
+
+public QuitException :
+  mov  sp, ss:[emws_resume_bp]
+  pop  bp
+  pop  es
+  pop  ds
+  pop  di
+  pop  si
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+  extrn __FloatEmulNMI
+  jmp far __FloatEmulNMI
+end
+

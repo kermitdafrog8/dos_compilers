@@ -1,0 +1,691 @@
+Customizing The TopSpeed Environment - TSCFG
+=============================================
+
+The TopSpeed configuration text file (TSCFG.TXT) and other files
+TS*.TXT included by it contain the message text, menu
+definitions, project system configuration and compiler
+definitions installed in the TopSpeed System.
+
+This information may be 're-compiled' (using TSCFG.EXE) to
+produce a new TSDATA.OVL data overlay which is read whenever
+the TopSpeed environment is entered. This allows you to change
+your environment menu layout, hot keys, Editing keys and text
+messages to your own requirements.
+
+The top-level configuration file TSCFG.TXT sets some directives
+(see below), then includes other .TXT files which contain
+configuration text as follows:
+
+  TSMAIN.TXT    editor keys, menus, and environment options
+  TSPRJ.TXT     configuration of project system (see Developers
+                Guide).
+  TSMAKE.TXT    Messages and initialization data for Project
+                System and Linker
+  TSISL.TXT     Messages for code generator
+  TSCPP.TXT     C++ compiler messages
+  TSC.TXT       C compiler messages
+  TSPAS.TXT     Pascal compiler messages
+  TSMOD.TXT     Modula2 compiler messages
+
+To run TSCFG.EXE just type:
+
+   TSCFG
+
+at the main DOS or OS/2 prompt in the system directory where
+you keep TSDATA.OVL. This will create a new TSDATA.OVL,
+and the old TSDATA.OVL is renamed to TSDATA.OLD. The new
+configuration can then be immediately used on starting the
+TopSpeed Environment.
+
+You are encouraged to experiment by changing the TopSpeed
+Configuration File TSMAIN.TXT to discover the setup that best
+suits you. However, before you edit TSMAIN.TXT, you should save
+a copy of the file, in case you later want to go back to the
+default definitions supplied with the TopSpeed system.
+
+The following sections describe changes you can make within
+the Menu Definition File.
+
+
+
+Changing the Main Menu Type
+---------------------------
+
+You can use three types of menus: pop-up, pull-down, and bar.
+The type of the main menu is defined by the line
+
+! LinePull                 | [ TopSpeed ]  <F10> <AltF9> <AltF10>
+
+which defines a "Bar" style menu (i.e. a Pull-Down menu with no
+frame). If you wish to have a horizontal "Pull-Down" menu with a
+frame, you should change LinePull to PullDown. If you want a
+vertical "Pop-Up" style menu, you should change LinePull to
+PopUp.
+
+If you wish to change the title displayed at the top of a menu,
+you can  edit the "TopSpeed" between the square brackets ('['
+and ']'). For example, you may want to change it to:
+
+!PullDown [ My TopSpeed C,  Hands Off! ] | <F10>
+
+You  can  also  change  the key that invokes  the  main  menu
+by changing the  <F10> after the '|' . For example, if you need
+ShiftF10 to invoke the main menu you might have the line:
+
+!PullDown [ TopSpeed ] | <ShiftF10>
+
+
+Changing Menu Text
+------------------
+
+In the Menu Definition File, you can change the text displayed
+in the menu by editing the appropriate line. For example, if you
+want to change Files to read PcDos on the Main Menu you can
+change the line:
+
+{F}iles   | <AltF>
+
+to
+
+{P}cDos   | <AltF>
+
+Note that the character enclosed in the braces ( { and } )
+defines the command character that invokes the menu line.
+This command character may be in the middle of the word - for
+example, Pc{D}os - or left out altogether if not required.
+
+The number of leading spaces before the menu text defines the
+Level of the menu within the menu tree. Don't change this
+unless the menu tree is to be changed, as described in the
+next section.
+
+
+Changing the Menu Tree
+----------------------
+
+In addition to changing the text of the menu, you can also
+change the actual structure of the menu tree. This means you
+can reorder menus, create new submenus or even delete
+unwanted commands.
+
+To illustrate how to change the menu tree, suppose you wish
+to group the "Compilation  Functions" together in a  single
+menu. To do this, the lines containing:
+
+{E}dit               | Editor        <AltE>
+{C}ompile            | Compiler      <AltC>
+{L}ink               | Linker        <AltL>
+{M}ake               | Make          <AltM>
+{R}un                | Run program   <AltR>
+{P}roject            | {ProjOptions} [Project Options] <AltP>
+
+could be changed to:
+
+{E}dit               | Editor        <AltE>
+{C}ompilation
+  {C}ompile          | Compiler      <AltC>
+  {L}ink             | Linker        <AltL>
+  {M}ake             | Make          <AltM>
+  {R}un              | Run program   <AltR>
+{P}roject            | {ProjOptions} [Project Options] <AltP>
+
+This creates a new submenu under the command Compilation.
+The indentation of the menu text (i.e. number of leading spaces)
+determines the start and end of each menu. In the above example,
+this means that the extra spaces added in front of {C}ompile
+cause a new submenu to be started. This submenu continues until
+{P}roject where the indentation returns to its previous level.
+Look  at the Project Menu for further examples of "nested"
+submenus.
+
+
+Changing ShortCut Keys
+----------------------
+
+At the end of a Menu Definition Line, there also may be a
+ShortCut key sequence defined. This sequence activates that
+function or submenu. You may change or add to these key
+definitions to change the ShortCut keys. For example, to assign
+the key F4 to the {O}ptions {R}un {C}ommand-Line function, you
+would change the line:
+
+{C} - Command line    | Command Line
+
+to
+
+{C} - Command line    | Command Line <F4>
+
+You can specify multiple keys after the line, if you need more
+than one key to activate the same function.
+
+You can also define keys independently of the menus. An example
+of this is the zoom window function, which is defined as follows:
+
+!Key  | Zoom Window <F5>
+
+You can change, add to, or delete these key definitions in the
+same way as changing the Menu Definition lines.
+
+
+External DOS Commands
+---------------------
+
+As you may have already noticed, there is an Action Name after
+the | and before the ShortCut keys in Menu and Key Definition
+lines. This name defines the action that is performed when the
+menu line is selected, or the ShortCut key is pressed.
+
+In addition to the pre-defined environment actions (which are
+listed further on) you can also install a DOS Command String
+which will be executed under a DOS shell whenever the Menu Line
+is selected.  In this way, you can attach your own programs to
+the environment menus and keys. For example, if you required
+the DOS command
+
+  delete *.bak
+
+as a menu function, then you might add the line:
+
+Delete {B}AK files  | 'del *.BAK' <AltF3>
+
+to the menu  definition. The DOS command required should be
+enclosed by single or double quote characters, and may prompt
+for parameters by placing %M or %P within the command string.
+
+
+The Editor Keys and Menus
+-------------------------
+
+The Environment Editor has its own specific keys and menus.
+These are separated from the rest of the Menu Definition by
+the line:
+
+!Editor
+
+Everything after this line and before the line !MsgText is
+only valid when within the Editor. If you want to add or
+change Editor keys or menus, the you should edit the lines
+after !Editor.
+
+
+Text Messages
+-------------
+
+Text after the !MsgText directive (and in included files)
+defines all the text messages used by the environment. These
+may be translated to other languages or personalized by adding
+your own text. The length of most messages may be changed,
+but in general it is best to retain the approximate length of
+each message (especially when lengthening messages). Some
+messages are used as initialized data and should only be
+changed with extreme care (or preferably not at all!) An
+example of this is the C reserved words.
+
+
+
+TSMAIN.TXT Format
+=================
+
+The TopSpeed Configuration file contains lines of text that
+may be either Directives, Menu Text or Message text. Blank
+lines are not significant, and can therefore be used for clarity.
+Directives inform the TSCFG program of, Menu Types, Menu Titles,
+Conditional sections and ShortCut Keys. The Menu Text defines
+the structure of the menu tree and the associated functions.
+The Message Text defines the text used and displayed by the
+TopSpeed Environment.
+
+
+Directives
+----------
+Directives always begin with a '!'. Following the '!' is the
+directive name, together with any parameters required. Directives
+can be global to the entire environment, or they can be
+restricted to the editor.
+
+The directives, together with some examples, are as follows:
+
+
+Menu Type
+---------
+You can have three forms of Menu Type directives:
+
+!PopUp [ MenuTitle ] | KeySequences
+or:
+
+!PullDown [ MenuTitle ] | KeySequences
+
+or:
+
+!LinePull | KeySequences
+
+Such directives define the type and title of a top level menu
+and any ShortCut keys that should invoke the menu. The menu
+title and shortcut keys are optional.
+
+The type of the top menu can be one of the following
+
+Line Pull (default), a Pull Down menu with no frame or title.
+Pop Up, which has vertical menu selections.
+Pull Down, which has horizontal menu selections.
+
+The menu title is text - enclosed by square brackets ( [ and ] )
+and will appear in the top center of the frame enclosing the
+menu. You can define one or more KeySequences to invoke the menu.
+The KeySequence format later.
+
+Example:
+
+!PullDown [ TopSpeed ] | <F10>
+
+specifies that the menu named "TopSpeed" is to be a pull down
+menu, and is to be activated by pressing F10.
+
+
+Editor Section
+--------------
+
+!Editor
+
+Generally, your directives will apply to the entire environment.
+Sometimes, however, you may have directives that should apply
+only to the editor. For example, you might want to use a
+different Help Line for the editor.
+
+To make this possible, the menu definition is split into two
+distinct sections. The first section contains general menus
+and keys, available from anywhere within the environment. The
+second section contains editor menus and keys that are only
+available while editing.
+
+To split the two sections, the directive !Editor must be
+included in the menu definition. Everything above this directive
+is global to the environment, and everything down to the
+Message text section is local to the editor.
+
+
+ShortCut Key Definition
+-----------------------
+
+!Key | Action KeySequences
+
+You can use the !Key directive to define ShortCut keys that
+invoke commands not found on any menu. This directive assigns
+the specified action to one or more key sequences.
+
+The format of actions (which can be a DOS command) is described
+below.
+
+Whenever a sequence of keys is pressed, the appropriate action
+will be invoked. Keys defined before the !Editor directive will
+be active anywhere within the environment, and keys defined
+after will be active only while editing. An example of an Editor
+Key is the Case Correct Key which is defined as follows:
+
+!Key  |  Ed Case Correct     <ShiftF7>
+
+
+Comment
+-------
+
+!! <comment text>
+A line beginning with '!!'  serves as a comment on other
+material. The line is ignored by the environment, but will be
+useful to you or someone else trying to get an overview of the
+file's contents. You can include comment lines anywhere in the
+file.
+
+Example:
+
+!! TopSpeed C Version 3.10
+!! -----------------------
+
+
+Conditional Sections
+--------------------
+Sections of the menu definition may be bracketed by the !if
+and !end directives these take the form:
+
+!if conditionname
+
+   conditional section
+
+!end
+
+If the condition has been previously set using the !set
+directive (e.g: !set conditionname) then the conditional
+section will be read, otherwise it will be ignored by the
+TSCFG program. These sections may be nested and cannot
+bracket messages in the !MsgText section.
+
+Multiple conditions may be specified - for example
+
+!if c | cpp
+
+will cause the following lines to be included if either of
+the conditions have been specified.
+
+
+Menu Line Definition
+--------------------
+
+A menu line defines the menu level, the menu text, the command
+character, and the function to be invoked, as well as any
+ShortCut keys.
+
+The format of a menu line definition is:
+
+MenuText | Action KeySequences
+
+The menu text specifies what will appear on the screen when the
+menu is invoked. The level of the menu is determined by the
+number of leading spaces before the menu text.
+
+When a new submenu definition begins, its text is indented
+further to the right.  When the submenu definition ends, the
+text is indented to the left to the same indentation as the
+parent menu.
+
+The Action is the name of the function to be invoked and is
+described in the following section, "Menu Actions".
+
+Note that menu lines that invoke submenus should not have an
+Action defined. They can have associated ShortCut keys, however.
+
+Within the menu text, you can define a single command character
+(which invokes that menu line) by enclosing that character
+within braces - for example, {E}. A command character defined
+in this way should be unique for that particular menu.
+
+Trailing and leading spaces are ignored within the menu text
+(except that leading spaces serve to define the menu level,
+as described above). If you need actual spaces at the beginning
+or end of the text, you should use the underscore _ character.
+This will be translated into actual spaces in the displayed
+menu text.
+
+A Menu Line may also contain after the '|' character, Help File
+Links (contained within the braces '{' and '}'), Menu title
+text (contained between '[' and ']') and, after the action,
+option definition text. Option definition text (also contained
+within the characters '[' and ']') is read and decoded by the
+TopSpeed compilers and environment so should NOT be changed.
+You may change the Menu Title Text however which determines the
+title displayed at the top and center of the menu window.
+
+
+Menu Actions
+------------
+The menu actions are invoked either by a key or by menu
+selection. There are two different kinds of actions, Pre-Defined
+Actions and External Actions. Pre-Defined Actions invoke an
+environment command, while External Actions run an external
+program under DOS.
+
+
+Pre-Defined Actions
+-------------------
+These actions are specified by name. The first eight non-space
+characters in the name are significant. The following lists
+specify the pre-defined actions, together with the page number
+of the section that describes their function. The first list
+shows the global actions and the second list shows the actions
+accessible in the editor.
+
+
+
+Global Actions
+--------------
+The Global Actions, which may be invoked throughout the
+environment, are as follows:
+
+ LoadFile              (load file into editor)
+ LoadF RO              (Load file read-only)
+ PickFile              (Pick file from pick list)
+ SaveFile              (Save file in current editor)
+ SaveAllF              (Save all files)
+ ChangeDir             (Change DOS directory)
+ Directory             (Display DOS directory)
+ DOSShell              (Execute DOS Shell)
+ Execute               (Execute single line program)
+ Quit                  (Leave environment)
+ Editor                (Invoke editor)
+ Compiler              (Compile program)
+ Make                  (Make project)
+ Run program           (Run program)
+ ProjNew               (New project name)
+ ProjOpt               (Project options)
+ ModelOpt              (Memory model options)
+ CompOpt               (Compiler options)
+ MakeOpt               (Make options)
+ Command Line          (Command line for Run program)
+ RunOpt                (Run options)
+ EdOpt                 (Editor Options)
+ Default Filenames     (Define default filenames)
+ Default Extensions    (Define default extensions)
+ No Of Backups         (No of editor file backups)
+ Top Scroll Zone       (Set top scroll zone)
+ Bottom Scroll Zone    (Set bottom scroll zone)
+ EnvOpt                (Environment option)
+ Load Red File         (Load redirection file)
+ Red Edit              (Edit redirection file)
+ Load Macs             (Load macro file)
+ Save Macs             (Save macro file)
+ Load Config File      (Load CFG file)
+ Save Config File      (Save CFG file)
+ Asciitab              (Ascii table)
+ Calculator            (Calculator)
+ Find Error            (Find run-time error)
+ WildSearch            (Search for text)
+ Search List           (Search pick-list)
+ ScanCodes             (Keyboard codes)
+ Print                 (Print file)
+ PrintSet              (Print settings)
+ Review Screen         (Review DOS screen)
+ View File             (View file as data)
+ Help                  (Enter help system)
+ Info                  (Information window)
+ Edit0-Edit9           (Invoke editor windows 0-9)
+ Zoom Window           (Zoom window)
+ Cycle Windows         (Cycle windows)
+ CutKey                (Cut text from screen) (Single key only)
+ WinKey                (Enter window control mode) (Single key only)
+
+
+Editor Actions
+--------------
+The Editor Actions, which may be invoked throughout the editor
+but not elsewhere, are as follows:
+
+Ed Load File         Ed Load F RO        Save File
+Ed Write File        Ed Find             Ed Replace
+Ed Start Screen      Ed End Screen       Ed Start File
+Ed End File          Ed Start Line       Ed End Line
+Ed Goto Begin Block  Ed Goto End Block   Ed Prev Position
+Ed Del End Line      Ed Restore Line     Ed Goto Line
+Save File            Save All Files      Ed Begin Block
+Ed End Block         Ed Hide Block       Ed Mark Word
+Ed Mark Line         Ed Copy Block       Ed Move Block
+Ed Del Block         Ed Read Block       Ed Write Block
+Ed Get Block         Ed Print Block      Ed Indent Block
+Ed Undo              Ed Quit             Ed Opt
+Toggle RO            Ed Tab Width        Ed Word Left
+Ed Page Down         Ed Move Right       Ed Move Up
+Ed Word Right        Ed Del Forward      Ed Del Backward
+Ed Tab               Ed Find Again       Ed Ins Line
+Ed Ins Below         Ed Prefix           Ed Page Up
+Ed Move Left         Ed Del Word         Ed Upper Case
+Ed Scrl Down         Ed Move Down        Ed Del Line
+Ed Scrl Up           Ed Next Error       Ed Prev Error
+Ed Case Correct      Ed Goto M1          Ed Goto M2
+Ed Set M1            Ed Set M2           Paste
+
+Editor Actions can only be used as the action within the
+Editor section of the menu definition, while Global Actions
+can be used in either section.
+
+
+External Commands
+-----------------
+Within the environment menu system it's possible to attach an
+external DOS or OS/2 command or program to any key or menu entry.
+This can be done by enclosing the command line in either single
+or double quotes and using it as an Action in the Menu or Key
+definition described above.
+
+For example, suppose you have the following menu lines defined:
+
+
+     {B}ackup Files   | 'copy *.c a:'
+     !Key             | "find 'Version' *.h"  <AltZ>
+
+If you select the {B}ackup Files menu entry, then the DOS
+command line:
+
+  copy *.C a:
+
+is executed. Similarly,  when you press  AltZ the command line:
+
+  find 'Version' *.h
+
+is executed.
+
+
+External Command Parameters
+---------------------------
+Suppose you need to pass the current Project name to the command
+you want to execute. You can do this, by including %M in the
+command at the spot in which you want the name. Similarly %L
+can be used to insert the current command line set.
+
+To prompt for a string you can put %P (prompt string) in the
+command string. The %P will then be expanded to the entered
+string.
+
+For example, suppose you define:
+
+     {E}rase          | 'del %P(File to delete: )'
+     {D}ebug          | 'debug %M.EXE'
+
+
+Selecting Erase prompts for
+
+File to delete:
+
+After you type a file name (let's say, FTODEL) and press Enter,
+the command line:
+
+  del ftodel
+
+is executed. Similarly selecting Debug will prompt for the
+Project name and will then execute the command
+
+  debug mainfile.exe
+
+You can include as many '%P's as you need in the command string.
+
+
+Key Sequences
+-------------
+The !Key directives and menu entries can have one or more
+KeySequences attached. These key sequences  consist of key names
+enclosed by the  characters '<' and '>'.
+
+Examples of key sequences include:
+
+<AltA>               Alt A
+<CtrlZ>              Control Z
+<CtrlQ D>            Control Q followed by D
+<CtrlK M 1>          Control K followed by M then 1
+<ShiftF2>            F2 Shifted
+<Home End>           Home followed by End
+
+
+The following keys are valid and represent the names to use:
+
+
+F1 - F10                     CtrlF1 - CtrlF10
+ShiftF1 - ShiftF10           AltF1 - AltF10
+
+Alt0 - Alt9    AltA - AltZ
+
+UpArr          DownArr       LeftArr       RightArr
+CtrlUpArr      CtrlDownArr   CtrlLeftArr   CtrlRightArr
+
+PageDown       PageUp        Home          End
+CtrlPageDown   CtrlPageUp    CtrlHome      CtrlEnd
+
+Del            Ins           AltEqual      ShiftTab
+
+
+If ambiguous key sequences are defined in the menu definition
+(for example, CtrlK and CtrlK B and CtrlK K), then the menu
+system will wait a short interval after the initial sequence
+has been typed. If the remainder of a longer sequence is typed,
+within this time then the long sequence will be executed.
+Otherwise, the shorter sequence will be assumed. This can be
+used to create automatic "pop-up" menus in the menu definition.
+
+To remove the automatic Pop-Up facility from  the standard menu
+configuration, remove the "short" key  sequences - that is,
+remove the lines in TSMAIN.TXT containing the sequences
+CtrlQ, CtrlK and CtrlO.
+
+
+Message Text
+------------
+
+The message text section is located at the end of the TSCFG.TXT
+file and is introduced by the !MsgText directive. Text
+following this directive will be interpreted as text messages.
+The !MsgText directive when followed by a filename can also be
+used to 'include' an external set of text messages.
+
+e.g:
+
+   !MsgText
+
+starts the message text section.
+
+Text messages have the format: decimal number followed by a
+single space followed by the message text. Trailing in the
+message text spaces are ignored, but if required can be added
+by placing a '@' delimiter character at the desired end of
+message. In this case the '@' is deleted.
+
+Text messages must be kept in the correct numerical sequence.
+However some message numbers may be omitted. TopSpeed compilers
+have their error messages within external files and are
+included as described above.
+
+Generally it is easy to determine the message use from either
+inspection or trial and error. Some useful messages that may
+be configured are listed below:
+
+25 -    Default Backup extension
+26 -    Backup extension when no of backups > 1
+34 -    Printer device as used by the editor
+36 -    Characters used together with alpha-numerics to
+        define a 'word'
+        (as used by next/prev word, delete word etc)
+46 -    Character Prefix prompt (CtrlP)
+61 -    Yes or No alternative keys (YN)
+73 -    Abort/Retry alternative keys (AR)
+81-82 - am pm for date strings
+119,127,144,145,149,156,181-183 -
+        Help lines displayed at the bottom of the screen.
+        Text enclosed in braces is highlighted.
+        ~nnn specifies the ASCII character nnn, which can be
+        used to insert unprintable characters.
+147 -   The names of the keys
+174-178,185-186,189-190,195-199:
+        Various default filenames and extensions
+180 -   Search option characters
+188 -   Location of OS/2 error message file
+193 -   OS/2 Start session command line
+210+n   DOS error message for error n
+250-264 Project file text messages
+310-315 Command line options description
+400-460 TopSpeed Run-time-error messages
+500-516 DLL Run-time-error messages
+

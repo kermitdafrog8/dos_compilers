@@ -1,0 +1,22 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  MODCORE.DEF - Modula-2 interface to MODCORE.A                           *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE ModCore;
+
+(*# save *)
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+PROCEDURE  _getheapmem(): CARDINAL;
+PROCEDURE AdjustMem(End: CARDINAL);
+
+END ModCore.
+

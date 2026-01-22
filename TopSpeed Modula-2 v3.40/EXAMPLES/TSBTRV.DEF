@@ -1,0 +1,271 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  TopSpeed Modula-2 Interface for BTRIEVE - Supports TopSpeed Extender    *
+*  Public Domain - May be used without restriction                         *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+DEFINITION MODULE TSBTRV;
+
+(* Data types *)
+TYPE
+    StatusCodes = (
+ (*  0 *)  OK,BadOpcode,IOError,NoOpen,KeyNotFound,
+ (*  5 *)  DuplicateKey,InvalidKey,ChangedKey,InvalidPosition,EndOfFile,
+ (* 10 *)  NonModifiable,BadFileName,FileNotFound,ExtensionError,PreOpenError,
+ (* 15 *)  PreImageError,ExpansionError,CloseError,DiskFull,Unrecoverable,
+ (* 20 *)  BtrieveAbsent,KeyBufferSize,RecBufferSize,PosBlockSize,PageSize,
+ (* 25 *)  CreateError,KeySegments,KeyPosition,RecLength,KeyLength,
+ (* 30 *)  NotBtrieveFile,AlreadyExtended,CantExtend,Err33,BadExtendName,
+ (* 35 *)  DirectoryError,TransactError,NestedTransact,TransactControl,EndAbortError,
+ (* 40 *)  TransactMaximum,TransactFileErr,AccelFailure,BadRecAddress,NullKeyPath,
+ (* 45 *)  BadKeySpecs,AccessDenied,MaxOpenFiles,BadCollation,CollationKeyType,
+ (* 50 *)  OwnerSet,InvalidOwner,CacheWriteError,BadBtInterface,BadVariablePage,
+ (* 55 *)  AutoIncErr, IncompleteIndex, EMSErr, CompressBufTooShort,FileAlreadyExists,
+ (* 60 *)  Err60,Err61,Err62,Err63,Err64,
+ (* 65 *)  Err65,Err66,Err67,Err68,Err69,
+ (* 70 *)  Err70,Err71,Err72,Err73,Err74,
+ (* 75 *)  Err75,Err76,Err77,Err78,Err79,
+ (* 80 *)  AccessConflict,LockFailed,LostPosition,UnreadTransact,RecInUse,
+ (* 85 *)  FileInUse,FileTableFull,HandleTableFull,OpenModeError,DeviceNameError,
+ (* 90 *)  DeviceTableFull,ServerError,TransactTabFull,IncompatibleLockType,PermissionErr,
+ (* 99 *)  SessionNoLongerValid, ComEnvErr,DataBufTooSmall,InternalTransactionErr, DemoVersion
+    );
+
+ FileControlBlock = ARRAY[0..127] OF BYTE;
+ KeyType          = ARRAY[0..255] OF CHAR;
+ OwnerType        = ARRAY[0..7] OF CHAR;
+
+VAR
+  StatusCode : StatusCodes;  (* Status of last operation *)
+
+(* Btrieve functions - function number in brackets *)
+
+PROCEDURE AbortTransaction;
+(*  Terminate transaction and abort all associated file operations (#21) *)
+
+PROCEDURE BeginTransaction;
+(*  Mark beginning of a set of file operations (#19) *)
+
+PROCEDURE ClearOwner(VAR FileControl : FileControlBlock);
+(*  Remove owner name associated with file (#30) *)
+
+PROCEDURE Close(VAR FileControl : FileControlBlock);
+(*  Close a file (#1) *)
+
+PROCEDURE Create(  VAR FileControl : FileControlBlock;
+                   FileDescriptor : ARRAY OF BYTE;
+                   DescriptorLength : CARDINAL;
+                   FileName : ARRAY OF CHAR);
+(*  Create a file (#14) *)
+
+PROCEDURE DeleteRec(VAR FileControl : FileControlBlock; KeyID : SHORTCARD);
+(*  Delete a record from a file (#4) *)
+
+PROCEDURE EndTransaction;
+(*  Mark the end of a set of related file operations (#20) *)
+
+PROCEDURE Extend(VAR FileControl : FileControlBlock; FileName : ARRAY OF CHAR;
+                   UseNow : BOOLEAN);
+(*  Extend a file to a second logical disk drive (#16) *)
+
+PROCEDURE FindEQ(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with key value equal to given key (#55) *)
+
+PROCEDURE FindGT(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with key value greater than given key (#58) *)
+
+PROCEDURE FindGE(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with key value greater than or equal to given key (#59) *)
+
+PROCEDURE FindLast(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with highest key value for given key (#63) *)
+
+PROCEDURE FindLT(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with key value lower than given key (#60) *)
+
+PROCEDURE FindLE(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with key value less than or equal to given key (#61) *)
+
+PROCEDURE FindFirst(VAR FileControl : FileControlBlock;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Find record with lowest key value for given key (#62) *)
+
+PROCEDURE FindNext(VAR FileControl : FileControlBlock;
+                   VAR KeyBuffer : ARRAY OF BYTE;
+                   KeyID : SHORTCARD);
+(*  Find record with next key value for given key (#56) *)
+
+PROCEDURE FindPrev(VAR FileControl : FileControlBlock;
+                   VAR KeyBuffer : ARRAY OF BYTE;
+                   KeyID : SHORTCARD);
+(*  Find record with previous key value for given key (#57) *)
+
+PROCEDURE GetDirect(VAR FileControl : FileControlBlock;
+                    VAR DataBuffer : ARRAY OF BYTE;
+                    VAR BufferLength : CARDINAL;
+                    VAR KeyBuffer : ARRAY OF BYTE;
+                    KeyID : SHORTCARD);
+(*  Get a record by physical address (#23) *)
+
+PROCEDURE GetDir(Drive : SHORTCARD; VAR DirName : ARRAY OF CHAR);
+(*  Get current directory for drive (#28) *)
+
+PROCEDURE GetEQ(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with key value equal to given key (#5) *)
+
+PROCEDURE GetGT(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with key value greater than given key (#8) *)
+
+PROCEDURE GetGE(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with key value greater than or equal to given key (#9) *)
+
+PROCEDURE GetLast(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with highest key value for given key (#13) *)
+
+PROCEDURE GetLT(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with key value lower than given key (#10) *)
+
+PROCEDURE GetLE(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with key value less than or equal to given key (#11) *)
+
+PROCEDURE GetFirst(VAR FileControl : FileControlBlock;
+                VAR DataBuffer : ARRAY OF BYTE;
+                VAR BufferLength : CARDINAL;
+                VAR KeyBuffer : ARRAY OF BYTE;
+                KeyID : SHORTCARD);
+(*  Get record with lowest key value for given key (#12) *)
+
+PROCEDURE GetNext(VAR FileControl : FileControlBlock;
+                  VAR DataBuffer : ARRAY OF BYTE;
+                  VAR BufferLength : CARDINAL;
+                  VAR KeyBuffer : ARRAY OF BYTE;
+                  KeyID : SHORTCARD);
+(*  Get record with next key value for given key (#6) *)
+
+PROCEDURE GetPosition(VAR FileControl :FileControlBlock;
+                      VAR pos : ARRAY OF BYTE);
+(*  Return physical record position in given file (#22) *)
+
+PROCEDURE GetPrev(VAR FileControl : FileControlBlock;
+                  VAR DataBuffer : ARRAY OF BYTE;
+                  VAR BufferLength : CARDINAL;
+                  VAR KeyBuffer : ARRAY OF BYTE;
+                  KeyID : SHORTCARD);
+(*  Get record with previous key value for given key (#7) *)
+
+PROCEDURE Insert(VAR FileControl : FileControlBlock;
+                 VAR DataBuffer : ARRAY OF BYTE;
+                 VAR BufferLength : CARDINAL;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Add record with given key value (#2) *)
+
+PROCEDURE Open(VAR FileControl : FileControlBlock;
+               FileName,OwnerName : ARRAY OF CHAR;
+               OpenMode : SHORTCARD);
+(*  Open a file with given file name in given mode (#0) *)
+
+PROCEDURE Reset;
+(*  Release all resources and close all open files (#28) *)
+
+PROCEDURE SetDirectory(DirName : ARRAY OF CHAR);
+(*  Set current directory to given name (#17) *)
+
+PROCEDURE SetOwner(VAR FileControl : FileControlBlock;
+                     OwnerName : ARRAY OF CHAR;
+                     AccessMode : SHORTCARD);
+(*  Set owner name and subsequent access rights on given file (#29) *)
+
+PROCEDURE Status(VAR FileControl : FileControlBlock;
+                 VAR DataBuffer : ARRAY OF BYTE;
+                 VAR BufferLength : CARDINAL;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Return file information for given file (#15) *)
+
+PROCEDURE StepDirect(VAR FileControl : FileControlBlock;
+                     VAR DataBuffer : ARRAY OF BYTE;
+                     VAR BufferLength : CARDINAL);
+(*  Move to next physical record in file (#24) *)
+
+PROCEDURE Stop;
+(*  Remove Btrieve file manager from memory (#25) *)
+
+PROCEDURE Update(VAR FileControl : FileControlBlock;
+                 VAR DataBuffer : ARRAY OF BYTE;
+                 VAR BufferLength : CARDINAL;
+                 VAR KeyBuffer : ARRAY OF BYTE;
+                 KeyID : SHORTCARD);
+(*  Update a previously retrieved record (#3) *)
+
+PROCEDURE Version(VAR DataBuffer : ARRAY OF BYTE);
+(*  Return Btrieve version number (#26) *)
+
+
+(* Low level interface to btree *)
+
+CONST
+     opOpen        = 0;  opClose       = 1;  opInsert       = 2;
+     opUpdate      = 3;  opDelete      = 4;  opGetEQ        = 5;
+     opGetNext     = 6;  opGetPrev     = 7;  opGetGT        = 8;
+     opGetGE       = 9;  opGetLT       = 10; opGetLE        = 11;
+     opGetFirst    = 12; opGetLast     = 13; opCreate       = 14;
+     opStat        = 15; opExtend      = 16; opSetDir       = 17;
+     opGetDir      = 18; opBeginTrans  = 19; opEndTrans     = 20;
+     opAbortTrans  = 21; opGetPos      = 22; opGetDirect    = 23;
+     opStepDirect  = 24; opStop        = 25; opVersion      = 26;
+     opUnlock      = 27; opReset       = 28; opSetOwner     = 29;
+     opClearOwner  = 30; opCreateSupp  = 31; opDropSupp     = 32;
+     opKeyOnly  = 50;  (* 'Get???? + opKeyOnly': Add ops 5..13 only ! *)
+
+
+PROCEDURE BTRV ( op: CARDINAL;              (* Operation          *)
+                 VAR pos: FileControlBlock; (* Position Block     *)
+                 VAR data: ARRAY OF BYTE;   (* Data Buffer        *)
+                 VAR datalen: CARDINAL;     (* Data Length        *)
+                 VAR kbuf: ARRAY OF BYTE;   (* Key Buffer         *)
+                 key: SHORTCARD             (* Key Number         *)
+
+               ): StatusCodes ;             (* Btrieve error code *)
+
+END TSBTRV.
+
+

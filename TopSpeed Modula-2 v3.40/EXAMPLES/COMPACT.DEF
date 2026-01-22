@@ -1,0 +1,21 @@
+DEFINITION MODULE Compact;
+
+TYPE
+  HandleType=CARDINAL;
+  MemRecP=POINTER TO MemRec;
+  MemRec=RECORD
+           Length:CARDINAL; (* The size of the data area *)
+           Handle:HandleType; (* The external 'name' of this block *)
+           Next:MemRecP;    (* The next in the chain *)
+           (* In fact all the data comes in here *)
+         END;
+
+CONST
+  NotAHandle=MAX(HandleType);
+  SmallestAlloc=4;
+PROCEDURE Deallocate(x:HandleType);
+PROCEDURE DerefHandle(x:HandleType):ADDRESS;
+PROCEDURE Allocate(size:CARDINAL):HandleType;
+
+
+END Compact.

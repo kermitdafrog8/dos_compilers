@@ -1,0 +1,155 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  LOADER.DEF - Modula-2 Overlay Loader Source                             *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE Loader;
+
+(*# call(o_a_copy=>off,o_a_size=>off,near_call=>off,same_ds=>off) *)
+(*# call(ds_entry=>null) *)
+(*# module(init_code=>off,implementation=>off)*)
+(*# call(seg_name=>null) *)
+
+(*******************)
+(* program loading *)
+(*******************)
+
+PROCEDURE LoadModule (name:ARRAY OF CHAR):CARDINAL;
+PROCEDURE UnLoadModule (modnum:CARDINAL);
+PROCEDURE GetProcAddr (modnum:CARDINAL;entry: ARRAY OF CHAR):ADDRESS;
+PROCEDURE GetOrdProcAddr(modnum:CARDINAL;entry:CARDINAL):ADDRESS;
+
+(******************)
+(* error handling *)
+(******************)
+
+  TYPE
+    ExitHandler         = PROCEDURE(ARRAY OF CHAR,CARDINAL);
+    MemHandler          = PROCEDURE(CARDINAL):BOOLEAN;
+    str65               = ARRAY[0..64] OF CHAR;
+
+(*********************)
+(* memory management *)
+(*********************)
+
+PROCEDURE FlushAll;
+PROCEDURE TotalAvail():CARDINAL;
+PROCEDURE Avail():CARDINAL;
+
+
+(*****************************)
+(* Virtual memory segments   *)
+(*****************************)
+
+PROCEDURE VAlloc(VAR addr : ADDRESS; size : CARDINAL);
+(* Allocates Virtual memory block of specified size.
+   returns result in addr.
+   Block is initially fixed so VUnfix must be called before
+   it can be swapped out.
+   Address of addr is used as handle so only one variable must be used
+   to hold pointer.
+*)
+
+PROCEDURE VUnfix(VAR addr : ADDRESS);
+(*
+   Unfixes memory allowing it to be moved or swapped to EMS or disk if
+   memory runs low. The address should not be used to reference memory
+   when unfixed.
+*)
+
+PROCEDURE VFix(VAR addr : ADDRESS);
+(*
+   Swaps block back into memory if necessary and
+   fixes the address so it can be used.
+   Calls to FixVSeg and UnfixVSeg may be nested.
+*)
+
+PROCEDURE VFree(VAR addr : FarADDRESS);
+(* frees virtual memory block
+   can be called only when segment fixed
+   addr is reset to NIL on exit
+*)
+
+PROCEDURE VUnfixAll();
+(*
+   Unfixes all virtual memory blocks. Use with care!
+*)
+
+
+(*****************************)
+(* ems control               *)
+(*****************************)
+
+PROCEDURE SetEms(on:BOOLEAN):BOOLEAN;
+
+
+(*******************)
+(* setjmp handling *)
+(*******************)
+
+(*# save, call(reg_return=>(ax,bx)) *)
+(*# call(reg_saved=>(cx,dx,si,di,ds,es,st1,st2)) *) (*N.B. es must be saved*)
+PROCEDURE RetGate(off,seg:CARDINAL):ADDRESS;
+(*# restore *)
+
+(***********************)
+(* C memory management *)
+(***********************)
+
+  TYPE
+    HeapInfo            = RECORD
+                            pentry     : FarADDRESS;
+                            size       : CARDINAL;
+                            useflag    : BOOLEAN;
+                          END; (*HeapInfo*)
+
+  PROCEDURE AllocMem(size:CARDINAL):FarADDRESS;
+  PROCEDURE FreeMem(ofs,seg:CARDINAL);
+  PROCEDURE ClearAllocMem(num,size:CARDINAL):FarADDRESS;
+  PROCEDURE HugeAllocMem(size:LONGCARD):FarADDRESS;
+  PROCEDURE ExpandMem(Buffer:FarADDRESS;Size:CARDINAL):FarADDRESS;
+  PROCEDURE HugeExpandMem(Buffer:FarADDRESS;Size:LONGCARD):FarADDRESS;
+  PROCEDURE HeapWalk(VAR Entry:HeapInfo):INTEGER;
+  PROCEDURE HeapCheck(Val:CARDINAL;DoFill:BOOLEAN):INTEGER;
+
+(*******************)
+(* User Procedures *)
+(*******************)
+
+  TYPE
+    SegReturn           = (SUCCESS,FAIL,RESIDENT,UNLOADED,INVALID_SEG,INVALID_MOD);
+
+(*#save,call(result_optional=>on)*)
+  PROCEDURE ShrinkHeap():CARDINAL;
+(*# restore *)
+  PROCEDURE GrowHeap;
+  PROCEDURE UserFlush;
+  PROCEDURE SetExitHandler(p:ExitHandler);
+  PROCEDURE SetMemHandler(p:MemHandler);
+  PROCEDURE LoadSeg(segno:CARDINAL;ModName:ARRAY OF CHAR):SegReturn;
+  PROCEDURE UnloadSeg(segno:CARDINAL;ModName:ARRAY OF CHAR):SegReturn;
+  PROCEDURE Getseg(seg:CARDINAL):CARDINAL;
+
+(*******************)
+(* rest is private *)
+(*******************)
+
+PROCEDURE InvalidProc;
+PROCEDURE Main(psp:CARDINAL);
+PROCEDURE Terminate;
+
+
+(*# call(reg_saved=>(cx,dx,si,di,ds,es,st1,st2)) *) (*N.B. es must be saved*)
+PROCEDURE CallTrap(sd:CARDINAL;gd:CARDINAL):CARDINAL;
+PROCEDURE ReturnTrap(sd:CARDINAL):CARDINAL;
+(*# restore *)
+
+END Loader.
+
+
+

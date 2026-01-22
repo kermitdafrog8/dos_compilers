@@ -1,0 +1,13 @@
+DEFINITION MODULE MathLib0;
+
+  PROCEDURE arctan (x: REAL) : REAL;
+  PROCEDURE cos(x: REAL) : REAL;
+  PROCEDURE entier(x: REAL) : INTEGER;
+  PROCEDURE exp(x: REAL) : REAL;
+  PROCEDURE ln(x: REAL) : REAL;
+  PROCEDURE real(x: INTEGER) : REAL;
+  PROCEDURE sin(x:REAL) : REAL;
+  PROCEDURE sqrt(x:REAL) : REAL;
+
+END MathLib0.
+

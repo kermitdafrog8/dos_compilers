@@ -1,0 +1,105 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  SYSTEM.DEF - Modula-2 system-dependent definitions                      *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => on,
+         o_a_size => on) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+DEFINITION MODULE SYSTEM;
+TYPE
+  PROCESS   = FarADDRESS;
+
+CONST
+    ADDRESS   ::= ADDRESS;   ADR       ::= ADR;       SIZE    ::= SIZE;
+    TSIZE     ::= SIZE;      WORD      ::= WORD;      BYTE    ::= BYTE;
+    SHORTADDR ::= SHORTADDR; LONGWORD  ::= LONGWORD;
+    Seg       ::= Seg;       Ofs       ::= Ofs;
+
+    FarADDRESS ::= FarADDRESS; NearADDRESS ::= NearADDRESS;
+    FarADR ::= FarADR; NearADR ::= NearADR;
+
+    FarNIL ::= FarNIL; NearNIL ::= NearNIL;
+(*%T _fcall *)
+    Ret = 0CBH;
+(*%E *)
+(*%F _fcall *)
+    Ret = 0C3H;
+(*%E *)
+
+TYPE
+  Registers = RECORD
+                CASE : BOOLEAN OF
+                | TRUE  : AX,BX,CX,DX,BP,SI,DI,DS,ES : CARDINAL;
+                          Flags                      : BITSET;
+                | FALSE : AL,AH,BL,BH,CL,CH,DL,DH    : SHORTCARD;
+                END;
+              END;
+CONST
+   CarryFlag = 0;
+   ZeroFlag  = 6;
+
+VAR
+   HeapBase    : CARDINAL;  (* Base segment of heap *)
+
+(*# save *)
+(*# call(near_call=>off, reg_saved=>(ds,si,di,st1,st2), reg_param=>(),seg_name=>PROC) *)
+(*# data(near_ptr=>off) *)
+
+(* Under MSDOS These are in CoreProc *)
+PROCEDURE NEWPROCESS(P: PROC; A: FarADDRESS; S: CARDINAL; VAR P1: FarADDRESS);
+PROCEDURE TRANSFER  (VAR P1,P2: FarADDRESS);
+PROCEDURE IOTRANSFER (VAR P1,P2: FarADDRESS; I: CARDINAL); (* Only Timer (I=8) supported under OS/2 *)
+PROCEDURE CurrentProcess():ADDRESS;
+PROCEDURE initprocess();
+PROCEDURE CurrentPriority() : CARDINAL;
+PROCEDURE NewPriority(PR: CARDINAL);
+PROCEDURE Listen(Mask: BITSET);
+PROCEDURE InterruptRegisters(P: FarADDRESS): FarADDRESS;
+(*# restore *)
+
+TYPE A3=ARRAY [0..2] OF SHORTCARD;
+TYPE A2=ARRAY [0..1] OF SHORTCARD;
+TYPE A1=ARRAY [0..0] OF SHORTCARD;
+
+(*# save,
+    call( reg_param=>(dx,ax),
+          reg_saved=>(dx,ax,bx,cx,si,di,es,ds,st1,st2),
+          inline=>on )
+*)
+INLINE PROCEDURE Out (p:CARDINAL;v:SHORTCARD)=A2(0EEH, Ret);
+INLINE PROCEDURE OutW(p:CARDINAL;v:CARDINAL )=A2(0EFH, Ret);
+
+(*# call( reg_param=>(dx),
+          reg_saved=>(dx,bx,cx,si,di,es,ds,st1,st2)) *)
+INLINE PROCEDURE In (p:CARDINAL):SHORTCARD=A2(0ECH, Ret);
+INLINE PROCEDURE InW(p:CARDINAL):CARDINAL =A2(0EDH, Ret);
+
+(*# call( reg_param=>(ax),
+          reg_saved=>(dx,bx,cx,si,di,es,ds,st1,st2)) *)
+INLINE PROCEDURE GetFlags():CARDINAL=A3(9CH, 58H, Ret);
+INLINE PROCEDURE SetFlags(F: CARDINAL)=A3(50H, 9DH, Ret);
+
+(*# call( reg_param=>(ax,bx,cx,dx,st1,st2),
+          reg_saved=>(dx,bx,cx,si,di,es,ds,st0,st1,st2,st2,st3,st4,st5,st6)) *)
+INLINE PROCEDURE Eval(Result: ARRAY OF BYTE)=A1(Ret);
+(* Discards function result *)
+
+(*# call( reg_param=>(),
+          reg_saved=>(ax,dx,bx,cx,si,di,es,ds,st1,st2)) *)
+INLINE PROCEDURE DI()=A2(0FAH, Ret);
+INLINE PROCEDURE EI()=A2(0FBH, Ret);
+(*# restore *)
+
+END SYSTEM.
+
+

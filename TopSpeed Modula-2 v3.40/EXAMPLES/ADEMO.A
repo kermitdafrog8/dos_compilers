@@ -1,0 +1,296 @@
+(* Release 3.02 *)
+(*===========================================================
+== JPI-TopSpeed Assembler                                  ==
+== Demo assembler skeleton (For Modula-2 and Pascal usage) ==
+==                                                         ==
+== Module name is ADemo,                                   ==
+== all occurances of ADemo should be be replaced           ==
+== with your module name                                   ==
+==                                                         ==
+== The following compiler directives are used extensively  ==
+== in this example to show how to create memory model/     ==
+== calling convention independent code                     ==
+==                                                         ==
+==  NearCall     TRUE for memory models small and compact  ==
+==  NearPtr      TRUE for memory models small and medium   ==
+==  SameDS       TRUE for memory models small, medium,     ==
+==                    compact and large                    ==
+==  RegParam     TRUE for the JPI calling convention       ==
+==  (see corelib.inc for other directives)                 ==
+==                                                         ==
+==  The compiler directive 'Modula' is also used in this   ==
+==  example to show the differences between C and Modula   ==
+==  Normally you would decide on the main interface        ==
+==  language then create an interface file for the other   ==
+==  languages that sets the appropriate pragmas to do      ==
+==  the language specific conversions for you              ==
+=============================================================*)
+
+include "corelib.inc"
+
+module ADemo
+
+Modula   = 1     (* Set this to 0 to compile as a C style caller *)
+InitCode = 1     (* Set this to 0 if no initcode needed e.g. if pragma
+                  * (*# module(init_code=>off) *) is in definition file
+                  *)
+
+
+segment _BSS(BSS,28H)
+
+(* Data Goes here *)
+public ADemo@GlobalVariable:  org 2
+
+segment _CONST(DATA,28H)
+
+(* Initialized constants go here,
+   (Unless const-in-code required (large models only)) *)
+
+(*%T InitCode*)
+public ADemo$:                    (* Dependancy list *)
+
+(*%F NearCall*)                   (* Far calls *)
+    dd $AnInit                    (* initialization label goes here (far) *)
+(*%E NearCall FALSE *)
+(*%T NearCall*)                   (* Near Calls *)
+  dw $AnInit
+                                  (* See pg 108 of the Advanced Developer's *)
+                                  (* Guide if you need to initialise other  *)
+                                  (* modules                                *)
+(*%E NearCall TRUE  *)
+    dw -1                         (* Terminates list *)
+(*%E InitCode TRUE  *)
+
+(*************************************************************************)
+(* This is the initialisation code.  It is equivalent to:                *)
+(*                                                                       *)
+(* BEGIN                                                                 *)
+(*   GlobalVariable := 3;                                                *)
+(* END ADemo.                                                            *)
+(*                                                                       *)
+(*************************************************************************)
+(*%F NearCall *)
+segment ADemo_TEXT(CODE,28H)
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E NearCall TRUE  *)
+
+extrn ADemo@GlobalVariable
+public $AnInit:
+(*%F SameDS *)
+    push ds
+    mov  ax, _BSS
+    mov  ds, ax
+(*%E SameDS FALSE *)
+    mov  word [ADemo@GlobalVariable],3
+(*%F SameDS *)
+    pop  ds
+(*%E SameDS FALSE *)
+(*%F NearCall *)
+    ret  far 0
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+    ret      0
+(*%E NearCall TRUE  *)
+
+
+(*************************************************************************
+* respecifying the segment allows the smart linking facility to
+* only include the code that is actually used
+*
+*PROCEDURE AFunc (AString : Str30) : INTEGER;
+*VAR
+*  A : char;
+*
+*BEGIN
+*  A := AString[0];
+*  RETURN (GlobalVariable);
+*END AFunc;
+**************************************************************************)
+(*%F NearCall *)
+segment ADemo_TEXT(CODE,28H)
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E NearCall TRUE  *)
+
+public ADemo$AFunc:
+                    (* (JPI calling convention)
+                       Parameters come in the following registers:
+                       AX,BX,CX,DX and then on the stack.
+                       The following registers should be saved if corrupted
+                       BP,DS,SI,DI,ST0,ST1,
+                       Also AX,BX,CX and DX (if NOT used as parameters)
+                    *)
+       push bp
+       mov  bp,sp
+(*%F RegParam*)
+                            (* Move the parameters into the same   *)
+                            (* registers as passed by JPI calling  *)
+                            (* convention                          *)
+(*%F NearPtr *)
+       mov   bx,[bp][8]
+(*%E NearPtr FALSE *)
+       mov   ax,[bp][6]
+(*%E RegParam FALSE *)
+(*%F NearPtr *)
+       sub   sp,6                 (* This is the scratch space for the *)
+                                  (* local varaibles.                  *)
+       mov   [bp][-4],ax
+       mov   [bp][-2],bx
+       les   bx,[bp][-4]
+       mov   al,es:[bx][1]
+       sub   ah,ah
+       mov   [bp][-6],al
+(*%E NearPtr FALSE *)
+(*%T NearPtr *)
+       dec   sp
+       dec   sp
+       mov   bx,ax
+(*%F Modula *)
+       mov   al,[bx]
+(*%E Modula FALSE *)
+(*%T Modula *)
+       mov   al,[bx][1]
+(*%E Modula TRUE  *)
+       sub   ah,ah
+       mov   [bp][-2],al
+(*%E NearPtr TRUE  *)
+(*%F SameDS *)
+       push ds
+       mov  ax, _BSS
+       mov  ds, ax              (* Now DS points to the data segment   *)
+                                (* containing ADemo@GlobalVariable     *)
+(*%E SameDS FALSE *)
+       mov   ax,[ADemo@GlobalVariable]
+(*%F SameDS *)
+       pop ds
+(*%E SameDS FALSE *)
+       mov   sp,bp
+       pop   bp
+(*%F RegParam *)
+(*%F NearCall *)
+(*%F NearPtr *)
+       ret   far 4
+(*%E NearPtr  FALSE *)
+(*%T NearPtr *)
+       ret   far 2
+(*%E NearPtr  TRUE  *)
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+(*%F NearPtr *)
+       ret       4
+(*%E NearPtr  FALSE *)
+(*%T NearPtr *)
+       ret       2
+(*%E NearPtr  TRUE  *)
+(*%E NearCall TRUE  *)
+(*%E RegParam FALSE *)
+(*%F NearCall *)
+       ret   far 0
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+       ret       0
+(*%E NearCall TRUE  *)
+
+
+(*************************************************************************
+*PROCEDURE AProc (VAR variable : CHAR; param : INTEGER);
+*BEGIN
+*  variable := 'c';
+*  GlobalVariable := param;
+*END AProc;
+**************************************************************************)
+(*%F NearCall *)
+segment ADemo_TEXT(CODE,28H)
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H)
+(*%E NearCall TRUE  *)
+
+public ADemo$AProc:
+(*%F RegParam*)
+                            (* Only need to deal with the stack if *)
+                            (* using the stack calling convention  *)
+                            (* Note that this is not true for all  *)
+                            (* functions.  See AFunc               *)
+       push  bp
+       mov   bp, sp
+                            (* Move the parameters into the same   *)
+                            (* registers as passed by JPI calling  *)
+                            (* convention                          *)
+(*%F Modula *)
+(*%F NearPtr *)
+       mov   ax,[bp][6]
+       mov   bx,[bp][8]
+       mov   cx,[bp][10]
+(*%E NearPtr FALSE *)
+(*%T NearPtr *)
+       mov   ax,[bp][6]
+       mov   bx,[bp][8]
+(*%E NearPtr TRUE *)
+(*%E Modula FALSE *)
+(*%T Modula *)
+(*%F NearPtr *)
+       mov   cx,[bp][6]
+       mov   ax,[bp][8]
+       mov   bx,[bp][10]
+(*%E NearPtr FALSE *)
+(*%T NearPtr *)
+       mov   bx,[bp][6]
+       mov   ax,[bp][8]
+(*%E NearPtr TRUE *)
+(*%E Modula TRUE  *)
+(*%E RegParam FALSE*)
+       push  si
+       mov   si,ax
+(*%F NearPtr *)
+       mov   es,bx
+       mov   byte es:[si],63H
+(*%E NearPtr FALSE *)
+(*%T NearPtr *)
+       mov   byte [si],63H
+(*%E NearPtr TRUE  *)
+       pop   si
+(*%F SameDS *)
+       mov   ax, _BSS
+       mov   es,ax
+       mov   es:[ADemo@GlobalVariable],cx
+(*%E SameDS FALSE *)
+(*%T SameDS *)
+(*%F NearPtr *)
+       mov   [ADemo@GlobalVariable],cx
+(*%E NearPtr FALSE *)
+(*%T NearPtr *)
+       mov   [ADemo@GlobalVariable],bx
+(*%E NearPtr TRUE  *)
+(*%E SameDS TRUE  *)
+                            (* Now clean up everything before returning *)
+(*%F RegParam *)
+       pop bp
+(*%F NearCall *)
+(*%F NearPtr *)
+       ret   far 6
+(*%E NearPtr  FALSE *)
+(*%T NearPtr *)
+       ret   far 4
+(*%E NearPtr  TRUE  *)
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+(*%F NearPtr *)
+       ret       6
+(*%E NearPtr  FALSE *)
+(*%T NearPtr *)
+       ret       4
+(*%E NearPtr  TRUE  *)
+(*%E NearCall TRUE  *)
+(*%E RegParam FALSE *)
+(*%F NearCall *)
+       ret   far 0
+(*%E NearCall FALSE *)
+(*%T NearCall *)
+       ret       0
+(*%E NearCall TRUE  *)
+
+end

@@ -1,0 +1,21 @@
+(* Copyright (C) 1987 Jensen & Partners International *)
+DEFINITION MODULE FloatExc;
+(*
+   This module enables floatingpoint exception handling. 
+   If an 8087-exception occurs, program excution will stop
+   (by a call to FatalError) and a message of the following
+   form is given:
+
+   [AAAAA/OOOO] Float Error : 'message'
+
+   The address AAAAA is an absolute address in hexadecimal
+   notation; the address OOOO is the offset from  the start of
+   the program, i.e the procedure in error can be found in the
+   mapfile.
+*)
+
+PROCEDURE EnableExceptionHandling;
+PROCEDURE DisableExceptionHandling;
+
+END FloatExc.
+

@@ -1,0 +1,855 @@
+#pragma save
+
+#if "%model"="" #then
+  #error "model must be set before including MKLIB.PI"
+#endif
+
+#pragma check(index=>off,range=>off,overflow=>off,stack=>off,nil_ptr=>off)
+#pragma optimize(speed=>off)
+#pragma option(ansi=>off)
+
+#pragma define(_ENV=>off,_WINDOWS=>off,_DLL=>off,_OVL=>off,_OS2=>off,_WINDLL=>off)
+#pragma define(_SMALL_INLINE=>on,_XTD=>off)
+
+#set usestdmem="off"
+#if %system = os2 #then
+  #pragma define(_OS2=>on)
+  #set usestdmem="on"
+#endif
+#if %system = win #then
+  #pragma define(_WINDOWS=>on)
+#endif
+#if %model = overlay #then
+  #pragma define(_OVL=>on)
+#endif
+#if %model = dynalink #then
+  #pragma define(_DLL=>on)
+#endif
+#if (%model=extended) #or (%model=extendmt) #then
+  #pragma define(_OS2=>on,_XTD=>on)
+  #set usestdmem="on"
+#endif
+
+#if %model = dynalink #then
+  #pragma define(_MULTI=>on,_PMD=>off,_GRAPHICS=>on,_TEXTWIND=>on)
+  -- If a non multi thread DLL is made turn _MTHREAD off.
+  -- If a DLL with Post Mortem is made turn _PMD on.
+  -- If a DLL without Graphics is made turn _GRAPHICS off.
+  -- If a DLL without Text Windows is made turn _TEXTWIND off.
+#endif
+
+-- macro for performing implib
+#set implib = "#implib %%lname.lib %%O%%%%M%%_%%lext.exp"
+
+-- macro for doing link
+#set dolink = '
+  #if %%model = dynalink #then
+    %%implib
+    #pragma link_option(oldexe=>off,map=>on)
+    #if %system = dos #then
+      #pragma link_option(pack=>off,overlay=>on)
+    #endif
+    #if #not "%%extra" = "" #then
+      #pragma link(%%extra)
+    #endif
+    #if %%system = os2 #then
+      #pragma link(os2jpi.lib)
+    #endif
+    #dolink %%lname.dll
+    #if %system = dos #then
+      #if %%make #then
+        #exemod %%lname.dll %%lname.exp %%lname.map
+      #endif
+    #endif
+  #else
+    #dolink %%lname.lib
+  #endif
+  #pragma restore
+'
+
+#if "%makestandard" #then
+  #message "remaking standard object files"
+  #pragma save
+  #if (%system = win) #then
+    #compile initwin.a
+    #compile initwdll.a
+    #compile winfloat.a
+  #else
+    #compile initexe.a
+    #compile initdll.a
+    #if "%tsm2" #then
+      #compile initnew.a
+    #endif
+    #if (%system = os2) #and #exists initpm.a #then
+      #compile initpm.a
+    #endif
+    #compile noemul.a
+    #compile nofloat.a
+    #if %model=extended #then
+      #pragma save
+      #if x_emul.obj #older x_emul.a, tsxemul.exp #then
+        #implib tsxemul.lib tsxemul.exp
+        #compile x_emul.a #to xx_emul.obj
+        #message "Building X_EMUL.OBJ"
+        #run "objmerge x_emul.obj xx_emul.obj tsxemul.lib >nul" no_window
+        #dolink dummy.lib
+        #file delete dummy.lib
+      #endif
+      #pragma restore
+    #else
+      #compile %O%_emul.a
+    #endif
+    #if ((%model = dynalink) #or (%model = overlay)) #and (%system = dos) #then
+      #implib loader.lib loader.exp
+    #endif
+  #endif
+  #dolink dummy.lib
+  #file delete dummy.lib
+  #pragma restore
+#endif
+
+#message "making core library COM, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #pragma linkfirst(initdll.obj)
+  #endif
+  #compile coremain.a
+  #compile coresig.a
+  #compile coremath.a
+  #compile 3rdparty.a
+  #compile corefile.a
+  #compile corertl.a
+  #compile coreio.a
+  #compile corepmd.a
+  #if (%model=extended) #or (%model=extendmt) #then
+    #compile xos2lib.a
+    #compile xinterc.a
+    #if (%model=extendmt) #then
+      #compile xthread.mod
+    #endif
+    #implib tsxlib.lib tsxapi.exp
+    #pragma link(tsxlib.lib)
+  #endif
+
+  #if (#not (%system = win)) #then
+    #compile corewind.a
+    #if "%usestdmem"=on #then
+      #compile stdmem.a
+    #else
+      #compile coremem.a
+    #endif
+    #compile coreemul.a
+
+    #if define(_mthread) #then
+      #compile coreproc.a
+    #endif
+  #endif
+
+  #if %model = dynalink #and #not %system = win #then
+    #compile %O%_emul.a #to l%O%_emul.obj
+  #endif
+  #set lname = %O%%M%%C%com
+  #if %system = dos #then
+    #if (%model=extended) #or (%model=extendmt) #then
+      #set lname = X%M%%C%com
+    #endif
+    #compile coregrap.a
+  #endif
+  #set lext  = com
+  #if %system = dos #then
+    #set extra = "loader.lib"
+  #else
+    #set extra = ""
+  #endif
+  %dolink
+  #set extra = %O%%M%%C%com.lib
+
+#if "%windll" = on #then
+  #pragma define(_WINDLL=>on)
+  #message "making core library COMD, model = %model"
+  #pragma save
+  #compile coremain.a #to dcoremai.obj
+  #compile coresig.a  #to dcoresig.obj
+  #compile coremath.a #to dcoremat.obj
+  #compile 3rdparty.a #to d3rdpart.obj
+  #compile corefile.a #to dcorefil.obj
+  #compile corertl.a  #to dcorertl.obj
+  #compile coreio.a   #to dcoreio.obj
+  #set lname = W%M%%C%comd
+  #set lext  = comd
+  %dolink
+#endif
+
+-- make C library
+#if ("%tsc"=on) #then
+
+  #message "making C library CLIB, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #compile initcdll.a
+  #endif
+  #compile cdata.c
+  #compile clib1.a
+  #compile clib2.c
+  #compile printf.c
+  #compile scanf.c
+  #compile cstr.a
+  #compile cfstr.a
+  #compile cio1.a
+  #compile cio2.c
+  #compile csys.c
+
+  #if %system = dos #then
+    #compile msdos.a
+    #compile cmouse.c
+  #endif
+  #if define(_mthread) #then
+    #compile cproc.c
+  #endif
+  #if %system = win #then
+    #compile msdos.a
+    #compile cwinmem.c
+  #endif
+
+  #set lname = %O%%M%%C%clib
+  #set lext  = clib
+  %dolink
+#endif
+
+-- make Modula library
+#if ("%tsm2"=on) #then
+  #pragma save
+  #message "making modula library MLIB, model = %model"
+  #if %model = dynalink #then
+    #pragma linkfirst(initdll.obj)
+    #compile fio.mod
+    #compile asmlib.a
+    #compile mathlib.mod
+    #compile system.mod
+    #compile str.mod
+    #compile lib.mod
+    #compile io.mod
+    #compile floatexc.mod
+    #compile process.mod
+  #endif
+  #compile modcore.a
+  #compile spawn.a
+  #if %system = dos #then
+    #if (%model = overlay) #or (%model = dynalink) #then
+      #compile mstorage.mod
+    #else
+      #compile storage.mod
+    #endif
+  #elsif %system = win #then
+    #compile wstorage.mod
+  #elsif %system = os2 #then
+    #compile storage.mod
+  #endif
+  #set lname = %O%%M%%C%mlib
+  #set lext  = mlib
+  %dolink
+
+  #message "making modula library M2, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #compile initmdll.a
+  #endif
+  #compile fior.mod
+  #compile shtheap.mod
+  #compile formio.mod
+  #if #not %system = win #then
+    #compile window.mod
+  #endif
+  #if (#not ( %model = dynalink )) #then
+    #compile fio.mod
+    #compile asmlib.a
+    #compile mathlib.mod
+    #compile system.mod
+    #compile str.mod
+    #compile lib.mod
+    #if #not %system = win #then
+      #compile io.mod
+    #endif
+    #compile floatexc.mod
+    #if define(_mthread) #then
+      #compile process.mod
+    #endif
+  #endif
+  #if %system = win #then
+    #compile winfio.mod
+    #compile winstr.mod
+  #elsif %system = dos #then
+    #compile biosio.mod
+    #compile lim.mod
+    #compile msmouse.mod
+    #compile graph.mod
+  #else -- system = os2
+    #if #not((%model = small) #or (%model = compact)) #then
+      -- graphics impossible, because IO privilege functions must be far calls
+      #compile graph.mod
+      #compile graphi.mod
+    #endif
+  #endif
+  #set lname = %O%%M%%C%m2
+  #set lext  = m2
+  #if %model = dynalink #then
+    #pragma link (%O%%M%%C%mlib.lib)
+  #endif
+  %dolink
+
+  #if ("%tsc"=on) #then
+    #pragma save
+    #message "making modula library MLIBC, model = %model"
+    #if %model = dynalink #then
+      #pragma linkfirst(initdll.obj)
+      #compile fio.mod
+      #compile asmlib.a
+      #compile mathlib.mod
+      #compile system.mod
+      #compile str.mod
+      #compile lib.mod
+      #compile io.mod
+      #compile floatexc.mod
+      #compile process.mod
+    #endif
+    #if %system = dos #then
+      #compile mstorage.mod
+    #elsif %system = win #then
+      #compile wstorage.mod
+    #elsif %system = os2 #then
+      #compile storage.mod
+    #endif
+    #if %model = dynalink #then
+      #pragma link (%O%%M%%C%clib.lib)
+    #endif
+    #set lname = %O%%M%%C%mlibc
+    #set lext  = mlibc
+    %dolink
+
+    #if %model = dynalink #then
+      #message "making modula library M2C, model = %model"
+      #pragma save
+      #pragma linkfirst(initdll.obj)
+      #compile fior.mod
+      #compile shtheap.mod
+      #compile formio.mod
+      #if #not %system = win #then
+        #compile window.mod
+      #endif
+      #if %system = dos #then
+        #compile biosio.mod
+        #compile lim.mod
+        #compile msmouse.mod
+        #compile graph.mod
+      #elsif %system = os2 #then
+        #compile graph.mod
+        #compile graphi.mod
+      #endif
+      #set lname = %O%%M%%C%m2c
+      #set lext  = m2c
+      #pragma link (%O%%M%%C%mlibc.lib)
+      %dolink
+    #endif
+  #endif
+#endif
+
+#if (("%tsc" = on) #or ("%tspas" = on)) #and (#not %system = win) #then
+  -- C/Pascal Borland windows
+  #message "making library BORW, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #pragma linkfirst(initdll.obj)
+  #endif
+  #compile coreclip.a
+  #set lname = %O%%M%%C%borw
+  #set lext  = borw
+  %dolink
+#endif
+
+-- Make Pascal libraries
+#if "%tspas"=on #then
+  #message "making pascal library PLIB, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #pragma linkfirst(initdll.obj)
+  #endif
+  #compile modcore.a
+  #compile pspawn.a
+  #pragma link_option(case => off)
+  #set lname = %O%%M%%C%plib
+  #set lext  = plib
+  %dolink
+
+  #message "making pascal library PAS, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #compile initmdll.a
+  #endif
+  #pragma expr(promote=>off)
+  #compile paslib.pas
+  #compile pascore.pas
+  #compile pasdos.pas
+  #compile pasred.pas
+  #compile paslow.a
+  #compile turbodos.pas
+  #compile turbosys.pas
+  #if #not %system = win #then
+    #compile paswin.pas
+    #compile turbocrt.pas
+    #compile turboprn.pas
+  #endif
+  #if define(_mthread) #then
+    #compile pasproc.pas
+  #endif
+  #pragma link_option(case => off)
+  #if %model = dynalink #then
+    #pragma link ( %O%%M%%C%plib.lib )
+    #pragma link ( %O%%M%%C%borw.lib )
+  #endif
+  #set lname = %O%%M%%C%pas
+  #set lext  = pas
+  %dolink
+
+  #if ("%tsc"=on) #and (%model = dynalink) #then
+
+    #message "making pascal library PASC, model = %model"
+    #pragma save
+    #pragma linkfirst(initdll.obj)
+    #pragma expr(promote=>off)
+    #compile paslib.pas
+    #compile pascore.pas
+    #compile pasdos.pas
+    #compile pasred.pas
+    #compile paswin.pas
+    #compile paslow.a
+    #compile turbodos.pas
+    #compile turbosys.pas
+    #compile turbocrt.pas
+    #compile turboprn.pas
+    #compile pasproc.pas
+    #pragma link_option(case => off)
+    #pragma link ( %O%%M%%C%clib.lib )
+    #pragma link ( %O%%M%%C%borw.lib )
+    #set lname = %O%%M%%C%pasc
+    #set lext  = pasc
+    %dolink
+  #endif
+
+  #if ("%tsm2"=on) #and (%model = dynalink) #then
+
+    #message "making pascal library PASM, model = %model"
+    #pragma save
+    #compile initmdll.a
+    #pragma expr(promote=>off)
+    #compile paslib.pas
+    #compile pascore.pas
+    #compile pasdos.pas
+    #compile pasred.pas
+    #compile paswin.pas
+    #compile paslow.a
+    #compile turbodos.pas
+    #compile turbosys.pas
+    #compile turbocrt.pas
+    #compile turboprn.pas
+    #compile pasproc.pas
+    #pragma link_option(case => off)
+    #pragma link ( %O%%M%%C%mlib.lib )
+    #pragma link ( %O%%M%%C%borw.lib )
+    #set lname = %O%%M%%C%pasm
+    #set lext  = pasm
+    %dolink
+  #endif
+
+#endif
+
+#if ("%tsc" = on) #and (%system = dos) #then
+  -- C graphics
+  #message "making C library GRAPH, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #compile initgdll.a
+  #endif
+  #compile cgraph.c
+  #set lname = %O%%M%%C%graph
+  #set lext  = graph
+  #if %model = dynalink #then
+    #pragma link(%O%%M%%C%clib.lib)
+  #endif
+  %dolink
+#endif
+
+#if ("%tsc" = on) #and (#not %system = win) #then
+  -- C text windows
+  #message "making C library WIND, model = %model"
+  #pragma save
+  #if %model = dynalink #then
+    #compile inittdll.a
+  #endif
+  #compile cwindow.c
+  #compile cwin.a
+  #set lname = %O%%M%%C%wind
+  #set lext  = wind
+  #if %model = dynalink #then
+    #pragma link(%O%%M%%C%clib.lib)
+  #endif
+  %dolink
+#endif
+
+#if #not ((%model=extended) #or (%model=extendmt)) #then
+  -- make CPP library
+  #if "%tscpp"=on #then
+    #message "making CPP library SLIB, model = %model"
+    #pragma save
+    #if %model = dynalink #then
+      #pragma linkfirst(initdll.obj)
+    #endif
+    #if define(_mthread) #then
+      #compile task.cpp
+    #endif
+    #compile bcd.cpp
+    #compile complex.cpp
+    #compile fstream.cpp
+    #compile new.cpp
+    #compile iostream.cpp
+    #compile ioinline.cpp
+    #compile stdiostr.cpp
+    #compile strstrea.cpp
+    #compile stream.cpp
+    #if #not %system = win #then
+      #compile textwin.cpp
+      #compile coniostr.cpp
+    #endif
+    #compile cpplow.a
+    #if %model = dynalink #then
+      #pragma link( %O%%M%%C%clib.lib, %O%%M%%C%wind.lib)
+      #set lname = %O%%M%%C%slib
+    #else
+      #if %system = win #then
+        #set lname = W%M%%C%slib
+      #else
+        #set lname = C%M%%C%slib
+      #endif
+    #endif
+    #set lext  = slib
+    %dolink
+
+    #if "%makertool" = on #then
+      #message "making CPP Tools library RTOOL, model=%model"
+      #pragma save
+      #if %model = dynalink #then
+        #pragma linkfirst(initdll.obj)
+      #endif
+      #compile FACTORY.cpp
+      #compile BINTREE.cpp
+      #compile BTRDICT.cpp
+      #compile BTREE.cpp
+      #compile COLCLASS.cpp
+      #compile COLLASS.cpp
+      #compile COLLSTR.cpp
+      #compile COLLDATE.cpp
+      #compile COLLECT.cpp
+      #compile COLLINT.cpp
+      #compile COLLTIME.cpp
+      #compile DISKTREE.cpp
+      #compile DLIST.cpp
+      #compile DLISTCOL.cpp
+      #compile FILEMGR.cpp
+      #compile HASHDICT.cpp
+      #compile IDENDICT.cpp
+      #compile IDENSET.cpp
+      #compile ORDCLTN.cpp
+      #compile PSTREAM.cpp
+      #compile QUEUECOL.cpp
+      #compile RWBAG.cpp
+      #compile RWDATE.cpp
+      #compile RWFILE.cpp
+      #compile RWSET.cpp
+      #compile RWTIME.cpp
+      #compile SLIST.cpp
+      #compile SLISTCOL.cpp
+      #compile STACKCOL.cpp
+      #compile STRINGIO.cpp
+      #compile STRINGS.cpp
+      #compile UTILITY.cpp
+      #if %model = dynalink #then
+        #pragma link( %O%%M%%C%clib.lib, %O%%M%%C%slib.lib)
+        #set lname = %O%%M%%C%rtool
+      #else
+        #if %system = win #then
+          #set lname = W%M%%C%rtool
+        #else
+          #set lname = C%M%%C%rtool
+        #endif
+      #endif
+      #set lext  = rtool
+      %dolink
+    #endif
+
+    #if "%makermath" = on #then
+      #message "making CPP Tools library RMATH, model=%model"
+      #pragma save
+      #if %model = dynalink #then
+        #pragma linkfirst(initdll.obj)
+      #endif
+      #if "%makersrc" = on #then
+        #set doexpand = '
+          #expand %%srcfile #set srcfile=%%opath
+          #expand %%outfile #set outfile=%%cpath
+          #if %%outfile #older %%srcfile #then
+            #run "maketype %%mtype %%srcfile %%outfile" no_window rte_abort
+          #endif
+        '
+        #set mtype = "DComplex" #set srcfile = "xcmath.cpp" #set outfile = "ccmath.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgemat.cpp" #set outfile = "cgemat.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgematio.cpp" #set outfile = "cgematio.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgematm1.cpp" #set outfile = "cgematm1.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgematm2.cpp" #set outfile = "cgematm2.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgematop.cpp" #set outfile = "cgematop.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xgepick.cpp" #set outfile = "cgepick.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xludecmp.cpp" #set outfile = "cludecmp.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xpick.cpp" #set outfile = "cpick.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xvec.cpp" #set outfile = "cvec.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xvecio.cpp" #set outfile = "cvecio.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xvecmath.cpp" #set outfile = "cvecmath.cpp"
+        %doexpand
+        #set mtype = "DComplex" #set srcfile = "xvecop.cpp" #set outfile = "cvecop.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgemat.cpp" #set outfile = "dgemat.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgematio.cpp" #set outfile = "dgematio.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgematm1.cpp" #set outfile = "dgematm1.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgematm2.cpp" #set outfile = "dgematm2.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgematop.cpp" #set outfile = "dgematop.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xgepick.cpp" #set outfile = "dgepick.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xludecmp.cpp" #set outfile = "dludecmp.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xpick.cpp" #set outfile = "dpick.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xrmath.cpp" #set outfile = "drmath.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xvec.cpp" #set outfile = "dvec.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xvecio.cpp" #set outfile = "dvecio.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xvecmath.cpp" #set outfile = "dvecmath.cpp"
+        %doexpand
+        #set mtype = "Double" #set srcfile = "xvecop.cpp" #set outfile = "dvecop.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgemat.cpp" #set outfile = "fgemat.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgematio.cpp" #set outfile = "fgematio.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgematm1.cpp" #set outfile = "fgematm1.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgematm2.cpp" #set outfile = "fgematm2.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgematop.cpp" #set outfile = "fgematop.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xgepick.cpp" #set outfile = "fgepick.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xludecmp.cpp" #set outfile = "fludecmp.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xpick.cpp" #set outfile = "fpick.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xrmath.cpp" #set outfile = "frmath.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xvec.cpp" #set outfile = "fvec.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xvecio.cpp" #set outfile = "fvecio.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xvecmath.cpp" #set outfile = "fvecmath.cpp"
+        %doexpand
+        #set mtype = "Float" #set srcfile = "xvecop.cpp" #set outfile = "fvecop.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xgemat.cpp" #set outfile = "igemat.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xgematio.cpp" #set outfile = "igematio.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xgematm1.cpp" #set outfile = "igematm1.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xgematop.cpp" #set outfile = "igematop.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xgepick.cpp" #set outfile = "igepick.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xpick.cpp" #set outfile = "ipick.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xvec.cpp" #set outfile = "ivec.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xvecio.cpp" #set outfile = "ivecio.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xvecmath.cpp" #set outfile = "ivecmath.cpp"
+        %doexpand
+        #set mtype = "Int" #set srcfile = "xvecop.cpp" #set outfile = "ivecop.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xgemat.cpp" #set outfile = "sgemat.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xgematio.cpp" #set outfile = "sgematio.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xgematm1.cpp" #set outfile = "sgematm1.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xgematop.cpp" #set outfile = "sgematop.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xgepick.cpp" #set outfile = "sgepick.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xpick.cpp" #set outfile = "spick.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xvec.cpp" #set outfile = "svec.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xvecio.cpp" #set outfile = "svecio.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xvecmath.cpp" #set outfile = "svecmath.cpp"
+        %doexpand
+        #set mtype = "SChar" #set srcfile = "xvecop.cpp" #set outfile = "svecop.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xgemat.cpp" #set outfile = "ugemat.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xgematio.cpp" #set outfile = "ugematio.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xgematm1.cpp" #set outfile = "ugematm1.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xgematop.cpp" #set outfile = "ugematop.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xgepick.cpp" #set outfile = "ugepick.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xpick.cpp" #set outfile = "upick.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xvec.cpp" #set outfile = "uvec.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xvecio.cpp" #set outfile = "uvecio.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xvecmath.cpp" #set outfile = "uvecmath.cpp"
+        %doexpand
+        #set mtype = "UChar" #set srcfile = "xvecop.cpp" #set outfile = "uvecop.cpp"
+        %doexpand
+      #endif
+      #compile ccmath.cpp
+      #compile cfft.cpp
+      #compile cfft2d.cpp
+      #compile cgemat.cpp
+      #compile cgematio.cpp
+      #compile cgematm1.cpp
+      #compile cgematm2.cpp
+      #compile cgematop.cpp
+      #compile cgematx.cpp
+      #compile cgepick.cpp
+      #compile cludecmp.cpp
+      #compile cpick.cpp
+      #compile cvec.cpp
+      #compile cvecio.cpp
+      #compile cvecmath.cpp
+      #compile cvecop.cpp
+      #compile dcosfft.cpp
+      #compile dfft.cpp
+      #compile dgemat.cpp
+      #compile dgematio.cpp
+      #compile dgematm1.cpp
+      #compile dgematm2.cpp
+      #compile dgematop.cpp
+      #compile dgepick.cpp
+      #compile dludecmp.cpp
+      #compile dpick.cpp
+      #compile drmath.cpp
+      #compile dvec.cpp
+      #compile dvecio.cpp
+      #compile dvecmath.cpp
+      #compile dvecop.cpp
+      #compile fgemat.cpp
+      #compile fgematio.cpp
+      #compile fgematm1.cpp
+      #compile fgematm2.cpp
+      #compile fgematop.cpp
+      #compile fgematx.cpp
+      #compile fgepick.cpp
+      #compile fludecmp.cpp
+      #compile fpick.cpp
+      #compile frmath.cpp
+      #compile fvec.cpp
+      #compile fvecio.cpp
+      #compile fvecmath.cpp
+      #compile fvecop.cpp
+      #compile fvecx.cpp
+      #compile igemat.cpp
+      #compile igematio.cpp
+      #compile igematm1.cpp
+      #compile igematop.cpp
+      #compile igematx.cpp
+      #compile igepick.cpp
+      #compile ipick.cpp
+      #compile ivec.cpp
+      #compile ivecio.cpp
+      #compile ivecmath.cpp
+      #compile ivecop.cpp
+      #compile ivecx.cpp
+      #compile sgemat.cpp
+      #compile sgematio.cpp
+      #compile sgematm1.cpp
+      #compile sgematop.cpp
+      #compile sgematx.cpp
+      #compile sgepick.cpp
+      #compile spick.cpp
+      #compile svec.cpp
+      #compile svecio.cpp
+      #compile svecmath.cpp
+      #compile svecop.cpp
+      #compile svecx.cpp
+      #compile ugemat.cpp
+      #compile ugematio.cpp
+      #compile ugematm1.cpp
+      #compile ugematop.cpp
+      #compile ugematx.cpp
+      #compile ugepick.cpp
+      #compile upick.cpp
+      #compile uvec.cpp
+      #compile uvecio.cpp
+      #compile uvecmath.cpp
+      #compile uvecop.cpp
+      #compile uvecx.cpp
+      #compile dstats.cpp
+      #compile histo.cpp
+      #compile lsqfit.cpp
+      #compile randbino.cpp
+      #compile randexp.cpp
+      #compile randfunc.cpp
+      #compile randgama.cpp
+      #compile randnorm.cpp
+      #compile randpois.cpp
+      #compile randunif.cpp
+      #compile mathutil.cpp
+      #compile rwblock.cpp
+      #compile rwfile.cpp
+      #compile utility.cpp
+      #if %model = dynalink #then
+        #pragma link( %O%%M%%C%clib.lib, %O%%M%%C%slib.lib)
+        #set lname = %O%%M%%C%rmath
+      #else
+        #if %system = win #then
+          #set lname = W%M%%C%rmath
+        #else
+          #set lname = C%M%%C%rmath
+        #endif
+      #endif
+      #set lext  = rmath
+      %dolink
+    #endif  -- makermath
+  #endif -- tscpp
+#endif -- not an extended model
+
+#pragma restore
+
+

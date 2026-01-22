@@ -1,0 +1,21 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  REALINOU.DEF - Modula-2 core library interface                          *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE RealInOut ;
+
+VAR
+      Done   : BOOLEAN ;
+
+PROCEDURE ReadReal  ( VAR v : REAL ) ;
+
+PROCEDURE WriteReal ( v : REAL ; w : CARDINAL ) ;
+
+END RealInOut.
+

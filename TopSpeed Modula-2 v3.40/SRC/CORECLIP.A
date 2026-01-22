@@ -1,0 +1,3969 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  CORECLIP.A - Borland clipping window module                             *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module Borw
+
+(* Common Procedures *)
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _incxy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Cursor position advanced.
+
+   IN PARAMETERS -  row (CHAR), column (CHAR) in DH:DL.
+
+   OUT PARAMETERS - returns new values DH:DL.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  Internal.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __setxy
+extrn __scroll
+extrn __right
+extrn __top
+extrn __bottom
+extrn __left
+extrn __wscroll
+
+select _TEXT
+
+public  __incxy :                   (* internal to conio *)
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    inc  dl
+    cmp  dl, [__right]
+    jbe  xOK
+    cmp  dh, [__bottom]
+    jae  scrollUp
+    mov  dl, [__left]
+    inc  dh
+xOK:
+    call __setxy
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret   0
+scrollUp:
+    cmp  word [__wscroll], 0
+    je   xOK
+    push dx
+    mov  ax, 601H
+    mov  ch, [__top]
+    mov  cl, [__left]
+    mov  dh, [__bottom]
+    mov  dl, [__right]
+    call __scroll
+    pop  dx
+    mov  dl, [__left]
+    jmp  xOK
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _decxy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Cursor position decremented.
+
+   IN PARAMETERS -  row (CHAR), column (CHAR) in DH:DL.
+
+   OUT PARAMETERS - returns new values DH:DL.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  Internal.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __setxy
+extrn __scroll
+
+select _DATA
+
+extrn __right
+extrn __top
+extrn __bottom
+extrn __left
+
+select _TEXT
+
+public  __decxy :                   (* internal to conio *)
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    dec  dl
+    cmp  dl, [__left]
+    jae  xOK
+    cmp  dh, [__top]
+    jbe  screenBegin
+    mov  dl, [__right]
+    dec  dh
+xOK:
+    call __setxy
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret   0
+screenBegin:
+    mov  dh, [__top]
+    mov  dl, [__left]
+    jmp  xOK
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - clreol.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Screen cleared from cursor to end of line.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __attrib
+extrn __right
+
+select _TEXT
+
+public  _clreol :                   (* clear screen from cursor to eol *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  ax, 6FFH
+    mov  cx, dx
+    mov  dl, [__right]              (* calculate end of line *)
+    call __scroll                   (* use scroll to clear screen *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - clrscr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Screen cleared and cursor home.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __setxy
+extrn __attrib
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+
+select _TEXT
+
+public  _clrscr :                  (* clear screen and home cursor *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, 06FFH
+    mov  ch, [__top]
+    mov  cl, [__left]
+    mov  dl, [__right]
+    mov  dh, [__bottom]
+    call __scroll
+    mov  dh, [__top]
+    mov  dl, [__left]
+    call __setxy
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - delline.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Current line deleted and screen scrolled up.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+
+select _TEXT
+
+public  _delline :               (* delete current line *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  ch, dh
+    mov  cl, [__left]
+    mov  dh, [__bottom]
+    mov  dl, [__right]
+    mov  ax, 601H
+    call __scroll
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(* __delline ENDP *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - insline.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Line inserted at current position and screen below
+                    scrolled up down.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+
+select _TEXT
+
+public  _insline :               (* insert line at curent position *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  ch, dh
+    mov  cl, [__left]
+    mov  dh, [__bottom]
+    mov  dl, [__right]
+    mov  ax, 701H
+    call __scroll
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(* __insline ENDP *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - highvideo.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - High intensity attribute bit set.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+
+select _TEXT
+
+public  _highvideo :                  (* set high intensity bit *)
+
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ax
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    or   byte [__attrib], 8
+(*%F SameDS *)
+    pop  ds
+    pop  ax
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - lowvideo.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - High intensity attribute bit cleared.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+
+select _TEXT
+
+public  _lowvideo :                   (* clear high intensity bit *)
+
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ax
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    and  byte [__attrib], 247
+(*%F SameDS *)
+    pop  ds
+    pop  ax
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - normvideo.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - High intensity attribute bit set to original state.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+extrn __startattrib
+
+select _TEXT
+
+public  _normvideo :                    (* restore original attribute *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ax
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [__startattrib]
+    mov  [__attrib], al
+(*%F SameDS *)
+    pop  ds
+    pop  ax
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - textcolor.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Text foreground color attribute bit set.
+
+   IN PARAMETERS -  New color (int).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+extrn __startattrib
+
+select _TEXT
+
+public _textcolor :
+
+colour = frame
+
+    push bp
+    mov  bp, sp
+(*%F SameDS *)
+    push bx
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%F RegParam *)
+    mov  al, [bp][colour]
+(*%E *)
+    and  al, 08FH
+    and  byte [__attrib], 070H
+    or   [__attrib], al
+(*%F SameDS *)
+    pop  ds
+    pop  bx
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - textbackground.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Text background color attribute bit set.
+
+   IN PARAMETERS -  New color (int).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+extrn __startattrib
+
+select _TEXT
+
+public  _textbackground :
+
+colour = frame                           (* set background colour *)
+
+    push bp
+    mov  bp, sp
+    push cx
+(*%F SameDS *)
+    push bx
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][colour]
+(*%E *)
+    and  al, 7
+    mov  cl, 4
+    shl  ax, cl
+    and  byte [__attrib], 0FH
+    or   [__attrib], al
+(*%F SameDS *)
+    pop  ds
+    pop  bx
+(*%E *)
+    pop  cx
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - textattr.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Text color attribute bit set.
+
+   IN PARAMETERS -  New attribute (int).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __attrib
+extrn __startattrib
+
+select _TEXT
+
+public  _textattr :
+
+attribute = frame                        (* set background and text colour *)
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F SameDS *)
+    push bx
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][attribute]
+(*%E *)
+    mov  [__attrib], al
+(*%F SameDS *)
+    pop  ds
+    pop  bx
+(*%E *)
+(*%F RegParam *)
+    pop  ax
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - wherex.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - X cursor position (int).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getxy
+extrn __left
+extrn __top
+
+select _TEXT
+
+public  _wherex :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy                    (* return x position relative to window *)
+    sub  dl, [__left]
+    mov  al, dl
+    cbw
+    inc  ax
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - wherey.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - Y cursor position (int).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getxy
+extrn __left
+extrn __top
+
+select _TEXT
+
+public  _wherey :                   (* return y position relative to window *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    sub  dh, [__top]
+    mov  al, dh
+    cbw
+    inc  ax
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - window.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Window parameters defined.
+
+   IN PARAMETERS -  left, top, right and bottom bounds (int).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  None.
+
+   VERSION - OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _gotoxy
+extrn __left
+extrn __top
+extrn __right
+extrn __bottom
+extrn __xlim
+extrn __ylim
+
+select _TEXT
+
+public  _window :
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+
+    push bp                    (* check parameters and set if valid *)
+    mov  bp, sp
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [bp][left]
+    dec  al
+    cmp  al, [__xlim]
+    ja   winError
+    mov  [__left], al
+    mov  al, [bp][top]
+    dec  al
+    cmp  al, [__ylim]
+    ja   winError
+    mov  [__top], al
+    mov  al, [bp][right]
+    dec  al
+    cmp  al, [__xlim]
+    ja   winError
+    mov  [__right], al
+    mov  al, [bp][bottom]
+    dec  al
+    cmp  al, [__ylim]
+    ja   winError
+    mov  [__bottom], al
+
+    mov  ax, 1
+    push ax
+    push ax
+(*%F NearCall *)
+    call far _gotoxy
+(*%E *)
+(*%T NearCall *)
+    call _gotoxy
+(*%E *)
+    add  sp, 4
+
+winError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bp
+(*%E *)
+
+(*%T RegParam *)
+(*%F SameDS *)
+    push ds
+    push ax
+    mov  ax, _DATA
+    mov  ds, ax
+    pop  ax
+(*%E *)
+    dec  al
+    cmp  al, [__xlim]
+    ja   winError
+    mov  [__left], al
+    dec  bl
+    cmp  bl, [__ylim]
+    ja   winError
+    mov  [__top], bl
+    dec  cl
+    cmp  cl, [__xlim]
+    ja   winError
+    mov  [__right], cl
+    dec  dl
+    cmp  dl, [__ylim]
+    ja   winError
+    mov  [__bottom], dl
+
+    mov  ax, 1
+    mov  bx, ax
+(*%F NearCall *)
+    call far _gotoxy
+(*%E *)
+(*%T NearCall *)
+    call _gotoxy
+(*%E *)
+
+winError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%F _OS2 *)  (* MSDOS Specific procedures *)
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _c_putch.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - character output to console.
+
+   IN PARAMETERS -  character (int).
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Internal procedure assigned to procedure variable for putch
+            when this module is initialized.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __decxy
+extrn __attrib
+extrn __vidseg
+extrn _directvideo
+extrn __left
+extrn __right
+
+select _DATA
+
+bellChar :dw 7
+
+select _TEXT
+
+public  __c_putch :
+
+(*%F RegParam *)
+chk = frame
+(*%E *)
+(*%T RegParam *)
+chk   = -2
+locals = 2
+(*%E *)
+
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%T RegParam *)
+    mov  [bp][chk], ax
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  al, [bp][chk]
+    cmp  al, 8
+    je   backSpace
+    cmp  al, 0AH
+    je   newLine
+    cmp  al, 0DH
+    je   carriageReturn
+    cmp  al, 09H
+    je   tab
+    cmp  al, 07H
+    je   bell
+notEsc:
+    cmp  word [_directvideo], 0
+    jnz  putDirect
+    mov  ah, 9
+    mov  bh, 0
+    mov  bl, [__attrib]
+    mov  cx, 1
+    int  10H
+putDone:
+    call __incxy
+putExit:
+    mov  ax, [bp][chk]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+bell:
+    mov  ah, 40H
+    mov  bx, 1
+    mov  cx, bx
+(*%F SameDS *)
+    push ds
+    mov  dx, _DATA
+    mov  ds, dx
+(*%E *)
+    mov  dx, bellChar
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    jmp  putExit
+
+backSpace:
+    call __decxy
+    jmp  putExit
+
+newLine:
+    mov  dl, [__right]
+    jmp  putDone
+
+carriageReturn:
+    mov  dl, [__left]
+    call __setxy
+    jmp  putExit
+
+tab:
+    mov  cx, 4
+    mov  al, 20H
+tabLoop:
+    push cx
+    mov  ah, 0AH
+    mov  bh, 0
+    mov  cx, 1
+    int  10H
+    call __incxy
+    pop  cx
+    loop tabLoop
+    jmp  putExit
+
+putDirect:                      (* direct video access *)
+    push di
+    push dx
+    mov  al, dh                 (* calculate address *)
+    mov  ah, 80
+    mul  ah
+    sub  dh, dh
+    add  ax, dx
+    shl  ax, 1
+    mov  di, ax
+    mov  es, [__vidseg]
+    mov  al, [bp][chk]
+    mov  ah, [__attrib]
+    stosw
+    pop  dx
+    pop  di
+    jmp  putDone
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _scroll.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - screen scrolled or cleared.
+
+   IN PARAMETERS -  Regsiters initialized for dos call, AL = -1 denotes
+                    clear window.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  Internal procedure.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+extrn __attrib
+
+public  __scroll :                  (* internal to conio *)
+
+    cmp  al, -1
+    jne  notClear
+    sub  al, al
+notClear:
+    mov  bh, [__attrib]
+    int  10H
+    ret  0
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _getxy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - Cursor position in DH:DL.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  Internal procedure.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+public  __getxy :                   (* internal to conio *)
+
+    push es
+    mov  ax, 40H
+    mov  es, ax
+    mov  bx, 50H
+    mov  dx, es:[bx]
+    pop  es
+    ret  0
+
+(****************************************************************************)
+section
+(* ------------------------------------------------------------------------
+   PROCEDURE - _setxy.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - Cursor position set.
+
+   IN PARAMETERS -  Cursor position in DH:DL.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -  Internal procedure.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+public  __setxy :                   (* internal to conio *)
+
+    mov  ah, 2H
+    mov  bh, 0
+    int  10H
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __ylim
+extrn __xlim
+extrn __vidseg
+extrn _directvideo
+
+select _TEXT
+
+public  _gettext :
+
+(*
+
+int gettext(int left, int top, int right, int bottom, void *buffer)
+
+puts text into buffer.
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+buffer  = 8+frame
+temp    = -2
+nextrow = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+buffer  = frame
+temp    = -2
+nextrow = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam                    (* validate arguments *)
+    jc   getError
+(*%F NearPtr *)
+    les  di, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][buffer]
+    mov  cx, _DATA
+    mov  es, cx
+(*%E *)
+    cmp  word [_directvideo], 0
+    jnz  tobuf                           (* use direct video output *)
+    mov  [bp][nextrow], dx
+    call __getxy                         (* save current position *)
+    mov  [bp][temp], dx
+    mov  bh, 0
+    mov  cx, [bp][top]
+    mov  dx, [bp][nextrow]
+rowLoop:                                 (* loop for total number of rows *)
+    cmp  cx, [bp][bottom]
+    ja   rowDone
+    call __setxy
+    push cx
+    mov  cx, [bp][left]
+colLoop:                                 (* loop for total number of columns *)
+    cmp  cx, [bp][right]
+    ja   colDone
+    mov  ah, 8
+    int  10H
+    stosw
+    call __incxy
+    inc  cx
+    jmp  colLoop
+colDone:
+    pop  cx
+    inc  cx
+    mov  dx, [bp][nextrow]
+    inc  dh
+    jmp  rowLoop
+rowDone:
+    mov  dx, [bp][temp]
+    call __setxy                         (* restore cursor *)
+    mov  ax, 1
+getDone:                                 (* return *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+getError:
+    sub  ax, ax
+    jmp  getDone
+
+tobuf:                                    (* direct video here *)
+    mov  ax, [bp][top]
+    mov  dx, [bp][bottom]
+    mov  cx, [bp][right]
+    sub  cx, [bp][left]
+    inc  cx
+    mov  [bp][temp], cx
+    sub  dx, ax
+    inc  dx
+    push dx
+    mov  bx, 80
+    mul  bx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  si, ax
+    pop  dx
+linlop:
+    mov  cx, [bp][temp]
+    push ds
+    mov  ds, [__vidseg]
+rep ; movsw
+    pop  ds
+    add  ax, 160
+    mov  si, ax
+    dec  dx
+    jne  linlop
+done:
+    mov  ax, 1
+    jmp  getDone
+
+public __checkParam :                     (* check parameters agianst window *)
+
+    dec  byte [bp][left]
+    dec  byte [bp][right]
+    dec  byte [bp][top]
+    dec  byte [bp][bottom]
+    mov  dh,  [bp][top]
+    cmp  dh, [__ylim]
+    ja   chkError
+    mov  dl, [bp][left]
+    cmp  dl, [__xlim]
+    ja   chkError
+    mov  bl, [bp][right]
+    cmp  bl, [__xlim]
+    ja   chkError
+    mov  bl, [bp][bottom]
+    cmp  bl, [__ylim]
+    ja   chkError
+    clc
+    ret  0
+chkError:                                (* carry flag denotes error *)
+    stc
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __checkParam
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __attrib
+extrn __ylim
+extrn __xlim
+extrn __vidseg
+extrn _directvideo
+
+select _TEXT
+
+public  _puttext :
+
+(*
+
+int puttext(int left, int top, int right, int bottom, void *buffer)
+
+copy buffer to screen
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+buffer  = 8+frame
+temp    = -2
+nextrow = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+buffer  = frame
+temp    = -2
+nextrow = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam
+    jc   setError
+    cmp  word [_directvideo], 0
+    jnz  frombuf
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+    mov  [bp][nextrow], dx
+    call __getxy
+    mov  [bp][temp], dx
+    mov  bh, 0
+    mov  cx, [bp][top]
+    mov  dx, [bp][nextrow]
+rowLoop:
+    cmp  cx, [bp][bottom]
+    ja   rowDone
+    call __setxy
+    push cx
+    mov  cx, [bp][left]
+colLoop:
+    cmp  cx, [bp][right]
+    ja   colDone
+    lodsw
+    mov  bl, ah
+    push cx
+    mov  cx, 1
+    mov  ah, 9
+    int  10H
+    pop  cx
+    call __incxy
+    inc  cx
+    jmp  colLoop
+colDone:
+    pop  cx
+    inc  cx
+    mov  dx, [bp][nextrow]
+    inc  dh
+    jmp  rowLoop
+rowDone:
+    mov  dx, [bp][temp]
+    call __setxy
+    mov  ax, 1
+setDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+setError:
+    sub  ax, ax
+    jmp  setDone
+
+frombuf:
+    mov  ax, [bp][top]
+    mov  dx, [bp][bottom]
+    mov  cx, [bp][right]
+    sub  cx, [bp][left]
+    inc  cx
+    mov  [bp][temp], cx
+    sub  dx, ax
+    inc  dx
+    push ds
+    push dx
+    mov  bx, 80
+    mul  bx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  di, ax
+    mov  es, [__vidseg]
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+    pop  dx
+linlop:
+    mov  cx, [bp][temp]
+rep ; movsw
+    add  ax, 160
+    mov  di, ax
+    dec  dx
+    jne  linlop
+    pop  ds
+    mov  ax, 1
+    jmp  setDone
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __checkParam
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __attrib
+extrn __ylim
+extrn __xlim
+extrn __vidseg
+extrn _directvideo
+
+select _TEXT
+
+public  _movetext :
+
+(*
+
+int movetext(int left, int top, int right, int bottom, int nleft, int ntop)
+
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+RetSize = 4
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+nleft   = 8+frame
+ntop    = 10+frame
+rcount  = -2
+ccount  = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+rcount  = -2
+ccount  = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+ntop    = frame
+nleft   = 2+frame
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+    push ds
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+    dec  word [bp][nleft]
+    dec  word [bp][ntop]
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam
+    jc   near setError
+
+    mov  ax, [bp][bottom]
+    sub  ax, [bp][top]
+    inc  ax
+    mov  [bp][rcount], ax
+    mov  ax, [bp][right]
+    sub  ax, [bp][left]
+    inc  ax
+    mov  [bp][ccount], ax
+
+    mov  ax, [bp][top]
+    mov  dx, 80
+    mul  dx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  si, ax
+
+    mov  ax, [bp][ntop]
+    mov  dx, 80
+    mul  dx
+    add  ax, [bp][nleft]
+    shl  ax, 1
+    mov  di, ax
+
+    mov  ax, [bp][top]
+    mov  bx, [bp][ntop]
+    cmp  ax, bx
+    jge  RowUp
+RowDown:
+    mov  ax, 80
+    mov  dx, [bp][rcount]
+    dec  dx
+    mul  dx
+    shl  ax, 1
+    add  si, ax
+    add  di, ax
+    mov  dx, -160
+    jmp  gotRowDirection
+RowUp:
+    mov  dx, 160
+gotRowDirection:
+    mov  cx, [bp][left]
+    mov  bx, [bp][nleft]
+    cmp  cx, bx
+    jge  ColUp
+ColDown:
+    mov  ax, [bp][ccount]
+    dec  ax
+    shl  ax, 1
+    add  si, ax
+    add  di, ax
+    std
+    jmp  gotColDirection
+ColUp:
+gotColDirection:
+
+    mov  ax, [__vidseg]
+    mov  es, ax
+    mov  ds, ax
+    mov  bx, [bp][rcount]
+rowLoop:
+    push di
+    push si
+    mov  cx, [bp][ccount]
+rep ; movsw
+    pop  si
+    pop  di
+    add  si, dx
+    add  di, dx
+    dec  bx
+    jnz  rowLoop
+
+setDone:
+    mov  ax, 1
+setExit:
+    cld
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+setError:
+    sub  ax, ax
+    jmp  setExit
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+
+select _TEXT
+
+public  _gotoxy :
+
+(*
+void gotoxy(int x, int y)
+*)
+
+xpos = frame
+ypos = 2+frame
+
+(*%F RegParam *)
+    push bp                       (* move to position relative to window *)
+    mov  bp, sp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push cx
+    push dx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  al, [bp][xpos]
+(*%E *)
+    dec  al
+    add  al, [__left]
+    cmp  al, [__right]
+    ja   gotoError
+(*%F RegParam *)
+    mov  bh, [bp][ypos]
+(*%E *)
+(*%T RegParam *)
+    mov  bh, bl
+(*%E *)
+    dec  bh
+    add  bh, [__top]
+    cmp  bh, [__bottom]
+    ja   gotoError
+    mov  dh, bh
+    mov  dl, al
+    mov  ah, 2
+    sub  bh, bh
+    int  10H
+gotoError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+
+public  __ScreenLines :
+
+    push bp
+    mov  bp, sp
+    push ax
+    push bx
+    push cx
+    mov  ax, 1130H
+    sub  bx, bx
+    sub  cx, cx
+    sub  dx, dx
+    int  10H
+    or   cx, cx
+    jnz  not25
+    mov  dl, 24
+not25:
+    mov  al, dl
+    add  al, ~24
+    pop  cx
+    pop  bx
+    pop  ax
+    pop  bp
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __ScreenLines
+
+select _DATA
+
+extrn __xlim
+extrn __ylim
+extrn __prevmode
+extrn __last43
+
+select _TEXT
+
+public  _textmode :
+
+(*
+void textmode(int mode)
+
+*)
+
+(*%F RegParam *)
+mode = frame                           (* set text mode *)
+(*%E *)
+(*%T RegParam *)
+mode   = -2
+locals = 2
+(*%E *)
+
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][mode], ax
+(*%E *)
+    push ax
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  cx, ax
+    mov  dl, [__prevmode]
+    mov  bh, 0
+    mov  ah, 0FH
+    int  10H
+    mov  [__prevmode], al
+    mov  al, [bp][mode]
+    sub  ah, ah
+    cmp  al, -1
+    jne  notLastMode
+    mov  al, dl
+    mov  ch, [__last43]
+notLastMode:
+    call __ScreenLines
+    mov  cl, 0
+    adc  cl, 0
+    mov  [__last43], cl
+    cmp  ch, 1
+    je   notMode25
+    mov  bx, 40H
+    mov  es, bx
+    and  byte es:[87H], ~1
+notMode25:
+    int  10H
+    cmp  ch, 1
+    jnz  notMode43
+    mov  ax, 40H
+    mov  es, ax
+    or   byte es:[87H], 1
+    mov  ax, 1112H
+    mov  bl, 0
+    int  10H
+    mov  dx, es:[63H]
+    mov  al, 14H
+    out  dx, al
+    inc  dx
+    mov  al, 7H
+    out  dx, al
+    mov  ah, 12H
+    mov  bl, 20H
+    int  10H
+    call __ScreenLines
+    mov  [__ylim], dl
+    jmp  modeExit
+notMode43:
+    cmp  al, 1
+    ja   column80
+    mov  cl, 39
+    jmp  setCol
+column80:
+    mov  cl, 79
+setCol:
+    mov  [__xlim], cl
+modeExit:
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F RegParam *)
+    pop  ax
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _wherex
+extrn _wherey
+
+select _DATA
+
+extrn __left
+extrn __top
+extrn __right
+extrn __bottom
+extrn __xlim
+extrn __ylim
+extrn __startattrib
+extrn __attrib
+
+select _TEXT
+
+public  _gettextinfo :
+
+(*
+void gettextinfo(struct text_info *r)
+
+Copies  window information into user supplied structure.
+*)
+
+winleft        = 0
+wintop         = 1
+winright       = 2
+winbottom      = 3
+attribute      = 4
+normattr       = 5
+currmode       = 6
+screenheight   = 7
+screenwidth    = 8
+curx           = 9
+cury           = 10
+
+(*%F RegParam *)
+r = frame
+
+    push bp
+    mov  bp, sp
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push ds
+(*%F NearPtr *)
+    lds  si, [bp][r]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][r]
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+    push si
+    push ds
+(*%F NearPtr *)
+    mov  ds, bx
+    mov  si, ax
+(*%E *)
+(*%T NearPtr *)
+    mov  si, ax
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far _wherex
+(*%E *)
+(*%T NearCall *)
+    call _wherex
+(*%E *)
+    mov  [si][curx], al
+(*%F NearCall *)
+    call far _wherey
+(*%E *)
+(*%T NearCall *)
+    call _wherey
+(*%E *)
+    mov  [si][cury], al
+    mov  ax, _DATA
+    mov  es, ax
+    mov  al, es:[__startattrib]          (* attributes *)
+    mov  [si][normattr], al
+    mov  al, es:[__attrib]
+    mov  [si][attribute], al
+    mov  al, es:[__left]
+    inc  al
+    mov  [si][winleft], al            (* window co-ordinates *)
+    mov  al, es:[__top]
+    inc  al
+    mov  [si][wintop], al
+    mov  al, es:[__right]
+    inc  al
+    mov  [si][winright], al
+    mov  al, es:[__xlim]
+    inc  al
+    mov  [si][screenwidth], al
+    mov  al, es:[__bottom]
+    inc  al
+    mov  [si][winbottom], al
+    mov  al, es:[__ylim]
+    inc  al
+    mov  [si][screenheight], al
+    mov  ah, 0FH
+    int  10H                          (* current text mode *)
+    mov  [si][currmode], al
+    pop  ds
+    pop  si
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __getxy
+extrn __setxy
+extrn __c_putch
+extrn __d_cgets
+extrn __ScreenLines
+
+select _DATA
+
+(*%T _DLLOVL *)
+PutchAdr: dd __c_putch
+CgetsAdr: dd __d_cgets
+(*%E *)
+
+extrn __i_putch
+extrn __i_cgets
+extrn __p_init
+public __startattrib :  db 0
+public __attrib :       db 0
+public __prevmode :     db 0
+public __xlim :         db 0
+public __ylim :         db 0
+public __windmin :
+public __left :         db 0
+public __top :          db 0
+public __windmax :
+public __right :        db 0
+public __bottom :       db _directvideo
+public __vidseg :       dw 0B000H
+public __last43:        db 0
+public __wscroll:       dw 1
+select _TEXT
+
+do_initconio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dd do_initconio
+(*%E *)
+(*%T NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dw do_initconio
+(*%E *)
+
+select _DATA
+public _directvideo :  dw  1, initconio
+
+select  _TEXT
+
+                               (* initialisation for conio - sets screen     *)
+                               (* mode, gets video refresh segment and       *)
+                               (* initialises the defualt full screen window *)
+temp   = -2
+locals =  2
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, seg __i_putch
+    mov  ds, ax
+(*%E *)
+(*%F _DLLOVL *)
+    mov  word [__i_putch], __c_putch
+    mov  word [__i_cgets], __d_cgets
+(*%F NearCall *)
+    mov  word [__i_putch][2], cs
+    mov  word [__i_cgets][2], cs
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    mov  ax, seg PutchAdr
+    mov  es, ax
+    mov  ax, es:[PutchAdr]
+    mov  word [__i_putch], ax
+    mov  ax, es:[CgetsAdr]
+    mov  word [__i_cgets], ax
+    mov  ax, es:[PutchAdr][2]
+    mov  word [__i_putch][2], ax
+    mov  ax, es:[CgetsAdr][2]
+    mov  word [__i_cgets][2], ax
+(*%E *)
+    mov  word [__p_init], 1
+(*%F SameDS *)
+    mov  ax, seg __startattrib
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  [bp][temp], dx
+    sub  dx, dx
+    call __setxy
+    mov  ah, 8H
+    mov  bh, 0
+    int  10H
+    mov  ah, 7H
+    mov  [__startattrib], ah
+    mov  [__attrib], ah
+    mov  ah, 0FH
+    int  10H
+    mov  [__prevmode], al
+    cmp  al, 1
+    ja   column80
+    mov  dx, 39
+    jmp  setColumn
+column80:
+    mov  dx, 79
+setColumn:
+    mov  [__xlim], dl
+    mov  [__right], dl
+    call __ScreenLines
+    mov  byte [__ylim], dl
+    mov  byte [__bottom], dl
+    jnc  not43
+    mov  byte [__last43], 1
+not43:
+    mov  byte [__left], 0
+    mov  byte [__top], 0
+
+    cmp  al, 7
+    je   monoScreen
+    mov  ax, 0B800H
+    jmp  setScreen
+monoScreen:
+    mov  ax, 0B000H
+setScreen:
+    mov  [__vidseg], ax
+
+    mov  dx, [bp][temp]
+    call __setxy
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    mov  sp, bp
+    pop  bp
+    ret  0
+(*%E *)
+
+(*%E *)
+
+(*%T _OS2 *)
+
+(* KBDKEYINFO structure, for KbdCharIn and KbdPeek *)
+
+chChar    =  0
+chScan    =  1
+fbStatus  =  2
+bNlsShift =  3
+fsState   =  4
+time      =  6
+
+KbdInfoSize = 10
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __decxy
+extrn VIOSHOWBUF
+extrn DOSBEEP
+
+select _DATA
+
+extrn __attrib
+extrn __vidsel
+extrn __left
+extrn __right
+extrn __char
+extrn _directvideo
+
+select _TEXT
+
+public  __c_putch :
+
+(*
+int  putch(int c)
+
+Checks for any character returned by ungetch then calls BIOS.
+*)
+
+(*%F RegParam *)
+chk = frame
+(*%E *)
+(*%T RegParam *)
+chk   = -2
+locals = 2
+(*%E *)
+
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    push bx
+    push cx
+    push dx
+    mov  [bp][chk], ax
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __getxy
+    mov  al, [bp][chk]
+    cmp  al, 8
+    je   backSpace
+    cmp  al, 0AH
+    je   newLine
+    cmp  al, 0DH
+    je   carriageReturn
+    cmp  al, 09H
+    je   tab
+    cmp  al, 07H
+    je   bell
+    mov  cx, 1
+pLoop:
+    push cx
+    push dx
+    mov  ah, [__attrib]              (* ax is char and attrib *)
+    mov  bx, ax
+    mov  al, 80
+    mul  dh
+    sub  dh, dh
+    add  ax, dx
+    shl  ax, 1
+    xchg ax, bx
+    mov  es, [__vidsel][2]
+    add  bx, [__vidsel]
+    mov  es:[bx], ax
+    push bx
+    mov  ax, 2
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOSHOWBUF
+    pop  dx
+    call __incxy
+    pop  cx
+    loop pLoop
+putExit:
+    mov  ax, [bp][chk]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+backSpace:
+    call __decxy
+    jmp  putExit
+
+newLine:
+    mov  dl, [__right]
+    call __incxy
+    jmp  putExit
+
+carriageReturn:
+    mov  dl, [__left]
+    call __setxy
+    jmp  putExit
+
+tab:
+    mov  cx, 4
+    mov  word [bp][chk], 20H
+    jmp  pLoop
+
+bell:
+    mov  ax, 1500
+    push ax
+    mov  ax, 300
+    push ax
+    call far DOSBEEP
+    jmp  putExit
+
+dw _directvideo
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+IO_NOWAIT = 1
+
+extrn KBDSTRINGIN
+extrn __getxy
+
+select _DATA
+
+extrn __ungotchar
+extrn __kbdhandle
+
+select _TEXT
+public  __c_cgets :
+
+(*
+char  *cgets(char *str)
+
+String is read from console and stroed starting at str[2].
+s[0] is the max length of the string.
+The actual length is stored at str[1].
+Returns a pointer to the beginning of the actual string.
+*)
+
+CR  = 0DH
+LF  = 0AH
+
+(*%F RegParam *)
+str  = frame
+kbuf = -4
+
+locals = 4
+(*%E *)
+(*%T RegParam *)
+str  = -4
+kbuf = -8
+locals = 8
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+(*%E *)
+    push cx
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%T RegParam *)
+    mov  [bp][str], ax
+    mov  [bp][str][2], bx
+(*%E *)
+    push di
+    push si
+    push ds
+    sub  cx, cx
+(*%F NearPtr *)
+    lds  si, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][str]
+(*%E *)
+    mov  ax, _DATA
+    mov  es, ax
+    cmp  word es:[__ungotchar], 0
+    je   cgetsNoWaiting
+    not  cx
+    dec  byte [si]
+cgetsNoWaiting:
+    mov  al, [si]
+    sub  ah, ah
+    mov  [bp][kbuf], ax
+    add  si, 2
+    push cx
+    push ds
+    push si
+    push ss
+    lea  ax, [bp][kbuf]
+    push ax
+    mov  ax, IO_NOWAIT               (* get string from console *)
+    push ax
+    push es:[__kbdhandle]
+    call far KBDSTRINGIN
+    pop  cx
+    jcxz cgetsNoUnget
+    mov  dx, es:[__ungotchar] (* insert put back character *)
+    mov  cx, [bp][kbuf][2]
+    push si
+    std
+(*%F NearPtr *)
+    les  di, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][str]
+(*%E *)
+    add  si, cx
+    add  di, cx
+    add  di, 2
+    dec  si
+rep ; movsb
+    pop  si
+    mov  [si], dl
+    cld
+    inc  word [bp][kbuf][2]
+cgetsNoUnget:
+    mov  bx, [bp][kbuf][2]
+    mov  [si][-1], bl
+    mov  byte [si][bx], 0
+    mov  dx, ds            (* return address of string *)
+    mov  ax, si
+    pop  ds
+    pop  si
+    pop  di
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+    pop  cx
+(*%F RegParam *)
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn  VIOSCROLLDN
+extrn  VIOSCROLLUP
+
+select _DATA
+
+extrn __char
+
+select _TEXT
+
+public  __scroll :                  (* internal to conio *)
+
+    push si
+    mov  si, ax
+    mov  byte [__char], 20H
+    sub  bh, bh
+    mov  bl, ch
+    push bx
+    mov  bl, cl
+    push bx
+    mov  bl, dh
+    push bx
+    mov  bl, dl
+    push bx
+    cbw
+    push ax
+    push ds
+    mov  bx, __char
+    push bx
+    sub  bx, bx
+    push bx
+    mov  ax, si
+    test ah, 1
+    jz   scrollUp
+    call far VIOSCROLLDN
+    jmp  scrollDone
+scrollUp:
+    call far VIOSCROLLUP
+scrollDone:
+    pop  si
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOGETCURPOS
+
+
+select _DATA
+
+extrn __attrib
+
+select _TEXT
+
+public  __getxy :                   (* internal to conio *)
+
+row = 2
+col = 0
+locals = 4
+
+    sub  sp, locals
+    mov  bx, sp
+    push ss
+    lea  ax, [bx][row]
+    push ax
+    push ss
+    push bx
+    sub  ax, ax
+    push ax
+    call far VIOGETCURPOS
+    mov  dh, ss:[bx][row]
+    mov  dl, ss:[bx][col]
+    add  sp, locals
+
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOSETCURPOS
+
+
+select _TEXT
+
+public  __setxy :                   (* internal to conio *)
+
+    sub  bh, bh
+    mov  bl, dh
+    push bx
+    mov  bl, dl
+    push bx
+    sub  ax, ax
+    push ax
+    call far VIOSETCURPOS
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __ylim
+extrn __xlim
+extrn __vidsel
+extrn _directvideo
+
+select _TEXT
+
+public  _gettext :
+
+(*
+
+int gettext(int left, int top, int right, int bottom, void *buffer)
+
+puts text into buffer.
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+buffer  = 8+frame
+temp    = -2
+nextrow = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+buffer  = frame
+temp    = -2
+nextrow = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam                    (* validate arguments *)
+    jc   getError
+    mov  ax, [bp][top]
+    mov  dx, [bp][bottom]
+    mov  cx, [bp][right]
+    sub  cx, [bp][left]
+    inc  cx
+    mov  [bp][temp], cx
+    sub  dx, ax
+    inc  dx
+    push dx
+    mov  bx, 80
+    mul  bx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  si, ax
+(*%F NearPtr *)
+    les  di, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, _DATA
+    mov  es, di
+    mov  di, [bp][buffer]
+(*%E *)
+    pop  dx
+linlop:
+    mov  cx, [bp][temp]
+    push ds
+    add  si, [__vidsel]
+    mov  ds, [__vidsel][2]
+rep ; movsw
+    pop  ds
+    add  ax, 160
+    mov  si, ax
+    dec  dx
+    jne  linlop
+done:
+
+getDone:
+    mov  ax, 1                         (* return *)
+getExit:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+getError:
+    sub  ax, ax
+    jmp  getExit
+
+
+public __checkParam :                     (* check parameters agianst window *)
+
+    dec  byte [bp][left]
+    dec  byte [bp][right]
+    dec  byte [bp][top]
+    dec  byte [bp][bottom]
+    mov  dh,  [bp][top]
+    cmp  dh, [__ylim]
+    ja   chkError
+    mov  dl, [bp][left]
+    cmp  dl, [__xlim]
+    ja   chkError
+    mov  bl, [bp][right]
+    cmp  bl, [__xlim]
+    ja   chkError
+    mov  bl, [bp][bottom]
+    cmp  bl, [__ylim]
+    ja   chkError
+    clc
+    ret  0
+chkError:                                (* carry flag denotes error *)
+    stc
+    ret  0
+
+(**************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __checkParam
+extrn __updatebuf
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __attrib
+extrn __ylim
+extrn __xlim
+extrn __vidsel
+extrn _directvideo
+
+select _TEXT
+
+public  _puttext :
+
+(*
+
+int puttext(int left, int top, int right, int bottom, void *buffer)
+
+copy buffer to screen
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+buffer  = 8+frame
+temp    = -2
+nextrow = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+buffer  = frame
+temp    = -2
+nextrow = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam
+    jc   setError
+
+    mov  ax, [bp][top]
+    mov  dx, [bp][bottom]
+    mov  cx, [bp][right]
+    sub  cx, [bp][left]
+    inc  cx
+    mov  [bp][temp], cx
+    sub  dx, ax
+    inc  dx
+    push dx
+    mov  bx, 80
+    mul  bx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  di, ax
+    mov  es, [__vidsel][2]
+    add  di, [__vidsel]
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+    pop  dx
+linlop:
+    mov  cx, [bp][temp]
+rep ; movsw
+    add  ax, 160
+    mov  di, ax
+    dec  dx
+    jne  linlop
+    call __updatebuf
+setDone:
+    mov  ax, 1
+setExit:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+setError:
+    sub  ax, ax
+    jmp  setExit
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+
+select _TEXT
+
+public  _gotoxy :
+
+(*
+void gotoxy(int x, int y)
+*)
+
+xpos = frame
+ypos = 2+frame
+
+(*%F RegParam *)
+    push bp                       (* move to position relative to window *)
+    mov  bp, sp
+(*%E *)
+(*%T RegParam *)
+    push cx
+    push dx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  al, [bp][xpos]
+(*%E *)
+    dec  al
+    add  al, [__left]
+    cmp  al, [__right]
+    ja   gotoError
+(*%F RegParam *)
+    mov  bh, [bp][ypos]
+(*%E *)
+(*%T RegParam *)
+    mov  bh, bl
+(*%E *)
+    dec  bh
+    add  bh, [__top]
+    cmp  bh, [__bottom]
+    ja   gotoError
+    mov  dh, bh
+    mov  dl, al
+    call __setxy
+gotoError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%E *)
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __settextmode
+extrn __gettextmode
+
+select _DATA
+
+extrn __xlim
+extrn __ylim
+extrn __prevmode
+
+select _TEXT
+
+public  _textmode :
+
+(*
+void textmode(int mode)
+
+*)
+
+(*%F RegParam *)
+mode = frame                           (* set text mode *)
+(*%E *)
+(*%T RegParam *)
+mode   = -2
+locals = 2
+(*%E *)
+
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][mode], ax
+(*%E *)
+(*%F RegParam *)
+    push ax
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  dl, [__prevmode]
+    call __gettextmode
+    mov  [__prevmode], al
+    mov  ax, [bp][mode]
+    cmp  al, -1
+    jne  newMode
+    sub  dh, dh
+    push dx
+    jmp  callSet
+newMode:
+    push ax
+callSet:
+    call __settextmode
+    add  sp, 2
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F RegParam *)
+    pop  ax
+(*%E *)
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _wherex
+extrn _wherey
+extrn __gettextmode
+
+select _DATA
+
+extrn __left
+extrn __top
+extrn __right
+extrn __bottom
+extrn __xlim
+extrn __ylim
+extrn __startattrib
+extrn __attrib
+
+select _TEXT
+
+public  _gettextinfo :
+
+(*
+void gettextinfo(struct text_info *r)
+
+Copies  window information into user supplied structure.
+*)
+
+winleft        = 0
+wintop         = 1
+winright       = 2
+winbottom      = 3
+attribute      = 4
+normattr       = 5
+currmode       = 6
+screenheight   = 7
+screenwidth    = 8
+curx           = 9
+cury           = 10
+
+(*%F RegParam *)
+r = frame
+
+    push bp
+    mov  bp, sp
+    push si
+(*%F NearPtr *)
+    push ds
+    lds  si, [bp][r]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][r]
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+    push si
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+    mov  si, ax
+(*%E *)
+(*%T NearPtr *)
+    mov  si, ax
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+    call far _wherex
+(*%E *)
+(*%T NearCall *)
+    call _wherex
+(*%E *)
+    mov  [si][curx], al
+(*%F NearCall *)
+    call far _wherey
+(*%E *)
+(*%T NearCall *)
+    call _wherey
+(*%E *)
+    mov  [si][cury], al
+    mov  ax, _DATA
+    mov  es, ax
+    mov  al, es:[__startattrib]          (* attributes *)
+    mov  [si][normattr], al
+    mov  al, es:[__attrib]
+    mov  [si][attribute], al
+    mov  al, es:[__left]
+    inc  al
+    mov  [si][winleft], al            (* window co-ordinates *)
+    mov  al, es:[__top]
+    inc  al
+    mov  [si][wintop], al
+    mov  al, es:[__right]
+    inc  al
+    mov  [si][winright], al
+    mov  al, es:[__xlim]
+    inc  al
+    mov  [si][screenwidth], al
+    mov  al, es:[__bottom]
+    inc  al
+    mov  [si][winbottom], al
+    mov  al, es:[__ylim]
+    inc  al
+    mov  [si][screenheight], al
+    call __gettextmode
+    mov  [si][currmode], al
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+segment INITCODE(CODE, 28H)
+segment _DATA(DATA, 28H)
+
+extrn _directvideo
+
+select _DATA                             (* globals for conio *)
+
+public __startattrib :  db 0
+public __char :         db 0
+public __attrib :       db 0
+public __prevmode :     db 0
+public __xlim :         db 0
+public __ylim :         db 0
+public __windmin :
+public __left :         db 0
+public __top :          db 0
+public __windmax :
+public __right :        db 0
+public __bottom :       db _directvideo
+public __vidsel :       org 4
+public __vidlen :       dw _directvideo
+public __wscroll:       dw 1
+
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+
+extrn __getxy
+extrn __setxy
+extrn __gettextmode
+extrn __getvidsel
+extrn __c_putch
+extrn __d_cgets
+
+extrn KBDOPEN
+
+select _DATA
+
+extrn __startattrib
+extrn __attrib
+extrn __prevmode
+extrn __xlim
+extrn __ylim
+extrn __top
+extrn __left
+extrn __right
+extrn __bottom
+extrn __vidsel
+extrn __kbdhandle
+extrn __p_init
+extrn __i_cgets
+extrn __i_putch
+extrn __nullproc
+
+select _TEXT
+
+do_initconio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dd do_initconio
+(*%E *)
+(*%T NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dw do_initconio
+(*%E *)
+
+select _DATA
+public _directvideo :  dw  0, initconio
+
+select  _TEXT
+
+public  __initconio :          (* initialisation for conio - sets screen     *)
+                               (* mode, gets video refresh segment and       *)
+                               (* initialises the defualt full screen window *)
+    push bp
+    mov  bp, sp
+(*%F SameDS *)
+    push ds
+    mov  ax, seg __i_putch
+    mov  ds, ax
+(*%E *)
+    mov  word [__i_putch], __c_putch
+    mov  word [__i_cgets], __d_cgets
+(*%F NearCall *)
+    mov  word [__i_putch][2], cs
+    mov  word [__i_cgets][2], cs
+(*%E *)
+    mov  word [__p_init], -1
+(*%F SameDS *)
+    mov  ax, seg __startattrib
+    mov  ds, ax
+(*%E *)
+    mov  ah, 7
+    mov  [__startattrib], ah
+    mov  [__attrib], ah
+
+    call __gettextmode
+    mov  [__prevmode], al
+    cmp  al, 1
+    ja   column80
+    mov  dx, 39
+    jmp  setColumn
+column80:
+    mov  dx, 79
+setColumn:
+    mov  [__xlim], dl
+    mov  [__right], dl
+    mov  byte [__ylim], 24
+    mov  byte [__bottom], 24
+    mov  byte [__left], 0
+    mov  byte [__top], 0
+    call __getvidsel
+(*    push ds
+    mov  ax, __kbdhandle
+    push ax
+    call far KBDOPEN *)
+setScreen:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOGETBUF
+
+select _DATA
+
+extrn __vidsel
+extrn __vidlen
+
+select _TEXT
+
+public __getvidsel :
+
+
+    push ds
+    mov  ax, __vidsel
+    push ax
+    push ds
+    mov  ax, __vidlen
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOGETBUF
+    ret  0
+
+(****************************************************************************)
+
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOSHOWBUF
+
+select _DATA
+
+extrn __vidsel
+extrn __vidlen
+
+select _TEXT
+
+public __updatebuf :
+
+    mov  ax, _DATA
+    mov  es, ax
+    push es:[__vidsel]
+    push es:[__vidlen]
+    sub  ax, ax
+    push ax
+    call far VIOSHOWBUF
+    ret  0
+
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOGETMODE
+extrn VIOSETMODE
+
+select _DATA
+
+
+select _TEXT
+
+
+BW40     = 0
+C40      = 1
+BW80     = 2
+C80      = 3
+MONO     = 7
+
+VGMT_MONO          = 0
+VGMT_OTHER         = 1
+VGMT_GRAPHICS      = 2
+VGMT_DISABLEBURST  = 4
+VGMT_ENABLEBURST   = 251
+
+
+(* struct _VIOMODEINFO  *)
+
+cb     = 0
+fbType = 2
+color  = 3
+col    = 4
+row    = 6
+hres   = 8
+vres   = 10
+fmt_ID = 12
+attrib = 13
+
+VIOMODESIZE  = 14
+
+viobuf = -VIOMODESIZE
+locals = VIOMODESIZE-2
+
+public __gettextmode :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  word [bp][viobuf][cb], VIOMODESIZE
+    push ss
+    lea  ax, [bp][viobuf]
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOGETMODE
+    mov  al, [bp][viobuf][fbType]
+    cmp  al, VGMT_MONO
+    jne  colorMode
+    mov  ax, MONO
+    jmp  modeDone
+colorMode:
+    cmp  al, VGMT_DISABLEBURST
+    jne  colorEnabled
+BWMode:
+    mov  ax, 0
+    jmp  getCols
+colorEnabled:
+    mov  ax, 1
+getCols:
+    mov  bx, [bp][viobuf][col]
+    cmp  bx, 80
+    jne  g40col
+    add  ax, 2
+g40col:
+modeDone:
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+public __settextmode :
+
+(*%F RegParam *)
+mode = sframe
+(*%E *)
+(*%T RegParam *)
+mode = VIOMODESIZE-2
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T RegParam *)
+    mov  [bp][mode], ax
+(*%E *)
+    mov  word [bp][viobuf][cb], VIOMODESIZE
+    push ss
+    lea  ax, [bp][viobuf]
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOGETMODE
+    mov  ax, [bp][mode]
+    cmp  ax, 7
+    jne  notMono
+    mov  byte [bp][viobuf][fbType], VGMT_MONO
+    jmp  setMode
+notMono:
+    test ax, 1
+    jnz  colorEd
+    or   byte [bp][viobuf][fbType], VGMT_DISABLEBURST
+    jmp  setCol
+colorEd:
+    and  byte [bp][viobuf][fbType], VGMT_ENABLEBURST
+setCol:
+    test ax, 2
+    jnz  s80Col
+    mov  word [bp][viobuf][col], 40
+    jmp  setMode
+s80Col:
+    mov  word [bp][viobuf][col], 80
+setMode:
+    push ss
+    lea  ax, [bp][viobuf]
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOSETMODE
+
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __scroll
+extrn __getxy
+extrn __setxy
+extrn __incxy
+extrn __checkParam
+extrn __updatebuf
+
+select _DATA
+
+extrn __top
+extrn __left
+extrn __bottom
+extrn __right
+extrn __attrib
+extrn __ylim
+extrn __xlim
+extrn __vidseg
+extrn __vidsel
+select _TEXT
+
+public  _movetext :
+
+(*
+
+int movetext(int left, int top, int right, int bottom, int nleft, int ntop)
+
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+RetSize = 4
+(*%E *)
+
+(*%F RegParam *)
+left    = frame
+top     = 2+frame
+right   = 4+frame
+bottom  = 6+frame
+nleft   = 8+frame
+ntop    = 10+frame
+rcount  = -2
+ccount  = -4
+locals  =  4
+(*%E *)
+(*%T RegParam *)
+rcount  = -2
+ccount  = -4
+left    = -6
+right   = -8
+top     = -10
+bottom  = -12
+ntop    = frame
+nleft   = 2+frame
+locals  =  12
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+(*%T RegParam *)
+    mov  [bp][left], ax
+    mov  [bp][top], bx
+    mov  [bp][right], cx
+    mov  [bp][bottom], dx
+(*%E *)
+    dec  word [bp][nleft]
+    dec  word [bp][ntop]
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call __checkParam
+    jc   near setError
+
+    mov  ax, [bp][bottom]
+    sub  ax, [bp][top]
+    inc  ax
+    mov  [bp][rcount], ax
+    mov  ax, [bp][right]
+    sub  ax, [bp][left]
+    inc  ax
+    mov  [bp][ccount], ax
+
+    mov  ax, [bp][top]
+    mov  dx, 80
+    mul  dx
+    add  ax, [bp][left]
+    shl  ax, 1
+    mov  si, ax
+
+    mov  ax, [bp][ntop]
+    mov  dx, 80
+    mul  dx
+    add  ax, [bp][nleft]
+    shl  ax, 1
+    mov  di, ax
+
+    mov  ax, [bp][top]
+    mov  bx, [bp][ntop]
+    cmp  ax, bx
+    jge  RowUp
+RowDown:
+    mov  ax, 80
+    mov  dx, [bp][rcount]
+    dec  dx
+    mul  dx
+    shl  ax, 1
+    add  si, ax
+    add  di, ax
+    mov  dx, -160
+    jmp  gotRowDirection
+RowUp:
+    mov  dx, 160
+gotRowDirection:
+    mov  cx, [bp][left]
+    mov  bx, [bp][nleft]
+    cmp  cx, bx
+    jge  ColUp
+ColDown:
+    mov  ax, [bp][ccount]
+    dec  ax
+    shl  ax, 1
+    add  si, ax
+    add  di, ax
+    std
+    jmp  gotColDirection
+ColUp:
+gotColDirection:
+
+    mov  ax, [__vidsel][2]
+    mov  bx, [__vidsel]
+    mov  es, ax
+    mov  ds, ax
+    add  di, bx
+    add  si, bx
+    mov  bx, [bp][rcount]
+rowLoop:
+    push di
+    push si
+    mov  cx, [bp][ccount]
+rep ; movsw
+    pop  si
+    pop  di
+    add  si, dx
+    add  di, dx
+    dec  bx
+    jnz  rowLoop
+
+setDone:
+    call __updatebuf
+    mov  ax, 1
+setExit:
+    cld
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+setError:
+    sub  ax, ax
+    jmp  setExit
+
+(*%E *)
+end
+

@@ -1,0 +1,79 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMATH.DEF - Modula-2 interface to COREMATH.A                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size => off,
+         o_a_copy=>off,
+         c_conv=>on,
+         result_optional=>on) *)
+(*# module(implementation=>off, init_code => off) *)
+
+(*# name(prefix => c) *)
+
+DEFINITION MODULE CoreMath;
+
+TYPE
+    StrPtr = POINTER TO ARRAY [0..15] OF CHAR;
+    Exception = RECORD
+      type: CARDINAL;
+      Name: StrPtr;
+      arg1, arg2, retval: LONGREAL;
+    END;
+
+VAR
+    matherr: PROCEDURE(VAR Exception): INTEGER;
+(*# save *)
+(*# call( seg_name=>null, c_conv=>on) *)
+
+PROCEDURE  acos(x: LONGREAL): LONGREAL;
+PROCEDURE  asin(x: LONGREAL): LONGREAL;
+PROCEDURE  atan(x: LONGREAL): LONGREAL;
+PROCEDURE  atan2(x: LONGREAL; y: LONGREAL): LONGREAL;
+PROCEDURE  cos(x: LONGREAL): LONGREAL;
+PROCEDURE  cosh(x: LONGREAL): LONGREAL;
+PROCEDURE  exp(x: LONGREAL): LONGREAL;
+PROCEDURE  log(x: LONGREAL): LONGREAL;
+PROCEDURE  pow(x: LONGREAL; y: LONGREAL): LONGREAL;
+PROCEDURE  sin(x: LONGREAL): LONGREAL;
+PROCEDURE  sinh(x: LONGREAL): LONGREAL;
+PROCEDURE  sqrt(x: LONGREAL): LONGREAL;
+PROCEDURE  tan(x: LONGREAL): LONGREAL;
+PROCEDURE  tanh(x: LONGREAL): LONGREAL;
+PROCEDURE  log10(x: LONGREAL): LONGREAL;
+
+PROCEDURE  fmod(x: LONGREAL; y: LONGREAL): LONGREAL;
+PROCEDURE  frexp(x: LONGREAL; VAR exp: INTEGER): LONGREAL;
+
+PROCEDURE hypot(X, Y: LONGREAL): LONGREAL;
+PROCEDURE ceil(X: LONGREAL): LONGREAL;
+PROCEDURE floor(X: LONGREAL): LONGREAL;
+PROCEDURE _clear87(): CARDINAL;
+PROCEDURE _fpreset();
+PROCEDURE _status87(): CARDINAL;
+PROCEDURE _control87(New, Mask: CARDINAL): CARDINAL;
+
+PROCEDURE _bcd(x:TEMPREAL; p:NearADDRESS);
+PROCEDURE _pow_int(x:TEMPREAL;y:INTEGER):TEMPREAL;
+PROCEDURE _round( x:TEMPREAL ):TEMPREAL;
+
+(*# call(reg_param=>(ax,bx,cx,dx,st0,st6,st5), c_conv=>off) *)
+PROCEDURE _acvt(flag:INTEGER; mbuf:ADDRESS; exp:INTEGER; len:INTEGER): TEMPREAL;
+PROCEDURE _seterrno(type:INTEGER);
+(*# restore *)
+
+(*# save *)
+(*# call(near_call => off, seg_name=>EMU) *)
+PROCEDURE _FloatExecSave();
+PROCEDURE _FloatExecRestore();
+(*# call(reg_param => (bx), reg_saved=>(di,si,ds,st1,st2)) *)
+PROCEDURE _FloatInitInstance(seg: CARDINAL);
+(*# restore *)
+
+END CoreMath.
+

@@ -1,0 +1,1339 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREPROC.A - low-level process routines                                 *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreProc
+
+(*****************************************************************************)
+segment _BSS(BSS, 28H)
+public  __threadTable : org THREADTABLESIZE*MAXPROCESS;  (* thread data *)
+
+segment _DATA(DATA, 28H)
+
+public  __threadTotal : dw 1;
+
+segment _BSS(BSS, 28H)
+
+public __cp : org FarDataPtrSize  (* currently active task + ready queue *)
+public __dq : org FarDataPtrSize  (* queue of delayed tasks *)
+public __wq : org FarDataPtrSize  (* queue of tasks that have reached thier delay time
+                                     but haven't been placed on the ready queue *)
+
+public __SchedProc :       org FarCodePtrSize
+public __Started :         org 1
+public __Continue :        org FarCodePtrSize
+public _Stop :             org 1
+public __LockNestMonster : org 2
+public __SchedTime :       org 2
+public __NextThread :      org 2
+public __proc_init :       org 1
+
+(*%T _DLL *)
+public __initmt_vector : org FarCodePtrSize
+(*%E *)
+
+segment _DATA(DATA, 28H)
+
+public __ProcIds: dw 1
+                  org (MAXPROCESS)*2
+
+segment _BSS(BSS, 28H)
+
+public __LockSem :      org 4
+public __LockCount :    org 2
+public __LockedThread : org 2
+
+segment PROC_TEXT(CODE,28H)
+
+public @CurrentProcess : dw 0
+
+
+section
+segment PROC_TEXT(CODE,28H)
+
+dummy:
+    ret far 0
+
+segment _DATA(DATA, 28H)
+
+public __core_lock :    dd dummy
+public __core_unlock :  dd dummy
+
+segment _DATA(DATA, 28H)
+
+extrn  _delay
+(*%F NearCall *)
+public __core_delay :   dd _delay
+(*%E *)
+(*%T NearCall *)
+public __core_delay :   dw _delay
+(*%E *)
+
+(****************************************************************************)
+(*%T _DLL *)
+section
+
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __initmt_vector
+
+public __set_initmt_vector :
+
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    mov  [__initmt_vector][2], bx
+    mov  [__initmt_vector], ax
+    pop  ds
+    ret  far 0
+(*%E *)
+
+
+section
+(*%F _OS2 *)
+(*%T MThread *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+
+select _TEXT
+
+public __getTID :
+
+(* unsigned _getTID(void); *)
+(*   Returns thread ID.    *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    mov  al, ss:[CurrentThread]
+    sub  ah, ah
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E NOT MThread*)
+(*%E NOT OS2*)
+
+(*%T _XTDDOS*)
+(*%T MThread *)
+(*****************************************************************************)
+section
+segment MP_CODE(MP_CODE,68H)
+segment PROC_TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn @CurrentProcess
+extrn @PrtAddrAbort
+extrn @Save8087
+
+extrn @MachineId
+
+select PROC_TEXT
+
+@GetPri: (* read interrupt controller mask *)
+  xor ah,ah
+(*%F _XTD*)
+  cmp byte cs:[@MachineId],0FCH (*an AT ? *)
+  jne @GetPri2
+(*%E*)
+  in  al,0A1H
+  mov ah,al
+@GetPri2:
+  in  al,21H
+  ret 0
+
+
+@SetPri: (* write interrupt controller mask *)
+  out 21H,al
+(*%F _XTD*)
+  cmp byte cs:[@MachineId],0FCH (*an AT ? *)
+  jne @SetPri2
+(*%E*)
+  xchg al,ah
+  out 0A1H,al
+@SetPri2:
+  ret 0
+
+public _new_priority :
+
+  push ax
+  call @GetPri
+  mov  bx, ax
+  pop  ax
+  call @SetPri
+  mov  ax, bx
+  ret  far 0
+
+public SYSTEM$Listen : Mask = 6
+  push bp; mov bp,sp
+  call @GetPri
+  mov bx,ax
+  mov cx,[bp][Mask]
+  not cx
+  and ax,cx
+  call @SetPri
+  mov ax,bx
+  call @GetPri
+  pop bp; ret far 2
+
+(*%E NOT MThread*)
+(*%E XTDDOS*)
+
+(*%F _OS2*)
+(*%T MThread *)
+
+extrn FIERQQ
+extrn FIDRQQ
+
+SwapStack :
+(* Procedure used to change stack *)
+(* Inputs: ds = segment of new process record *)
+(* Out:    ax = New priority *)
+(* NB Interrupts must be off *)
+(* The following registers are corrupted AX,CX,SI,DI,ES *)
+(* Out:    es = Old (swapped) process *)
+
+  mov es,cs:[@CurrentProcess]
+  cmp byte cs:[@Save8087],0
+  jne $dosave
+
+  call @Swap
+$exitswap:
+  call far _new_priority
+  ret 0
+
+$dosave: (* swap 8087 registers *)
+
+  call @Swap8087
+  jmp  $exitswap
+
+extrn __FloatRestore
+extrn __FloatSave
+
+@Swap8087:
+
+  call far __FloatSave
+  call @Swap
+  call far __FloatRestore
+  ret  0
+
+@Swap:
+(* local procedure to do the stack swap *)
+(* NB The first time a process gets swapped to, this routine returns to StartProcess *)
+
+  cmp word ds:[LongCall],9A90H (* check word *)
+  jne $CorruptProcess
+  mov cs:[@CurrentProcess],ds
+  mov di,ProcessSP
+  mov ax,sp
+  stosw
+  mov ax,ss
+  stosw
+
+  call @GetPri
+  stosw
+  mov si,ProcessSP
+  lodsw
+  mov sp,ax
+  lodsw
+  mov ss,ax
+  lodsw
+  mov cx,ax
+  ret 0
+
+SwapStack2:   (* Same as SwapStack but doesnt call $NewPrio *)
+
+  mov es,cs:[@CurrentProcess]
+  cmp byte cs:[@Save8087],0
+  jne $dosave2
+  call @Swap
+  jmp $exitswap2
+$dosave2:
+
+  call @Swap8087
+$exitswap2:
+  xchg ax,cx
+  call @SetPri
+  xchg ax,cx
+  ret 0
+
+extrn __FatalError
+extrn __FatalErrorPos
+
+$CorruptProcess:
+  sti
+  call far __FatalErrorPos
+  mov  cx, 049H
+  push cx
+  push dx
+  push ax
+  call far __FatalError
+
+public CoreProc$TRANSFER :
+public  SYSTEM$TRANSFER : p1seg=12; p1off=10; p2seg=8; p2off=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  cli
+(* Take copy of p2 *)
+  lds bx, [bp][p2off]
+  mov ds, [bx][2]
+  mov ax,cs:[@CurrentProcess]
+(* Return result *)
+  les bx, [bp][p1off]
+  mov word es:[bx], 0
+  mov word es:[bx][2],ax
+  push bp
+  call SwapStack
+  pop bp
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 8
+
+public CoreProc$IOTRANSFER :
+public  SYSTEM$IOTRANSFER : p1seg=14; p1off=12; p2seg=10; p2off=8; IntNo=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  cli
+
+(* Take copy of p2 *)
+  lds bx, [bp][p2off]
+  mov di, [bx][2]
+(* Return first result *)
+  mov ax, cs:[@CurrentProcess]
+  lds bx, [bp][p1off]
+  mov word [bx],0
+  mov [bx][2],ax
+
+(* Save old interrupt vector and set up new one *)
+  sub bx, bx
+  mov ds, bx
+  mov bx, [bp][IntNo]  (* NB *)
+  shl bx, 1
+  shl bx, 1
+  push [bx]
+  push [bx][2]
+  mov [bx][2], ax     (* current process *)
+  mov word [bx],LongCall
+  push ds
+  push bx
+  mov ds,di
+  push bp
+  call SwapStack
+  pop bp
+  pop bx
+  pop ds
+
+(* Restore old interrupt vector *)
+  pop [bx][2]
+  pop [bx]
+
+(* issue EOI to interrupt controller *)
+  cmp bx,20H
+  jb  skipa0
+  cmp bx,40H
+  mov al,20H
+  jae skip20
+  out 20H,al
+  jmp skipa0
+skip20:
+  cmp bx,1C0H
+  jb  skipa0
+  cmp bx,1E0H
+  jae skipa0
+  out 0A0H,al       (* assuming it's an AT *)
+    out  020H, al       (* Added 11/14/91 *)
+skipa0:
+
+
+(* return second result *)
+  lds bx, [bp][p2off]
+  mov word [bx], 0
+  mov [bx][2], es
+
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 10
+
+SYSTEM$IntHandler:
+(* On entry the stack has *)
+(* flags *)
+(* cs *)
+(* ip *)
+(* segment of task record of interrupting task ( used to save ax ) *)
+(* offset  of ditto                            ( used to save bx ) *)
+(* Then registers saved in Registers record order *)
+
+
+              (* flags = 16 *)
+              (* CS    = 14 *)
+              (* IP    = 12 *)
+              (* 10   (flags copy) *)
+              (* 8    (es) *)
+  push ds     (* 6 *)
+  push di     (* 4 *)
+  push si     (* 2 *)
+  push bp     (* 0 *)
+  mov bp, sp
+  push dx
+  push cx
+  push bx
+  push ax
+  pushf
+  cld
+  mov ds,ss:[bp][10]  (* load ds with new process rec *)
+  pop ss:[bp][10]
+  mov [bp][8],es
+
+$preempt:
+  call SwapStack2
+$exit:
+  pop ax
+  pop bx
+  pop cx
+  pop dx
+  pop bp
+  pop si
+  pop di
+  pop ds
+  pop es
+  add sp,2     (* flags are be restored by iret *)
+  iret
+
+(*%F NearCall *)
+  pseg                  = 18
+  poff                  = 16
+  aseg                  = 14
+  aoff                  = 12
+  wspsize               = 10
+  p1seg                 = 8
+  p1off                 = 6
+  RetSize               = 14
+(*%E *)
+(*%T NearCall *)
+  poff                  = 16
+  aseg                  = 14
+  aoff                  = 12
+  wspsize               = 10
+  p1seg                 = 8
+  p1off                 = 6
+  pseg                  = 4
+  RetSize               = 12
+(*%E *)
+
+extrn __ProcIds
+extrn __FatalError
+extrn __FatalErrorPos
+
+public CoreProc$NEWPROCESS :
+public SYSTEM$NEWPROCESS   :
+  push bp
+  mov  bp, sp
+  push ds
+  push es
+  push si
+  push di
+
+  les  di, [bp][aoff]       (* address of process workspace *)
+  mov  bx, [bp][wspsize]
+  mov  ax, di
+  and  di, 0FH              (* amount lost due to normalizing *)
+  jz   $$NoLoss
+  sub  di, 16
+  add  bx, di
+$$NoLoss:
+  lds  si, [bp][p1off]      (* result *)
+  add  ax, 15
+  shr  ax, 1
+  shr  ax, 1
+  shr  ax, 1
+  shr  ax, 1
+  mov  di, es
+  add  ax, di
+  mov  word ds:[si], 0
+  mov  ds:[si][2], ax
+  mov  ds, ax
+  cmp  byte cs:[@Save8087],0
+  je   $$NoSave8087
+  add  ax, 6       (* 94/16 *)
+  sub  bx, 96
+  and  bx, 0FFFEH  (* put stack on even boundrary *)
+  mov  dx, es:[16]
+  mov  es:[16+96], dx
+$$NoSave8087:
+  inc  ax         (* size of process record *)
+  sub  bx, 16+12   (* 1 para + return addresses etc *)
+
+(* initialize record *)
+  mov  word ds:[NextProcess], -1
+  mov  word ds:[LongCall], 09A90H
+  mov  word ds:[LongCallIP], SYSTEM$IntHandler
+  mov  ds:[LongCallCS], cs
+  mov  ds:[ProcessSS], ax
+  mov  ds:[ProcessSP], bx
+    mov  di, bx
+    mov  cx, MAXPROCESS
+    mov  bx, _DATA
+    mov  es, bx
+    mov  bx, __ProcIds
+$$TIDLoop:
+    inc  bx
+    inc  bx
+    cmp  word es:[bx], 0
+    je   $$TIDFound
+    loop $$TIDLoop
+    call far __FatalErrorPos
+    mov  cx, 040H
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+$$TIDFound:
+    neg  cx
+    add  cx, MAXPROCESS+2
+    mov  es:[bx], cx
+    mov  es, ax
+    mov  es:[0], cl
+  call @GetPri
+  mov  ds:[ProcessPriority], ax
+(* initialize return stack frame *)
+  mov  ax, $$StartProcess
+  stosw
+  mov  ax, [bp][poff]
+  stosw
+  mov  ax, [bp][pseg]
+  stosw
+  mov  ax, $$StopProcess
+  stosw
+  mov  ax, cs
+  stosw
+
+  pop  di
+  pop  si
+  pop  es
+  pop  ds
+  pop  bp
+  ret  far RetSize
+
+$$StopProcess:
+  extrn __FatalError
+  extrn __FatalErrorPos
+
+  call far __FatalErrorPos
+  mov  cx, 48H
+  push cx
+  push dx
+  push ax
+  call far __FatalError
+
+$$StartProcess:
+(* This is arrived at by first SwapStack *)
+(* IN ax = priority (from SwapStack) *)
+
+(*Initialise bp to zero, enable interrupts and set priority *)
+  cld
+  push bx
+  push es
+
+  mov  bx, ss
+  extrn __FloatInitInstance
+  call far __FloatInitInstance
+  push ss
+  pop  es
+  push ss
+  pop  ds
+  call far __FloatSave
+  call far __FloatRestore
+
+  pop  es
+  pop  bx
+
+  mov  bp, _DATA
+  mov  ds, bp
+  sub  bp, bp
+  call far _new_priority
+  sti
+  ret  far 0
+
+(* Utility procedures *)
+
+public CoreProc$NewPriority :
+public  SYSTEM$NewPriority :
+
+  mov bx,sp
+  mov ax,ss:[bx][4]
+  call @SetPri
+  ret far 2
+
+
+public CoreProc$CurrentPriority :
+public  SYSTEM$CurrentPriority :
+  call @GetPri
+  ret far 0
+
+public SYSTEM$InterruptRegisters : pseg=8; pofs=6
+  push bp; mov bp,sp
+  push ds
+
+(* called to find the registers of an interrupted process *)
+(* after an IOtransfer *)
+
+  mov ds,[bp][pseg]
+  mov dx,ds:[ProcessSS]
+  mov ax,ds:[ProcessSP]
+  add ax,4
+
+  pop ds
+  pop bp; ret far 4
+  extrn __SchedStack
+  dw __SchedStack
+
+select MP_CODE
+mp_code: (* must be at 0 *)
+  dw -1
+  dw 9A90H
+  dd SYSTEM$IntHandler
+  org ProcessRecordSize-8
+
+select PROC_TEXT
+public CoreProc$initprocess :
+public  SYSTEM$initprocess :
+  mov  ax, MP_CODE
+  mov word cs:[@CurrentProcess], ax
+  cmp byte cs:[@Save8087],0
+  je $NoSave87
+  push ds
+  mov  es, ax
+  mov  ds, ax
+  extrn __FloatSave
+  call far __FloatSave
+  extrn __FloatRestore
+  call far __FloatRestore
+  pop  ds
+$NoSave87:
+  mov ax,0F000H + mp_code (* make sure extra smart linking does not cause problem! *)
+  ret far 0
+
+
+section;
+segment PROC_TEXT(CODE,28H);  select PROC_TEXT
+
+extrn @CurrentProcess
+
+public CoreProc$CurrentProcess :
+public  SYSTEM$CurrentProcess :
+(* returns the current process in DX:AX *)
+   mov dx, cs:[@CurrentProcess]
+   sub ax,ax
+   ret far 0
+
+(*%E *)
+
+(***************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __initmt
+extrn __initmt_vector
+
+select _TEXT
+
+do_initproc : (* defined later on ! *)
+
+select _INIT
+initproc : dw MAGIC_NUM
+           db PR3
+           dd do_initproc
+
+select _DATA
+public __SchedStack :  dw  0, 0, initproc
+
+
+select  _TEXT
+
+(*%T MThread *)
+(*%F _DLL *)
+    call far __initmt
+(*%E *)
+(*%T _DLL *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+    cmp  word [__initmt_vector][2], 0
+    jz   noCall
+    call far [__initmt_vector]
+noCall:
+    pop  ds
+(*%E *)
+(*%E *)
+    ret  far 0
+
+(*%E *)  (* NOT OS2 *)
+
+
+(*%T _OS2 *)
+
+(***************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __initmt
+extrn __initmt_vector
+
+select _TEXT
+
+do_initproc : (* defined later on ! *)
+
+select _INIT
+initproc : dw MAGIC_NUM
+           db PR3
+           dd do_initproc
+
+select _DATA
+public __LastProc :  dw  0, initproc
+
+
+select  _TEXT
+
+(*%T MThread *)
+(*%F _DLL *)
+    call far __initmt
+(*%E *)
+(*%T _DLL *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+    cmp  word [__initmt_vector][2], 0
+    jz   noCall
+    call far [__initmt_vector]
+noCall:
+    pop  ds
+(*%E *)
+(*%E *)
+    ret  far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSCREATETHREAD
+extrn __dosgetstack
+extrn __dosfreestack
+extrn __seterrno
+extrn __FloatInitInstance
+extrn __core_unlock
+extrn __core_lock
+
+select _DATA
+
+launchbuff: org 8
+
+ERROR_INSUFFICIENT_BUFFER   = 122
+ERROR_NO_PROC_SLOTS         =  89
+
+extrn __threadTotal
+extrn __core_lock
+extrn __core_unlock
+extrn DOSALLOCSEG
+
+select _TEXT
+
+threadLauncher:
+
+  mov  bx, ss
+  call far __FloatInitInstance
+
+  push ds
+  mov  bx,_DATA
+  mov  ds,bx
+  mov  di, [launchbuff][0]
+  mov  si, [launchbuff][2]
+  mov  es, [launchbuff][6]
+  mov  cx, [launchbuff][4]
+  pop ds
+  mov  bx, ss
+  push si
+  push di
+  sub  sp, 4
+  push es
+  push cx
+  ret  far  0
+
+public __beginthread :
+
+(*
+int far _beginthread (void (_CDECL far *func) (void far * ), void far *stack, unsigned size, void far *arg);
+*)
+
+(*%F RegParam *)
+func     = frame
+stack    = 4+frame
+size     = 8+frame
+arg      = 10+frame
+
+tid      = -2
+locals   =  2
+RetSize  =  0
+(*%E *)
+
+(*%T RegParam *)
+size     = 4+frame
+arg      = frame
+
+func     = -4
+tid      = -6
+stack    = -10
+locals   =  6
+RetSize  =  6
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T RegParam *)
+    mov  [bp][func],    ax
+    mov  [bp][func][2], bx
+    mov  [bp][stack],   cx
+    mov  [bp][stack][2],dx
+(*%E *)
+(*%F RegParam *)
+    mov  cx, [bp][stack]
+    mov  dx, [bp][stack][2]
+(*%E *)
+    or   dx, cx
+    cmp  dx, 0
+    jne  StackOK
+    push ax
+    push [bp][size]
+    push ss
+    lea  cx, [bp][stack][2]
+    push cx
+    sub  cx, cx
+    push cx
+    call far DOSALLOCSEG
+    cmp  ax, 0
+    jne  stackError
+    pop  ax
+StackOK:
+    mov  dx, [bp][stack][2]
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call far [__core_lock]
+    add  cx, [bp][size]
+    mov  es, dx
+    mov  bx, cx
+    mov  byte es:[CurrentThread], -1
+    mov  ax, [bp][arg]
+    mov [launchbuff][0],ax
+    mov  ax, [bp][arg][2]
+    mov [launchbuff][2],ax
+    mov  ax, [bp][func][2]
+    mov [launchbuff][6],ax
+    mov  ax, [bp][func]
+    mov [launchbuff][4],ax
+    mov  word es:[0], -1
+    mov  bx, [__threadTotal]
+    cmp  bx, MAXPROCESS
+    jb   threadOK
+    mov  ax, ERROR_NO_PROC_SLOTS
+    jmp  threadError
+threadOK:
+    inc  bx
+    mov  [__threadTotal], bx
+    push cs
+    mov  ax, threadLauncher
+    push ax
+    push ss
+    lea  bx, [bp][tid]
+    push bx
+    push es
+    sub  cx, 2
+    push cx
+    call far DOSCREATETHREAD
+    or   ax, ax
+    jnz  threadError2
+threadExecOK:
+    mov  ax, [bp][tid]
+btDone:
+    call far [__core_unlock]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+    ret  far  RetSize
+
+stackError:
+    mov  ax, ERROR_INSUFFICIENT_BUFFER
+threadError:
+threadError2:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    jmp  btDone
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSCREATETHREAD
+extrn __dosgetstack
+extrn __dosfreestack
+extrn __seterrno
+extrn __FloatInitInstance
+
+select _DATA
+
+ERROR_INSUFFICIENT_BUFFER   = 122
+ERROR_NO_PROC_SLOTS         =  89
+
+extrn __core_lock
+extrn __core_unlock
+extrn __threadTotal
+extrn __core_unlock
+extrn __core_lock
+
+launchbuff2: org 4
+
+select _TEXT
+
+threadLauncher:
+
+
+  push ds
+  mov bx,_DATA
+  mov ds,bx
+  mov  si, [launchbuff2][2]
+  mov  di, [launchbuff2][0]
+  pop ds
+  mov  bx, ss
+  call far __FloatInitInstance
+  sub  sp,  6
+  push si
+  push di
+  ret  far  0
+
+public __dosbeginthread :
+
+(* TID _dosbeginthread(void ( * func)(void), unsigned st_len, unsigned *st_token)
+
+*)
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+RetSize = 4
+(*%E *)
+
+(*%F RegParam *)
+func    = frame
+st_len  = 4+frame
+st_base = 6+frame
+
+tid     = -2
+locals  =  2
+(*%E *)
+(*%T RegParam *)
+(*%F NearCall *)
+st_base = frame
+func    = -4
+st_len  = -6
+tid     = -8
+locals  = 12
+(*%E *)
+(*%T NearCall *)
+st_base = -4
+func    = -8
+st_len  = -10
+tid     = -12
+locals  =  12
+(*%E *)
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+    push dx
+    push di
+    push si
+(*%T RegParam *)
+(*%F NearCall *)
+    mov  [bp][func], ax
+    mov  [bp][func][2], bx
+    mov  [bp][st_len], cx
+(*%E *)
+(*%T NearCall *)
+    mov  [bp][func], ax
+    mov  [bp][st_len], dx
+    mov  [bp][st_base], cx
+    mov  [bp][st_base][2], dx
+(*%E *)
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    call far [__core_lock]
+    mov  cx, [bp][st_len]
+    jcxz stackError
+(*%F RegParam *)
+    push cx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, cx
+    push cx
+(*%E *)
+    call __dosgetstack
+    pop  cx
+    or   dx, dx
+    jz   stackError
+    mov  es, dx
+    neg  dx
+memOK:
+    mov  byte es:[CurrentThread], -1
+    mov  bx, [__threadTotal]
+    cmp  bx, MAXPROCESS
+    jb   threadOK
+    mov  ax, ERROR_NO_PROC_SLOTS
+    jmp  threadError
+threadOK:
+    inc  bx
+    mov  [__threadTotal], bx
+    mov  bx, cx
+    mov  ax, [bp][func][2]
+    mov [launchbuff2][2],ax
+    mov  ax, [bp][func]
+    mov [launchbuff2][0],ax
+    push cs
+    mov  ax, threadLauncher
+    push ax
+    push ss
+    lea  bx, [bp][tid]
+    push bx
+    push es
+    sub  cx, 2
+    push cx
+    call far DOSCREATETHREAD
+    or   ax, ax
+    jz   threadExecOK
+    push ax
+(*%F RegParam *)
+    push dx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, dx
+(*%E *)
+(*%F NearCall *)
+    call far __dosfreestack
+(*%E *)
+(*%T NearCall *)
+    call __dosfreestack
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    pop  ax
+    jmp  threadError2
+threadExecOK:
+    les  bx, [bp][st_base]
+    mov  ax, es
+    or   ax, ax
+    jz   noToken
+    mov  es:[bx], dx
+noToken:
+    mov  ax, [bp][tid]
+btDone:
+    call far [__core_unlock]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  dx
+(*%F RegParam *)
+    pop  cx
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+    ret  far  RetSize
+
+stackError:
+    mov  ax, ERROR_INSUFFICIENT_BUFFER
+threadError:
+threadError2:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    jmp  btDone
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSEXIT
+
+select _DATA
+
+extrn __threadTotal
+
+select _TEXT
+
+public __dosendthread :
+public __endthread :
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__threadTotal]
+    dec  ax
+    or   ax, ax
+    jbe  etError
+    mov  [__threadTotal], ax
+    mov  ax, EXIT_THREAD
+    push ax
+    sub  ax, ax
+    push ax
+    call far DOSEXIT
+etError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  far  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSALLOCSEG
+
+select _DATA
+
+extrn __threadTotal
+
+select _TEXT
+
+public __dosgetstack :
+
+size   = sframe
+
+sel    = -2
+locals =  2
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push [bp][size]
+(*%E *)
+(*%T RegParam *)
+    push ax
+(*%E *)
+    push ss
+    lea  ax, [bp][sel]
+    push ax
+    sub  ax, ax
+    push ax
+    call far DOSALLOCSEG
+    or   ax, ax
+    jnz  dgError
+    mov  dx, [bp][sel]
+dgDone:
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+dgError:
+    sub  ax, ax
+    cwd
+    jmp  dgDone
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSFREESEG
+
+select _DATA
+
+extrn __threadTotal
+
+select _TEXT
+
+public __dosfreestack :
+
+stack  = frame
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+    mov  ax, [bp][stack]
+(*%E *)
+    neg  ax
+    push ax
+    call far DOSFREESEG
+    pop  bp
+    ret  far  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSGETINFOSEG
+
+select _TEXT
+
+public __getTID :
+
+globalSeg = -2
+localSeg  = -4
+locals    =  4
+
+    sub  ah, ah
+    mov  al, ss:[CurrentThread]
+    cmp  al, -1
+    jne  gotID
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    lea  ax, [bp][globalSeg]
+    push ss
+    push ax
+    lea  ax, [bp][localSeg]
+    push ss
+    push ax
+    call far DOSGETINFOSEG
+    mov  es, [bp][localSeg]
+    mov  ax, es:[ThreadID]
+    mov  ss:[CurrentThread], al
+    mov  sp, bp
+    pop  bp
+gotID:
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+
+extrn DOSSETPRTY
+
+public CoreProc$NewPriority :
+
+pr  =  frame
+
+  push bp
+  mov  bp, sp
+  mov  ax, 2
+  push ax
+  sub  ax, ax
+  push ax
+  push [bp][pr]
+  push ax
+  call far DOSSETPRTY
+  pop  bp
+  ret  far 2
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+
+extrn DOSGETPRTY
+
+public CoreProc$CurrentPriority :
+
+pr     = -2
+locals =  2
+
+  push bp
+  mov  bp, sp
+  sub  sp, locals
+  mov  ax, 2
+  push ax
+  lea  ax, [bp][pr]
+  push ss
+  push ax
+  sub  ax, ax
+  push ax
+  call far DOSGETPRTY
+  mov  al, [bp][pr]
+  sub  ah, ah
+  mov  sp, bp
+  pop  bp
+  ret  far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+
+select _TEXT
+
+public __nullproc :
+
+    ret  0
+
+(*%E *)  (* OS2 *)
+
+
+end
+

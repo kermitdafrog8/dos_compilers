@@ -1,0 +1,89 @@
+TopSpeed Professional TechKit          Release notes version 3.10
+=============================          ==========================
+
+
+
+KNOWN PROBLEMS IN TOPSPEED TECHKIT
+==================================
+
+
+þ   The post-mortem debugger does not correctly show the value
+    of local variables where a program has been terminated by
+    an exception, and third-party software has hooked the
+    exception vectors in such a way that the BP register is not
+    preserved.
+
+þ   The profiler will only operate in line number mode for one
+    module at a time.
+
+þ   The resource compiler does not accept NOT as an operator.
+    The ~ operator may be used instead. Also, the / character
+    is not acceptable in filenames. Use \ instead.
+
+
+Increasing the maximum file handle count
+========================================
+
+To do this you must have the source kit for the appropriate
+language(s) as you will to rebuild libraries.
+
+1: Add the following code to INITEXE.A before 'jmp far __startup'
+
+---------------------------------------------------------------------
+(* extend handle size *)
+  push ax
+  mov ah,30H        (* check version >= 3.03 *)
+  int 21H
+  cmp al,3
+  ja $handleextnd
+  cmp ah,3
+  jb $nohandleextend
+$handleextnd:
+  mov ax,ds         (* PSP seg into AX *)
+
+  push  bx
+  push  es
+  mov   es,ax
+  mov   bx,ds:[2]   (* recover END-OF-ALLOCATION segment in BX *)
+  mov   ax,ds
+  sub   bx,ax       (* calculate total program size *)
+  sub   bx,11H      (* adjust down 11H paras., 256bytes plus 16 for slack *)
+  mov   ah,4AH      (* release this memory back to DOS to handle files *)
+  int   21H
+  sub   word ds:[2],11H (* decrement END-OF-ALLOCATION value for libraries *)
+  pop   es
+  mov  ah,67H
+  mov  bx,255     (* prepare DOS to handle up to 255 file handles. *)
+  int  21H        (* NB value must be odd and < 256 *)
+  pop  bx
+$nohandleextend:
+  pop ax
+  jmp far __startup
+----------------------------------------------------------------------------
+
+2. Change OPEN_MAX (default 20) in COREFILE.A to required number of files
+   (remember that 5 are reserved by DOS)
+
+3.
+   Modula-2
+   --------
+   Change MaxOpenFiles in FIO.DEF to required value-5
+   Change MaxHandles in COREFILE.DEF to required value
+
+   Pascal
+   --------
+   Change MaxHandles in COREFILE.ITF to required value
+
+   C
+   --------
+   Change NFDS in DOS.H to required value
+   Change HANDLE_MAX in IO.H to required value
+
+4. Remake all appropriate libraries and INITEXE.OBJ.
+
+5. Remember to set FILES= in your CONFIG.SYS and that running on
+   some networks you may need to change some configuration information.
+
+
+
+

@@ -1,0 +1,125 @@
+%A (%F %L,%C)
+%E %A Erreur
+01 %E Nom ind‚fini -> %N
+02 %E Modules non autoris‚s ici
+03 %E La Proc‚dure %N n'est pas dans le bon segment pour un appel court
+04 %E Ce n'est pas un type
+05 %E Type ensemble ill‚gal
+06 %E %N Utilis‚ comme type
+07 %E %N Non autoris‚ comme type index
+08 %E Les r‚els ne sont pas autoris‚s comme sous-type
+09 %E Erreur de type comme sous-type
+10 %E Typeincorrect
+11 %E Mauvais intervalle
+12 %E L'Expression doit donner un r‚sultat bool‚en
+13 %E L'Expression doit ˆtre  Constante
+14 %E Conflit de types
+15 %E Erreur de taille de constante : sup‚rieure … 64K
+16 %E Constante hors intervalle
+17 %E Types Incompatible (ou illegaux) dans une expression
+18 %E L'Expression doit donner un Cardinal
+19 %E Les variables absolues ne sont pas autoris‚es dans une proc‚dure
+20 %E C'est une  Fonction
+21 %E Ce n'est pas un label
+22 %E Un Label doit ˆtre local
+23 %E Le label a ‚t‚ redefini
+24 %E Ce n'est pas une Fonction
+25 %E Le type renvoy‚ par la fonction est erron‚
+26 %E Un Types est interdit ici
+27 %E Type incompatible dans l'assignment
+28 %E La  variable de la boucle loop est d'un mauvais type
+29 %E Le type de l'Expression est faux
+30 %E Ce n'est pas un ensemble
+31 %E Mauvais nombre de Parametres
+32 %E Ce n'est pas une procedure
+33 %E Ce n'est une  fonction
+34 %E Enregistrement attendu
+35 %E Pointer attendu
+36 %E Doit ˆtre compatible avec le type CARDINAL
+37 %E Type pointeur attendu
+38 %E Le type index est incorrect
+39 %E Tableau attendu
+40 %E Index hors limittes
+41 %E La champ de l'enregistrement n'a pas ‚t‚ trouv‚
+42 %E Le type du Parametre est incorrect
+43 %E (DE)ALLOCATE NOT IMPORTED
+44 %E Not an Open Array parameter
+45 %E Parameter must be a lvalue
+46 %E Too many parameters
+47 %E Variable expected
+48 %E Case expression not correct type
+49 %E Invalid type of Case label
+50 %E Overlapping cases
+51 %E Must be cardinal constant
+52 %E Procedure does not match previous definition
+53 %E Exit without loop
+54 %E Module name mismatch
+55 %E Procedure redefined
+56 %E Undefined label %N
+57 %E No return in function-procedure
+58 %E Procedure name mismatch
+59 %E No statement-part of main module
+60 %E %N Redefined
+61 %E %N Circular definition
+62 %E %N is not a module or %N is undefined
+63 %E Imported module definition name wrong : %N
+64 %E Definition Module expected
+65 %E Aggregates only allowed for records and arrays
+66 %E %N Is an unresolved forward procedure
+67 %E Division by zero
+68 %E %N Is an unresolved opaque type
+69 %E %N Is an unresolved forward pointer
+70 %E Constant has no address
+71 %E Allocated storage in this data-segment > 64K
+72 %E Allocated storage on stack > 64K
+73 %E Object too Big
+74 %E Record size too big, sum of recordfields > 64K
+75 %E invalid infix call (parameter count # 2)
+76 %E Definition/Implementation segments are different
+77 %E Size of %N not defined yet
+78 %E File name does not conform with module name
+79 %E Invalid argument to VSIZE
+80 %Y Token too big
+81 %Y Unknown compiler option
+82 %Y Bad character in hex constant
+83 %Y Bad character in octal constant
+84 %Y Bad character in decimal constant
+85 %Y String not terminated
+86 %Y Comment not terminated
+87 %Y Bad character
+88 %Y Token too long
+89 %Y Incomplete compiler option
+90 %Y Symbol not a boolean constant
+91 %Y Symbol not defined
+98 %A Unexpected end of input
+99 %A Syntax Error, expected :
+%I %A Internal Error :
+%X %A Compiler Limit :
+100 %I Walk in InsRecordnames
+101 %I RecordFieldsAdjust
+102 %I Index
+103 %I Index2
+104 %X 8087 Stack Overflow
+105 %I TreePhase in Int2Error
+106 %X Too many cases in CASE statement
+107 %X Out of memory
+108 %X Out of memory(2)
+109 %I Scope underrun in DropScope
+110 %I Addr mode difference
+111 %X Scope table full
+112 %X Name table full
+113 %I MakeWith
+114 %X Scope overflow
+115 %X 64K memory limit exceeded
+116 %X 64K segment limit exceeded
+120 %A File "%N" not found
+121 File "%N" could not be created
+%Z File system error %N
+122 %Z : Read
+123 %Z : Write
+124 %Z : Close
+125 %Z : Seek
+126 %Z : Erase
+127 Too many open files
+130 File write error : Disk full
+131 Compilation aborted due to error(s) in definition module

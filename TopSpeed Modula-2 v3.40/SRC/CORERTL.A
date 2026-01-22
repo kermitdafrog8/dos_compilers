@@ -1,0 +1,4118 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  CORERTL.A - compiler helper functions                                   *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreRTL
+
+(****************************************************************************)
+
+section
+
+segment ORDER(FCODE,68H)
+segment ORDER(MIXED,68H)
+segment ORDER(DATA,68H)
+segment ORDER(M_DATA,68H)
+segment ORDER(FAR_DATA,68H)
+segment ORDER(FAR_BSS,68H)
+segment ORDER(BSS,68H)
+segment ORDER(BSSEND,68H)
+segment STACK(STACK,68H)
+segment HEAP(HEAP,68H)
+
+(****************************************************************************)
+(* start of far handlers for compiler generated calls *)
+(****************************************************************************)
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+
+public F$UnsMol : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+public F$SgnMol :
+(* Unsigned/signed multiplication *)
+(* On overflow: modulus 2^32 wrap-around *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMol2
+  add  ax,[bp][High2]
+  jnz  UnsMol1
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+  pop  bp
+  ret  far  8
+
+UnsMol1:
+  mul  word [bp][Low1]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  far  8
+
+UnsMol2:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jnz  UnsMol3
+  mul  word [bp][Low2]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  far  8
+
+UnsMol3:
+  push cx
+  mul  word [bp][Low2]
+  mov  cx,ax
+  mov  ax,[bp][High2]
+  mul  word [bp][Low1]
+  add  cx,ax
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+  add  dx,cx
+  pop  cx
+  pop  bp
+  ret  far  8
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn F$UnsMul
+
+public F$SgnDiv : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed division *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+  xor  si,si
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn F$CnsDiv
+  add  sp, 6
+  jmp  F$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnDiv5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnDiv5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnDiv1
+  jz   SgnDiv6
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnDiv1
+
+SgnDiv6:
+  mov  cx,[bp][Low2]
+  jcxz SgnDiv0
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  SgnDivA
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+SgnDiv9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnDiv7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  far  8
+
+SgnDivA:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  SgnDiv9
+
+SgnDiv1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call far F$UnsMul
+  jo   SgnDiv3
+  cmp  dx,[bp][High1]
+  ja   SgnDiv3
+  jb   SgnDiv4
+  cmp  ax,[bp][Low1]
+  jbe  SgnDiv4
+SgnDiv3:
+  dec  bx
+SgnDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  SgnDiv9
+
+SgnDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnDiv7
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn F$UnsMul
+
+public F$UnsDiv : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned division *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn F$CnsDiv
+  add  sp, 4
+  jmp  F$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsDiv1
+  add  cx,[bp][Low2]
+  jz   UnsDiv0
+
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  UnsDiv7    (*!!!!New special case *)
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+UnsDiv8:
+  and  ax,ax
+UnsDiv9:
+  pop  cx
+  pop  bp
+  ret  far  8
+
+UnsDiv7:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  UnsDiv8
+
+UnsDiv1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call far F$UnsMul
+  jo   UnsDiv3
+  cmp  dx,[bp][High1]
+  jb   UnsDiv4
+  ja   UnsDiv3
+  cmp  ax,[bp][Low1]
+  jbe  UnsDiv4
+UnsDiv3:
+  dec  bx
+UnsDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  UnsDiv8
+
+UnsDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsDiv9
+
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn F$UnsMul
+
+public F$SgnRem : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed remainder *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn F$CnsDiv
+  add  sp, 6
+  jmp  F$CnsDiv
+DivOK:
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnRem5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnRem5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnRem1
+  jz   SgnRem6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnRem1
+
+SgnRem6:
+  mov  cx,[bp][Low2]
+  jcxz SgnRem0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnRem9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnRem7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  far  8
+
+SgnRem1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnRem2
+  div  bx
+  push cx
+  push ax
+  call far F$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnRem3
+  jb   SgnRem4
+  cmp  ax,[bp][Low1]
+  jbe  SgnRem4
+SgnRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  bx
+  jmp  SgnRem9
+
+SgnRem0:
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnRem7
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn F$UnsMul
+
+public F$SgnMod : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push bx
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn F$CnsDiv
+  add  sp, 6
+  jmp  F$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  mov  bh, dh
+  and  dx,dx
+  jge  SgnMod5
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMod5:
+  mov  dx,[bp][High2]
+  mov  bl,dh
+  and  dx,dx
+  jg   SgnMod1
+  jz   SgnMod6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnMod1
+
+SgnMod6:
+  mov  cx,[bp][Low2]
+  jcxz SgnMod0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnMod9:
+  mov cx,ax
+  or  cx,dx
+  jz SgnMod7
+  xor bh,bl
+  jge SgnMod10
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+  not bl
+SgnMod10:
+  shl bl,1
+  jnc SgnMod7
+  neg dx
+  neg ax
+  sbb dx,0
+SgnMod7:
+  pop  bx
+  pop  cx
+  pop  bp
+  ret far  8
+
+SgnMod1:
+  push si
+  mov  cx,dx
+  mov  si,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push si
+SgnMod2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  si,1
+  and  cx,cx
+  jnz  SgnMod2
+  div  si
+  push cx
+  push ax
+  call far F$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnMod3
+  jb   SgnMod4
+  cmp  ax,[bp][Low1]
+  jbe  SgnMod4
+SgnMod3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnMod4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  si
+  jmp  SgnMod9
+
+SgnMod0: (* overflow *)
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnMod7
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn F$UnsMul
+
+public F$UnsRem : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned remainder/modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn F$CnsDiv
+  add  sp, 4
+  jmp  F$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsRem1
+  add  cx,[bp][Low2]
+  jz   UnsRem0
+  mov  ax,[bp][High1]
+  xor  dx,dx
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+UnsRem9:
+  pop  cx
+  pop  bp
+  ret  far  8
+
+UnsRem1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsRem2
+  div  bx
+  sub  ax,1
+  adc  ax,0
+  push cx
+  push ax
+  call far F$UnsMul
+  add  ax,[bp][Low2]
+  adc  dx,[bp][High2]
+  jc   UnsRem3
+  cmp  dx,[bp][High1]
+  jb   UnsRem4
+  ja   UnsRem3
+  cmp  ax,[bp][Low1]
+  jbe  UnsRem4
+UnsRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+UnsRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  and  ax,ax
+  pop  bx
+  jmp  UnsRem9
+
+UnsRem0:
+  xor  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  UnsRem9
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public F$UnsMul : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned multiplication *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMul1
+  add  ax,[bp][High2]
+  jnz  UnsMul2
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+UnsMul8:
+  and  ax,ax
+UnsMul9:
+  pop  bp
+  ret  far  8
+
+UnsMul1:
+  cmp  word [bp][High2],0
+  jnz  UnsMul0
+  mul  word [bp][Low2]
+  jmp  UnsMul3
+UnsMul2:
+  mul  word [bp][Low1]
+UnsMul3:
+  jc   UnsMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jnc  UnsMul8
+
+UnsMul0:
+  mov  al,100
+  add  al,al
+  stc
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsMul9
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public F$SgnMul : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed multiplication *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push si
+
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnMul5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMul5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnMul6
+  jz   SgnMul1
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  jz   SgnMul1
+
+SgnMul6:
+  cmp  word [bp][High1],0
+  jnz  SgnMul0
+  mov  ax,dx
+  mul  word [bp][Low1]
+  jmp  SgnMul2
+SgnMul1:
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jz   SgnMul2
+  mul  word [bp][Low2]
+SgnMul2:
+  jc   SgnMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jc   SgnMul0
+  js   SgnMul0
+
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnMul7:
+  pop  si
+  pop  bp
+  ret  far  8
+
+SgnMul0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnMul7
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public F$LngShl :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz $lshl1
+$lshl2:
+  shl  ax,1
+  rcl  dx,1
+  loop $lshl2
+$lshl1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$LngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $lshr1
+$lshr2:
+  sar  dx,1
+  rcr  ax,1
+  loop $lshr2
+$lshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret  far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$ULngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $ulshr1
+$ulshr2:  shr  dx,1
+  rcr  ax,1
+  loop  $ulshr2
+$ulshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$MovByt : SourceSeg =lframe+8; SourceOff = lframe+6; DestSeg = lframe+4; DestOff = lframe+2; Count = lframe
+  push bp
+  mov  bp,sp
+  push cx; push si; push di; push es; push ds;
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lds si, [bp][SourceOff]
+  rep; movsb;
+  pop ds; pop es; pop di; pop si; pop cx
+  pop bp
+  ret far  10
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$PushByt : SourceSeg = lframe+4; SourceOff = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push cx; push si; push di; push es; push ds;
+  lds si, [bp][SourceOff]
+  mov cx, [bp][Count]
+  mov bp, [bp] (* restore bp *)
+  mov di, sp
+  add di, lframe+lframe+14
+  push ss
+  pop es
+  rep; movsb
+  pop ds; pop es; pop di; pop si; pop cx
+  ret far  lframe+6
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$PopByt : Data = lframe+6; DestSeg = lframe+4; DestOff = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  push cx; push si; push di; push es; push ds
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lea si, [bp][Data]
+  push ss; pop ds
+  rep; movsb
+  lea bp, [si][-lframe]
+  pop ds; pop es; pop di; pop si; pop cx
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*) pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public F$SetOr : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  or [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+(*%F NearCall *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+(*%F NearCall *)
+select CORE_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+public F$SetDif : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  not al
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+(*%F NearCall *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+(*%F NearCall *)
+select CORE_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+public F$SetXor : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  xor [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+
+section
+(*%F NearCall *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+(*%F NearCall *)
+select CORE_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+public F$SetAnd : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+(*%F NearCall *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+(*%F NearCall *)
+select CORE_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public F$DupByt : Seg = lframe+6; Off = lframe+4; Data = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  push es; push di; push cx; push ax
+  mov al, [bp][Data]
+  mov cx, [bp][Count]
+  les di, [bp][Off]
+  mov ah, al
+  shr cx,1
+  rep; stosw
+  jnc $DupBytExit
+  stosb
+$DupBytExit:
+  pop ax; pop cx; pop di; pop es
+  pop bp
+  ret far  8
+
+section
+(*%F NearCall *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T NearCall *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+(*%F NearCall *)
+select CORE_TEXT
+(*%E *)
+(*%T NearCall *)
+select _TEXT
+(*%E *)
+
+public F$EquByte : Data = lframe+2; Count = lframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+$exit:
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-frame] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+  pop [bp][4]
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jnz $not_equal
+  mov al, 1
+$not_equal:
+  ret far  0
+
+public F$NotEquByte : Data = lframe+2; Count = lframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-lframe] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*)  pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jz  $equal
+  inc ax
+$equal:
+  ret far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+  extrn DOSHUGESHIFT
+public F$HugeSub : p = lframe+4; q = lframe
+  push bp
+  mov bp, sp
+  push bx; push cx
+  mov ax, [bp][p]
+  mov dx, [bp][p][2]
+  mov bx, [bp][q][2]
+  mov cx, DOSHUGESHIFT
+  shr bx, cl
+  shr dx, cl
+  sub ax, [bp][q]
+  sbb dx, bx
+  pop cx; pop bx
+  pop bp
+  ret far  8
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public  F$LngRol :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push bx
+  and  cx, 31
+  cmp  cx, 16
+  jb   $1
+  sub cx, 16
+  xchg ax,dx
+$1:
+  rol ax, cl
+  rol dx, cl
+  mov bx, 1
+  rol bx, cl
+  dec bx
+  mov cx, ax
+  xor cx, dx
+  and cx, bx
+  xor ax, cx
+  xor dx, cx
+  pop bx
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+public F$SetRng : Start = lframe+4; Stop = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push ax; push bx; push cx; push dx; push si; push di; push es;
+  mov bx, [bp][Count]
+  mov si, [bp][Start]
+  mov dx, [bp][Stop]
+  mov bp, [bp]
+
+  mov di, sp; add di, lframe+lframe+18; push ss; pop es (* set up es:di *)
+
+  add bx, di (*End*)
+  mov ax, si (*Start*)
+  cmp ax, dx (*Stop*)
+  ja $lastpart
+
+  mov cx, ax
+  shr cx, 1; shr cx, 1; shr cx, 1
+  sub al, al
+  rep; stosb
+
+  mov cl, si (*Start*)
+  and cl, 7
+  mov al, 0FFH
+  shl al, cl
+  stosb
+
+  mov cx, dx (*Stop*)
+  shr cx, 1; shr cx, 1; shr cx, 1
+  mov ax, si (*Start*)
+  shr ax, 1; shr ax, 1; shr ax, 1
+  sub cx, ax
+  jz $one_byte_non_zero
+  dec cx
+  mov al, 0FFH
+  rep; stosb
+$done_all_ones:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  stosb
+
+$lastpart:
+  mov cx, bx (*End*)
+  sub cx, di
+  sub al,al
+  rep; stosb
+
+  pop es; pop di; pop si; pop dx; pop cx; pop bx; pop ax;
+  ret far  lframe+6
+
+$one_byte_non_zero:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  and es:[di][-1], al
+  jmp $lastpart
+
+section
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H);
+     (* Have to use a fixed segment for this as bp is used for a parameter *)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+segment _DATA(DATA, 28H)
+
+extrn __FatalError
+extrn __stk_base
+
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+
+CSVar = 2
+IPVar = 0
+
+Dgrp :  dw _DATA
+
+public F$StkChk :
+
+    push es
+    mov  es, cs:[Dgrp]
+    add  bp, es:[__stk_base]
+    pop  es
+    jc   stackError
+    cmp  sp, bp
+    jb   stackError
+    ret far  0
+stackError:
+    mov  bx, sp
+    mov  ax, 1
+    push ax
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    call far __FatalError
+
+section
+(*%F SameDS *)
+segment CORE_TEXT(CODE,28H);
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H);
+(*%E *)
+
+extrn __FatalError
+
+
+CSVar = 12
+IPVar = 10
+
+public F$CnsStk :  push ax; mov ax,  1  ; jmp F$cns
+public F$CnsPtr :  push ax; mov ax,  2  ; jmp F$cns
+public F$CnsIdx :  push ax; mov ax,  9  ; jmp F$cns
+public F$CnsOvr :  push ax; mov ax,  4  ; jmp F$cns
+public F$CnsRng :  push ax; mov ax,  5  ; jmp F$cns
+public F$CnsRet :  push ax; mov ax,  6  ; jmp F$cns
+public F$CnsCase : push ax; mov ax,  7  ; jmp F$cns
+public F$CnsDiv :  push ax; mov ax,  8  ; jmp F$cns
+public F$CnsPVC :  push ax; mov ax, 0AH ; jmp F$cns
+
+F$cns:
+    push bx
+    push cx
+    push dx
+    push ds
+    mov  bx, sp
+    mov  cx, ax
+    push cx
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    extrn  CoreSig@CnsHandler
+(*%F _WINDOWS *)
+    mov  dx, seg CoreSig@CnsHandler
+    mov  ds, dx
+(*%E *)
+    cmp  word [CoreSig@CnsHandler][2], 0
+    je   noHandler
+    call far [CoreSig@CnsHandler]
+    or   al, al
+    jnz  retFromCns
+noHandler:
+    push cx
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    call far __FatalError
+retFromCns:
+    pop  ds
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret  far 0
+
+(****************************************************************************)
+(* end of handlers for far compiler generated calls *)
+(****************************************************************************)
+
+(****************************************************************************)
+(* start of iopl handlers for compiler generated calls *)
+(****************************************************************************)
+section
+segment IOPL_TEXT(CODE,28H);
+
+
+public I$UnsMol : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+public I$SgnMol :
+(* Unsigned/signed multiplication *)
+(* On overflow: modulus 2^32 wrap-around *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMol2
+  add  ax,[bp][High2]
+  jnz  UnsMol1
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+  pop  bp
+  ret  far  8
+
+UnsMol1:
+  mul  word [bp][Low1]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  far  8
+
+UnsMol2:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jnz  UnsMol3
+  mul  word [bp][Low2]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  far  8
+
+UnsMol3:
+  push cx
+  mul  word [bp][Low2]
+  mov  cx,ax
+  mov  ax,[bp][High2]
+  mul  word [bp][Low1]
+  add  cx,ax
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+  add  dx,cx
+  pop  cx
+  pop  bp
+  ret  far  8
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn I$UnsMul
+
+public I$SgnDiv : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed division *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+  xor  si,si
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn I$CnsDiv
+  add  sp, 6
+  jmp  I$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnDiv5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnDiv5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnDiv1
+  jz   SgnDiv6
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnDiv1
+
+SgnDiv6:
+  mov  cx,[bp][Low2]
+  jcxz SgnDiv0
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  SgnDivA
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+SgnDiv9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnDiv7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  far  8
+
+SgnDivA:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  SgnDiv9
+
+SgnDiv1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call far I$UnsMul
+  jo   SgnDiv3
+  cmp  dx,[bp][High1]
+  ja   SgnDiv3
+  jb   SgnDiv4
+  cmp  ax,[bp][Low1]
+  jbe  SgnDiv4
+SgnDiv3:
+  dec  bx
+SgnDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  SgnDiv9
+
+SgnDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnDiv7
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn I$UnsMul
+
+public I$UnsDiv : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned division *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn I$CnsDiv
+  add  sp, 4
+  jmp  I$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsDiv1
+  add  cx,[bp][Low2]
+  jz   UnsDiv0
+
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  UnsDiv7    (*!!!!New special case *)
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+UnsDiv8:
+  and  ax,ax
+UnsDiv9:
+  pop  cx
+  pop  bp
+  ret  far  8
+
+UnsDiv7:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  UnsDiv8
+
+UnsDiv1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call far I$UnsMul
+  jo   UnsDiv3
+  cmp  dx,[bp][High1]
+  jb   UnsDiv4
+  ja   UnsDiv3
+  cmp  ax,[bp][Low1]
+  jbe  UnsDiv4
+UnsDiv3:
+  dec  bx
+UnsDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  UnsDiv8
+
+UnsDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsDiv9
+
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn I$UnsMul
+
+public I$SgnRem : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed remainder *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn I$CnsDiv
+  add  sp, 6
+  jmp  I$CnsDiv
+DivOK:
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnRem5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnRem5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnRem1
+  jz   SgnRem6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnRem1
+
+SgnRem6:
+  mov  cx,[bp][Low2]
+  jcxz SgnRem0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnRem9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnRem7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  far  8
+
+SgnRem1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnRem2
+  div  bx
+  push cx
+  push ax
+  call far I$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnRem3
+  jb   SgnRem4
+  cmp  ax,[bp][Low1]
+  jbe  SgnRem4
+SgnRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  bx
+  jmp  SgnRem9
+
+SgnRem0:
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnRem7
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn I$UnsMul
+
+public I$SgnMod : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push bx
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn I$CnsDiv
+  add  sp, 6
+  jmp  I$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  mov  bh, dh
+  and  dx,dx
+  jge  SgnMod5
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMod5:
+  mov  dx,[bp][High2]
+  mov  bl,dh
+  and  dx,dx
+  jg   SgnMod1
+  jz   SgnMod6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnMod1
+
+SgnMod6:
+  mov  cx,[bp][Low2]
+  jcxz SgnMod0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnMod9:
+  mov cx,ax
+  or  cx,dx
+  jz SgnMod7
+  xor bh,bl
+  jge SgnMod10
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+  not bl
+SgnMod10:
+  shl bl,1
+  jnc SgnMod7
+  neg dx
+  neg ax
+  sbb dx,0
+SgnMod7:
+  pop  bx
+  pop  cx
+  pop  bp
+  ret far  8
+
+SgnMod1:
+  push si
+  mov  cx,dx
+  mov  si,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push si
+SgnMod2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  si,1
+  and  cx,cx
+  jnz  SgnMod2
+  div  si
+  push cx
+  push ax
+  call far I$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnMod3
+  jb   SgnMod4
+  cmp  ax,[bp][Low1]
+  jbe  SgnMod4
+SgnMod3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnMod4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  si
+  jmp  SgnMod9
+
+SgnMod0: (* overflow *)
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnMod7
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn I$UnsMul
+
+public I$UnsRem : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned remainder/modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn I$CnsDiv
+  add  sp, 4
+  jmp  I$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsRem1
+  add  cx,[bp][Low2]
+  jz   UnsRem0
+  mov  ax,[bp][High1]
+  xor  dx,dx
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+UnsRem9:
+  pop  cx
+  pop  bp
+  ret  far  8
+
+UnsRem1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsRem2
+  div  bx
+  sub  ax,1
+  adc  ax,0
+  push cx
+  push ax
+  call far I$UnsMul
+  add  ax,[bp][Low2]
+  adc  dx,[bp][High2]
+  jc   UnsRem3
+  cmp  dx,[bp][High1]
+  jb   UnsRem4
+  ja   UnsRem3
+  cmp  ax,[bp][Low1]
+  jbe  UnsRem4
+UnsRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+UnsRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  and  ax,ax
+  pop  bx
+  jmp  UnsRem9
+
+UnsRem0:
+  xor  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  UnsRem9
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$UnsMul : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Unsigned multiplication *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMul1
+  add  ax,[bp][High2]
+  jnz  UnsMul2
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+UnsMul8:
+  and  ax,ax
+UnsMul9:
+  pop  bp
+  ret  far  8
+
+UnsMul1:
+  cmp  word [bp][High2],0
+  jnz  UnsMul0
+  mul  word [bp][Low2]
+  jmp  UnsMul3
+UnsMul2:
+  mul  word [bp][Low1]
+UnsMul3:
+  jc   UnsMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jnc  UnsMul8
+
+UnsMul0:
+  mov  al,100
+  add  al,al
+  stc
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsMul9
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SgnMul : High1 = lframe+6; Low1 = lframe+4; High2 = lframe+2; Low2 = lframe
+(*Signed multiplication *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push si
+
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnMul5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMul5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnMul6
+  jz   SgnMul1
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  jz   SgnMul1
+
+SgnMul6:
+  cmp  word [bp][High1],0
+  jnz  SgnMul0
+  mov  ax,dx
+  mul  word [bp][Low1]
+  jmp  SgnMul2
+SgnMul1:
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jz   SgnMul2
+  mul  word [bp][Low2]
+SgnMul2:
+  jc   SgnMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jc   SgnMul0
+  js   SgnMul0
+
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnMul7:
+  pop  si
+  pop  bp
+  ret  far  8
+
+SgnMul0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnMul7
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$LngShl :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz $lshl1
+$lshl2:
+  shl  ax,1
+  rcl  dx,1
+  loop $lshl2
+$lshl1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$LngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $lshr1
+$lshr2:
+  sar  dx,1
+  rcr  ax,1
+  loop $lshr2
+$lshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret  far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$ULngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $ulshr1
+$ulshr2:  shr  dx,1
+  rcr  ax,1
+  loop  $ulshr2
+$ulshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$MovByt : SourceSeg =lframe+8; SourceOff = lframe+6; DestSeg = lframe+4; DestOff = lframe+2; Count = lframe
+  push bp
+  mov  bp,sp
+  push cx; push si; push di; push es; push ds;
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lds si, [bp][SourceOff]
+  rep; movsb;
+  pop ds; pop es; pop di; pop si; pop cx
+  pop bp
+  ret far  10
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$PushByt : SourceSeg = lframe+4; SourceOff = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push cx; push si; push di; push es; push ds;
+  lds si, [bp][SourceOff]
+  mov cx, [bp][Count]
+  mov bp, [bp] (* restore bp *)
+  mov di, sp
+  add di, lframe+lframe+14
+  push ss
+  pop es
+  rep; movsb
+  pop ds; pop es; pop di; pop si; pop cx
+  ret far  lframe+6
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$PopByt : Data = lframe+6; DestSeg = lframe+4; DestOff = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  push cx; push si; push di; push es; push ds
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lea si, [bp][Data]
+  push ss; pop ds
+  rep; movsb
+  lea bp, [si][-lframe]
+  pop ds; pop es; pop di; pop si; pop cx
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*) pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SetOr : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  or [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SetDif : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  not al
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SetXor : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  xor [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SetAnd : Data = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  push [bp][4]
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, frame
+  pop si; pop cx; pop bx; pop ax
+  pop [bp][4]
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+
+public I$DupByt : Seg = lframe+6; Off = lframe+4; Data = lframe+2; Count = lframe
+  push bp
+  mov bp,sp
+  push es; push di; push cx; push ax
+  mov al, [bp][Data]
+  mov cx, [bp][Count]
+  les di, [bp][Off]
+  mov ah, al
+  shr cx,1
+  rep; stosw
+  jnc $DupBytExit
+  stosb
+$DupBytExit:
+  pop ax; pop cx; pop di; pop es
+  pop bp
+  ret far  8
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+
+public I$EquByte : Data = lframe+2; Count = lframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+$exit:
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-frame] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+  pop [bp][4]
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jnz $not_equal
+  mov al, 1
+$not_equal:
+  ret far  0
+
+
+public I$NotEquByte : Data = lframe+2; Count = lframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-lframe] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*)  pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jz  $equal
+  inc ax
+$equal:
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+  extrn DOSHUGESHIFT
+public I$HugeSub : p = lframe+4; q = lframe
+  push bp
+  mov bp, sp
+  push bx; push cx
+  mov ax, [bp][p]
+  mov dx, [bp][p][2]
+  mov bx, [bp][q][2]
+  mov cx, DOSHUGESHIFT
+  shr bx, cl
+  shr dx, cl
+  sub ax, [bp][q]
+  sbb dx, bx
+  pop cx; pop bx
+  pop bp
+  ret far  8
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public  I$LngRol :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push bx
+  and  cx, 31
+  cmp  cx, 16
+  jb   $1
+  sub cx, 16
+  xchg ax,dx
+$1:
+  rol ax, cl
+  rol dx, cl
+  mov bx, 1
+  rol bx, cl
+  dec bx
+  mov cx, ax
+  xor cx, dx
+  and cx, bx
+  xor ax, cx
+  xor dx, cx
+  pop bx
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret far  0
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+public I$SetRng : Start = lframe+4; Stop = lframe+2; Count = lframe
+  push bp
+  mov bp, sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push ax; push bx; push cx; push dx; push si; push di; push es;
+  mov bx, [bp][Count]
+  mov si, [bp][Start]
+  mov dx, [bp][Stop]
+  mov bp, [bp]
+
+  mov di, sp; add di, lframe+lframe+18; push ss; pop es (* set up es:di *)
+
+  add bx, di (*End*)
+  mov ax, si (*Start*)
+  cmp ax, dx (*Stop*)
+  ja $lastpart
+
+  mov cx, ax
+  shr cx, 1; shr cx, 1; shr cx, 1
+  sub al, al
+  rep; stosb
+
+  mov cl, si (*Start*)
+  and cl, 7
+  mov al, 0FFH
+  shl al, cl
+  stosb
+
+  mov cx, dx (*Stop*)
+  shr cx, 1; shr cx, 1; shr cx, 1
+  mov ax, si (*Start*)
+  shr ax, 1; shr ax, 1; shr ax, 1
+  sub cx, ax
+  jz $one_byte_non_zero
+  dec cx
+  mov al, 0FFH
+  rep; stosb
+$done_all_ones:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  stosb
+
+$lastpart:
+  mov cx, bx (*End*)
+  sub cx, di
+  sub al,al
+  rep; stosb
+
+  pop es; pop di; pop si; pop dx; pop cx; pop bx; pop ax;
+  ret far  lframe+6
+
+$one_byte_non_zero:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  and es:[di][-1], al
+  jmp $lastpart
+
+section
+segment IOPL_TEXT(CODE,28H);
+segment _DATA(DATA, 28H)
+
+
+extrn __FatalError
+
+extrn __stk_base
+
+
+select IOPL_TEXT
+
+CSVar = 2
+IPVar = 0
+
+Dgrp :  dw _DATA
+
+public I$StkChk :
+
+    push es
+    mov  es, cs:[Dgrp]
+    add  bp, es:[__stk_base]
+    pop  es
+    jc   stackError
+    cmp  sp, bp
+    jb   stackError
+    ret far  0
+stackError:
+    mov  bx, sp
+    mov  ax, 1
+    push ax
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    call far __FatalError
+
+section
+segment IOPL_TEXT(CODE,28H);
+
+extrn __FatalError
+
+
+CSVar = 12
+IPVar = 10
+
+public I$CnsStk :  push ax; mov ax,  1  ; jmp I$cns
+public I$CnsPtr :  push ax; mov ax,  2  ; jmp I$cns
+public I$CnsIdx :  push ax; mov ax,  9  ; jmp I$cns
+public I$CnsOvr :  push ax; mov ax,  4  ; jmp I$cns
+public I$CnsRng :  push ax; mov ax,  5  ; jmp I$cns
+public I$CnsRet :  push ax; mov ax,  6  ; jmp I$cns
+public I$CnsCase : push ax; mov ax,  7  ; jmp I$cns
+public I$CnsDiv :  push ax; mov ax,  8  ; jmp I$cns
+
+I$cns:
+    push bx
+    push cx
+    push dx
+    push ds
+    mov  bx, sp
+    mov  cx, ax
+    push cx
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    extrn  CoreSig@CnsHandler
+(*%F _WINDOWS *)
+    mov  dx, seg CoreSig@CnsHandler
+    mov  ds, dx
+(*%E *)
+    cmp  word [CoreSig@CnsHandler], 0
+    je   noHandler
+    call far [CoreSig@CnsHandler]
+    or   al, al
+    jnz  retFromCns
+noHandler:
+    push cx
+    push ss:[bx][IPVar]
+    push ss:[bx][CSVar]
+    call far __FatalError
+retFromCns:
+    pop  ds
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret  far 0
+
+(****************************************************************************)
+(* end of handlers for iopl compiler generated calls *)
+(****************************************************************************)
+
+(****************************************************************************)
+(* start of near handlers for compiler generated calls *)
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H);
+
+public N$StdRet :
+
+    pop  ax
+    pop  bx
+    pop  cx
+    pop  dx
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+section
+segment _TEXT(CODE,28H);
+
+
+public N$UnsMol : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+public N$SgnMol :
+(* Unsigned/signed multiplication *)
+(* On overflow: modulus 2^32 wrap-around *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMol2
+  add  ax,[bp][High2]
+  jnz  UnsMol1
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+  pop  bp
+  ret  near  8
+
+UnsMol1:
+  mul  word [bp][Low1]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  near  8
+
+UnsMol2:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jnz  UnsMol3
+  mul  word [bp][Low2]
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg bp,ax
+  mul  dx
+  add  dx,bp
+  pop  bp
+  ret  near  8
+
+UnsMol3:
+  push cx
+  mul  word [bp][Low2]
+  mov  cx,ax
+  mov  ax,[bp][High2]
+  mul  word [bp][Low1]
+  add  cx,ax
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+  add  dx,cx
+  pop  cx
+  pop  bp
+  ret  near  8
+
+section
+segment _TEXT(CODE,28H);
+
+extrn N$UnsMul
+
+public N$SgnDiv : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Signed division *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+  xor  si,si
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn N$CnsDiv
+  add  sp, 6
+  jmp  N$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnDiv5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnDiv5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnDiv1
+  jz   SgnDiv6
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnDiv1
+
+SgnDiv6:
+  mov  cx,[bp][Low2]
+  jcxz SgnDiv0
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  SgnDivA
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+SgnDiv9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnDiv7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  near  8
+
+SgnDivA:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  SgnDiv9
+
+SgnDiv1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call near N$UnsMul
+  jo   SgnDiv3
+  cmp  dx,[bp][High1]
+  ja   SgnDiv3
+  jb   SgnDiv4
+  cmp  ax,[bp][Low1]
+  jbe  SgnDiv4
+SgnDiv3:
+  dec  bx
+SgnDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  SgnDiv9
+
+SgnDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnDiv7
+
+section
+segment _TEXT(CODE,28H);
+
+extrn N$UnsMul
+
+public N$UnsDiv : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Unsigned division *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn N$CnsDiv
+  add  sp, 4
+  jmp  N$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsDiv1
+  add  cx,[bp][Low2]
+  jz   UnsDiv0
+
+  mov  dx,[bp][High1]
+  cmp  dx,cx
+  jae  UnsDiv7    (*!!!!New special case *)
+  mov  ax,[bp][Low1]
+  div  cx
+  xor  dx,dx
+
+UnsDiv8:
+  and  ax,ax
+UnsDiv9:
+  pop  cx
+  pop  bp
+  ret  near  8
+
+UnsDiv7:
+  mov  ax,dx
+  xor  dx,dx
+  div  cx
+  mov  cx,ax
+  mov  ax,[bp][Low1]
+  div  word [bp][Low2]
+  mov  dx,cx
+  jmp  UnsDiv8
+
+UnsDiv1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsDiv2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsDiv2
+  div  bx
+  mov  bx,ax
+  push cx
+  push ax
+  call near N$UnsMul
+  jo   UnsDiv3
+  cmp  dx,[bp][High1]
+  jb   UnsDiv4
+  ja   UnsDiv3
+  cmp  ax,[bp][Low1]
+  jbe  UnsDiv4
+UnsDiv3:
+  dec  bx
+UnsDiv4:
+  mov  ax,bx
+  xor  dx,dx
+  pop  bx
+  jmp  UnsDiv8
+
+UnsDiv0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsDiv9
+
+
+section
+segment _TEXT(CODE,28H);
+
+extrn N$UnsMul
+
+public N$SgnRem : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Signed remainder *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push si
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn N$CnsDiv
+  add  sp, 6
+  jmp  N$CnsDiv
+DivOK:
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnRem5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnRem5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnRem1
+  jz   SgnRem6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnRem1
+
+SgnRem6:
+  mov  cx,[bp][Low2]
+  jcxz SgnRem0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnRem9:
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnRem7:
+  pop  si
+  pop  cx
+  pop  bp
+  ret  near  8
+
+SgnRem1:
+  push bx
+  mov  cx,dx
+  mov  bx,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push bx
+SgnRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  SgnRem2
+  div  bx
+  push cx
+  push ax
+  call near N$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnRem3
+  jb   SgnRem4
+  cmp  ax,[bp][Low1]
+  jbe  SgnRem4
+SgnRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  bx
+  jmp  SgnRem9
+
+SgnRem0:
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnRem7
+
+section
+segment _TEXT(CODE,28H);
+
+extrn N$UnsMul
+
+public N$SgnMod : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Signed modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+  push bx
+
+(* DIV / 0 Test *)
+  mov  dx,[bp][High2]
+  or   dx,[bp][Low2]
+  jnz  DivOK
+  extrn N$CnsDiv
+  add  sp, 6
+  jmp  N$CnsDiv
+DivOK:
+  mov  dx,[bp][High1]
+  mov  bh, dh
+  and  dx,dx
+  jge  SgnMod5
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMod5:
+  mov  dx,[bp][High2]
+  mov  bl,dh
+  and  dx,dx
+  jg   SgnMod1
+  jz   SgnMod6
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  mov  [bp][High2],dx
+  jnz  SgnMod1
+
+SgnMod6:
+  mov  cx,[bp][Low2]
+  jcxz SgnMod0
+  mov  ax,[bp][High1]
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+SgnMod9:
+  mov cx,ax
+  or  cx,dx
+  jz SgnMod7
+  xor bh,bl
+  jge SgnMod10
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+  not bl
+SgnMod10:
+  shl bl,1
+  jnc SgnMod7
+  neg dx
+  neg ax
+  sbb dx,0
+SgnMod7:
+  pop  bx
+  pop  cx
+  pop  bp
+  ret near  8
+
+SgnMod1:
+  push si
+  mov  cx,dx
+  mov  si,[bp][Low2]
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  push cx
+  push si
+SgnMod2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  si,1
+  and  cx,cx
+  jnz  SgnMod2
+  div  si
+  push cx
+  push ax
+  call near N$UnsMul
+  cmp  dx,[bp][High1]
+  ja   SgnMod3
+  jb   SgnMod4
+  cmp  ax,[bp][Low1]
+  jbe  SgnMod4
+SgnMod3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+SgnMod4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  pop  si
+  jmp  SgnMod9
+
+SgnMod0: (* overflow *)
+  sub  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  SgnMod7
+
+section
+segment _TEXT(CODE,28H);
+
+extrn N$UnsMul
+
+public N$UnsRem : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Unsigned remainder/modulus *)
+(*On overflow: result 0, OF set *)
+  push bp
+  mov  bp,sp
+  push cx
+
+(* DIV / 0 Test *)
+  mov  cx,[bp][High2]
+  or   cx,[bp][Low2]
+  jnz  DivOK
+  extrn N$CnsDiv
+  add  sp, 4
+  jmp  N$CnsDiv
+DivOK:
+  mov  cx,[bp][High2]
+  and  cx,cx
+  jnz  UnsRem1
+  add  cx,[bp][Low2]
+  jz   UnsRem0
+  mov  ax,[bp][High1]
+  xor  dx,dx
+  div  cx
+  mov  ax,[bp][Low1]
+  div  cx
+  mov  ax,dx
+  xor  dx,dx
+
+UnsRem9:
+  pop  cx
+  pop  bp
+  ret  near  8
+
+UnsRem1:
+  push bx
+  mov  dx,[bp][High1]
+  mov  ax,[bp][Low1]
+  mov  bx,[bp][Low2]
+  push cx
+  push bx
+UnsRem2:
+  shr  dx,1
+  rcr  ax,1
+  shr  cx,1
+  rcr  bx,1
+  and  cx,cx
+  jnz  UnsRem2
+  div  bx
+  sub  ax,1
+  adc  ax,0
+  push cx
+  push ax
+  call near N$UnsMul
+  add  ax,[bp][Low2]
+  adc  dx,[bp][High2]
+  jc   UnsRem3
+  cmp  dx,[bp][High1]
+  jb   UnsRem4
+  ja   UnsRem3
+  cmp  ax,[bp][Low1]
+  jbe  UnsRem4
+UnsRem3:
+  sub  ax,[bp][Low2]
+  sbb  dx,[bp][High2]
+UnsRem4:
+  sub  ax,[bp][Low1]
+  sbb  dx,[bp][High1]
+  neg  dx
+  neg  ax
+  sbb  dx,cx
+  and  ax,ax
+  pop  bx
+  jmp  UnsRem9
+
+UnsRem0:
+  xor  dx,dx
+  mov  al,100
+  add  al,al
+  mov  ax,dx
+  jmp  UnsRem9
+
+section
+segment _TEXT(CODE,28H);
+
+public N$UnsMul : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Unsigned multiplication *)
+(*On overflow: result MAXCARD, OF set *)
+  push bp
+  mov  bp,sp
+
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jnz  UnsMul1
+  add  ax,[bp][High2]
+  jnz  UnsMul2
+  mov  ax,[bp][Low1]
+  mul  word [bp][Low2]
+
+UnsMul8:
+  and  ax,ax
+UnsMul9:
+  pop  bp
+  ret  near  8
+
+UnsMul1:
+  cmp  word [bp][High2],0
+  jnz  UnsMul0
+  mul  word [bp][Low2]
+  jmp  UnsMul3
+UnsMul2:
+  mul  word [bp][Low1]
+UnsMul3:
+  jc   UnsMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jnc  UnsMul8
+
+UnsMul0:
+  mov  al,100
+  add  al,al
+  stc
+  mov  ax,0FFFFH
+  mov  dx,ax
+  jmp  UnsMul9
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SgnMul : High1 = sframe+6; Low1 = sframe+4; High2 = sframe+2; Low2 = sframe
+(*Signed multiplication *)
+(*On overflow: result MAXINT, OF set *)
+  push bp
+  mov  bp,sp
+  push si
+
+  xor  si,si
+  mov  dx,[bp][High1]
+  and  dx,dx
+  jge  SgnMul5
+  not  si
+  neg  dx
+  neg  word [bp][Low1]
+  sbb  dx,0
+  mov  [bp][High1],dx
+SgnMul5:
+  mov  dx,[bp][High2]
+  and  dx,dx
+  jg   SgnMul6
+  jz   SgnMul1
+  not  si
+  neg  dx
+  neg  word [bp][Low2]
+  sbb  dx,0
+  jz   SgnMul1
+
+SgnMul6:
+  cmp  word [bp][High1],0
+  jnz  SgnMul0
+  mov  ax,dx
+  mul  word [bp][Low1]
+  jmp  SgnMul2
+SgnMul1:
+  mov  ax,[bp][High1]
+  and  ax,ax
+  jz   SgnMul2
+  mul  word [bp][Low2]
+SgnMul2:
+  jc   SgnMul0
+  mov  dx,[bp][Low1]
+  mov  bp,[bp][Low2]
+  xchg ax,bp
+  mul  dx
+  add  dx,bp
+  jc   SgnMul0
+  js   SgnMul0
+
+  add  ax,si
+  adc  dx,si
+  xor  ax,si
+  xor  dx,si
+
+SgnMul7:
+  pop  si
+  pop  bp
+  ret  near  8
+
+SgnMul0:
+  mov  al,100
+  add  al,al
+  mov  ax,0FFFFH
+  mov  dx,07FFFH
+  jmp  SgnMul7
+
+section
+segment _TEXT(CODE,28H);
+
+public N$LngShl :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz $lshl1
+$lshl2:
+  shl  ax,1
+  rcl  dx,1
+  loop $lshl2
+$lshl1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret near  0
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$LngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $lshr1
+$lshr2:
+  sar  dx,1
+  rcr  ax,1
+  loop $lshr2
+$lshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret  near  0
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$ULngShr :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor  ch,ch
+  jcxz  $ulshr1
+$ulshr2:  shr  dx,1
+  rcr  ax,1
+  loop  $ulshr2
+$ulshr1:
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret near  0
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$MovByt : SourceSeg =sframe+8; SourceOff = sframe+6; DestSeg = sframe+4; DestOff = sframe+2; Count = sframe
+  push bp
+  mov  bp,sp
+  push cx; push si; push di; push es; push ds;
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lds si, [bp][SourceOff]
+  rep; movsb;
+  pop ds; pop es; pop di; pop si; pop cx
+  pop bp
+  ret near  10
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$PushByt : SourceSeg = sframe+4; SourceOff = sframe+2; Count = sframe
+  push bp
+  mov bp,sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push cx; push si; push di; push es; push ds;
+  lds si, [bp][SourceOff]
+  mov cx, [bp][Count]
+  mov bp, [bp] (* restore bp *)
+  mov di, sp
+  add di, sframe+sframe+14
+  push ss
+  pop es
+  rep; movsb
+  pop ds; pop es; pop di; pop si; pop cx
+  ret near  sframe+6
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$PopByt : Data = sframe+6; DestSeg = sframe+4; DestOff = sframe+2; Count = sframe
+  push bp
+  mov bp,sp
+  push cx; push si; push di; push es; push ds
+  mov cx, [bp][Count]
+  les di, [bp][DestOff]
+  lea si, [bp][Data]
+  push ss; pop ds
+  rep; movsb
+  lea bp, [si][-sframe]
+  pop ds; pop es; pop di; pop si; pop cx
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*) pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  ret near  0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SetOr : Data = sframe+2; Count = sframe
+  push bp
+  mov bp, sp
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  or [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, sframe
+  pop si; pop cx; pop bx; pop ax
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret near 0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SetDif : Data = sframe+2; Count = sframe
+  push bp
+  mov bp, sp
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  not al
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, sframe
+  pop si; pop cx; pop bx; pop ax
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret near 0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SetXor : Data = sframe+2; Count = sframe
+  push bp
+  mov bp, sp
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  xor [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, sframe
+  pop si; pop cx; pop bx; pop ax
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret near 0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SetAnd : Data = sframe+2; Count = sframe
+  push bp
+  mov bp, sp
+  push ax; push bx; push cx; push si
+  mov cx, [bp][Count]
+  lea bp, [bp][Data]
+  mov si, cx
+$loop:
+  mov al, [bp]
+  and [bp][si], al
+  inc bp
+  loop $loop
+  sub bp, sframe
+  pop si; pop cx; pop bx; pop ax
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  ret near 0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$DupByt : Seg = sframe+6; Off = sframe+4; Data = sframe+2; Count = sframe
+  push bp
+  mov bp,sp
+  push es; push di; push cx; push ax
+  mov al, [bp][Data]
+  mov cx, [bp][Count]
+  les di, [bp][Off]
+  mov ah, al
+  shr cx,1
+  rep; stosw
+  jnc $DupBytExit
+  stosb
+$DupBytExit:
+  pop ax; pop cx; pop di; pop es
+  pop bp
+  ret near 8
+
+section
+segment _TEXT(CODE,28H);
+
+public N$EquByte : Data = sframe+2; Count = sframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+$exit:
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-sframe] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jnz $not_equal
+  mov al, 1
+$not_equal:
+  ret near 0
+
+segment _TEXT(CODE,28H);
+
+public N$NotEquByte : Data = sframe+2; Count = sframe
+(* result in flags and ax *)
+  push bp
+  mov bp, sp
+  push cx; push si; push di; push ds; push es
+  mov cx, [bp][Count]
+  lea si, [bp][Data]
+  mov di, si
+  add di, cx
+  mov bp, di
+  add bp, cx
+  mov ax, ss
+  mov es, ax
+  mov ds, ax
+  repz; cmpsb
+  pop es; pop ds; pop di; pop si; pop cx (* pop was wrong order *)
+  lea bp, [bp][-sframe] (* build return link, preserve flags!!*)
+  pop [bp]
+  pop [bp][2]
+(*%F NearCall*)  pop [bp][4] (*%E*)
+  mov sp, bp
+  pop bp
+  mov ax,0
+  jz  $equal
+  inc ax
+$equal:
+  ret near  0
+
+section
+segment _TEXT(CODE,28H);
+
+  extrn DOSHUGESHIFT
+public N$HugeSub : p = sframe+4; q = sframe
+  push bp
+  mov bp, sp
+  push bx; push cx
+  mov ax, [bp][p]
+  mov dx, [bp][p][2]
+  mov bx, [bp][q][2]
+  mov cx, DOSHUGESHIFT
+  shr bx, cl
+  shr dx, cl
+  sub ax, [bp][q]
+  sbb dx, bx
+  pop cx; pop bx
+  pop bp
+  ret near  8
+
+section
+segment _TEXT(CODE,28H);
+
+public  N$LngRol :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push bx
+  and  cx, 31
+  cmp  cx, 16
+  jb   $1
+  sub cx, 16
+  xchg ax,dx
+$1:
+  rol ax, cl
+  rol dx, cl
+  mov bx, 1
+  rol bx, cl
+  dec bx
+  mov cx, ax
+  xor cx, dx
+  and cx, bx
+  xor ax, cx
+  xor dx, cx
+  pop bx
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret near  0
+
+section
+segment _TEXT(CODE,28H);
+
+public N$SetRng : Start = sframe+4; Stop = sframe+2; Count = sframe
+  push bp
+  mov bp, sp
+  sub sp, [bp][Count]
+(*%F NearCall*) push [bp][4] (* return cs *) (*%E*)
+  push [bp][2] (* return ip *)
+  push ax; push bx; push cx; push dx; push si; push di; push es;
+  mov bx, [bp][Count]
+  mov si, [bp][Start]
+  mov dx, [bp][Stop]
+  mov bp, [bp]
+
+  mov di, sp; add di, sframe+sframe+18; push ss; pop es (* set up es:di *)
+
+  add bx, di (*End*)
+  mov ax, si (*Start*)
+  cmp ax, dx (*Stop*)
+  ja $lastpart
+
+  mov cx, ax
+  shr cx, 1; shr cx, 1; shr cx, 1
+  sub al, al
+  rep; stosb
+
+  mov cl, si (*Start*)
+  and cl, 7
+  mov al, 0FFH
+  shl al, cl
+  stosb
+
+  mov cx, dx (*Stop*)
+  shr cx, 1; shr cx, 1; shr cx, 1
+  mov ax, si (*Start*)
+  shr ax, 1; shr ax, 1; shr ax, 1
+  sub cx, ax
+  jz $one_byte_non_zero
+  dec cx
+  mov al, 0FFH
+  rep; stosb
+$done_all_ones:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  stosb
+
+$lastpart:
+  mov cx, bx (*End*)
+  sub cx, di
+  sub al,al
+  rep; stosb
+
+  pop es; pop di; pop si; pop dx; pop cx; pop bx; pop ax;
+  ret near  sframe+6
+
+$one_byte_non_zero:
+  mov cl, 7
+  sub cl, dl (*Stop*)
+  and cl, 7
+  mov al, 0FFH
+  shr al, cl
+  and es:[di][-1], al
+  jmp $lastpart
+
+section
+segment _TEXT(CODE,28H);
+segment _DATA(DATA, 28H)
+
+
+extrn __FatalError
+
+extrn __stk_base
+
+
+select _TEXT
+
+CSVar = 2
+IPVar = 0
+
+Dgrp :  dw _DATA
+
+public N$StkChk :
+
+    push es
+    mov  es, cs:[Dgrp]
+    add  bp, es:[__stk_base]
+    pop  es
+    jc   stackError
+    cmp  sp, bp
+    jb   stackError
+    ret near  0
+stackError:
+    mov  bx, sp
+    mov  ax, 1
+    push ax
+    push ss:[bx][IPVar]
+    push cs
+    call far __FatalError
+
+section
+segment _TEXT(CODE,28H);
+
+extrn __FatalError
+
+
+CSVar = 12
+IPVar = 10
+
+public N$CnsStk :  push ax; mov ax,  1  ; jmp N$cns
+public N$CnsPtr :  push ax; mov ax,  2  ; jmp N$cns
+public N$CnsIdx :  push ax; mov ax,  9  ; jmp N$cns
+public N$CnsOvr :  push ax; mov ax,  4  ; jmp N$cns
+public N$CnsRng :  push ax; mov ax,  5  ; jmp N$cns
+public N$CnsRet :  push ax; mov ax,  6  ; jmp N$cns
+public N$CnsCase : push ax; mov ax,  7  ; jmp N$cns
+public N$CnsDiv :  push ax; mov ax,  8  ; jmp N$cns
+public N$CnsPVC :  push ax; mov ax, 0AH ; jmp N$cns
+
+N$cns:
+    push bx
+    push cx
+    push dx
+    push ds
+    mov  bx, sp
+    mov  cx, ax
+    push cx
+    push ss:[bx][IPVar]
+    push cs
+    extrn  CoreSig@CnsHandler
+(*%F _WINDOWS *)
+    mov  dx, seg CoreSig@CnsHandler
+    mov  ds, dx
+(*%E *)
+    cmp  word [CoreSig@CnsHandler], 0
+    je   noHandler
+    call far [CoreSig@CnsHandler]
+    or   al, al
+    jnz  retFromCns
+noHandler:
+    push cx
+    push ss:[bx][IPVar]
+    push cs
+    call far __FatalError
+retFromCns:
+    pop  ds
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret  0
+
+(****************************************************************************)
+(* end of handlers for near compiler generated calls *)
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn @ExitCode
+extrn _exit
+
+(*%T _DLLOVL *)
+select _DATA
+$$initm: dd __initm2
+(*%E *)
+
+select _TEXT
+public __initm :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp,sp
+    push [$$initm][2]
+    push [$$initm][0]
+    jmp  $initm
+public __initm2:
+    pop  bp
+(*%E *)
+(*%F _DLLOVL *)
+    push cs
+    call $initm
+(*%E *)
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [@ExitCode]
+    sub  ah, ah
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+
+  extrn _x_main
+
+public $initm:
+    mov  si, [_x_main][0]
+(*%F near_init_data *)
+    mov  ax, [_x_main][2]
+(*%E*)
+
+public $initm2 :
+(***************************************************)
+(* Call each of the module initialisation routines *)
+(***************************************************)
+
+(* The bottom of the stack segment is used for working space
+   A stack of 16k gives enough storage for about 1000 modules
+   which should be ample. There are logically three arrays;
+   a fixed size hash table, an array of graph nodes, and an
+   array of lists used for sorting. The latter two are of
+   dynamic size and are interleaved, and allocated together.
+   Once the order has been determined, the addresses are pushed
+   onto the stack, and a return instruction is executed.
+*)
+
+extrn __stk_base
+
+  (* hash table size *)
+ht                      = 2 * 59       (* 59 is prime *)
+
+  (* values for state *)
+active                  = 0
+loop                    = 1
+done                    = 2
+
+  (* fields for graph nodes *)
+state                   = ht + 0
+equal                   = ht + 1       (* valid when state = loop *)
+ticket                  = ht + 1       (* valid when state = done *)
+next                    = ht + 3       (* used for chaining nodes in lists *)
+
+  (* sorting array *)
+list                    = ht + 5
+
+link                    = ht + 7       (* pointer to init code *)
+
+(*%T near_init_data*)
+alloc_size              = 9
+(*%E*)
+(*%F near_init_data*)
+alloc_size              = 11
+(*%E*)
+
+(*%F _WINDOWS *)
+    mov  cx, seg __stk_base
+(*%E *)
+(*%T _WINDOWS *)
+    mov  cx, ds
+(*%E *)
+  mov  es, cx
+  mov bx, es:[__stk_base] (* bx = allocator for nodes *)
+
+  (* set hash table to -1 *)
+  push es
+  mov  dx, ax
+  mov  cx, ht/2
+  mov  di, bx
+  mov  ax, ss
+  mov  es, ax
+  mov  ax, -1
+  cld
+  rep; stosw
+  mov  ax, dx
+  pop  es
+
+  mov  di, bx             (* di = allocator for tickets *)
+  (* build graph *)
+  push bx
+  push bp
+  call $mark
+  pop  dx
+  pop  cx
+
+  (* sort the nodes by inserting each node into *)
+  (* the list associated with its ticket *)
+$init_sort:
+  sub  bx, alloc_size
+  cmp  bx, cx
+  jc   $init_final
+  mov  bp, bx
+  call $follow
+  mov  bp, [bp][ticket]
+  mov  ax, ss:[bp][list]
+  mov  ss:[bx][next], ax
+  mov  ss:[bp][list], bx
+  jmp  $init_sort
+
+  (* push the address of each initialisation routine *)
+  (* onto the stack, in the correct order *)
+$init_final_loop:
+  mov  bp, ss:[di][list] (* list will always have at least one element *)
+$init_push_list_loop:
+
+(*%T near_init_data*)
+  mov  bx, [bp][link]
+(*%E*)
+(*%F near_init_data*)
+  lds  bx, [bp][link]  (* change 10/1/90 *)
+(*%E*)
+(*%F near_init_code*)
+  cmp  word [bx][2], 0
+  je   $codeNotInMem
+  push [bx][2]       (* change 10/1/90 *)
+(*%E*)
+  push [bx][0]       (* change 10/1/90 *)
+$codeNotInMem:
+  mov  bp, [bp][next]
+
+  cmp  bp, -1
+  jne  $init_push_list_loop
+$init_final:
+  sub  di, alloc_size
+  cmp  di, cx
+  jnc  $init_final_loop
+
+public $go :
+  mov  bp, dx
+  cld       (* global calling convention *)
+(*%F SameDS *)
+  mov  ax, _DATA
+  mov  ds, ax
+(*%E *)
+(*%T near_init_code*)
+  ret  near 0 (* go to first module to be initialised *)
+(*%E*)
+(*%F near_init_code*)
+  ret  far 0 (* go to first module to be initialised *)
+(*%E*)
+
+$follow_loop: (* local procedure for following equal chain *)
+  mov  bp, [bp][equal]
+$follow:
+  cmp  byte [bp][state], loop
+  je   $follow_loop
+  ret  0
+
+$mark:
+  (* local procedure to recursively build a copy of the dependency
+     graph, and topologically sort it. Loops (i.e. mutually
+     recursive modules) are collapsed to a representative node,
+     obtained by following the equal chain. Non-representative
+     nodes in a loop have state set = loop. A representative
+     node has state set = done, and a ticket which gives the ordering.
+
+     in:
+       ax:si is pointer to some init code
+       ax and si are corrupted
+     out:
+       bp = index for node
+     in/out:
+       bx = allocator for nodes
+       di = allocator for tickets
+     local:
+       cx = least active node found
+       ds = copy of ax
+       dx = temporary (corrupted)
+  *)
+
+  (* find list, based on hash of ax and si *)
+  push ax
+  add  ax, si
+  sub  dx, dx
+  mov  bp, ht/2
+  div  bp
+  pop  ax
+  shl  dx, 1
+  add  dx, es:[__stk_base]
+  mov  bp, dx
+  mov  bp, [bp] (* access hash table *)
+
+  (* search hash list *)
+  jmp  $mark_search_entry
+$mark_search_loop:
+  cmp  [bp][link][0], si
+(*%F near_init_data*)
+  jne  $mark_search_next
+  cmp  [bp][link][2], ax
+(*%E*)
+  je   $mark_ret
+$mark_search_next:
+  mov  bp, [bp][next]
+$mark_search_entry:
+  cmp  bp, -1
+  jne  $mark_search_loop
+
+  (* link into hash table *)
+  mov  bp, dx
+  mov  dx, [bp] (* get old list *)
+  mov  [bp], bx
+
+  (* allocate and initialise storage *)
+  mov  bp, bx
+  add  bx, alloc_size
+  mov  byte [bp][state], active
+  mov  [bp][link][0], si
+(*%F near_init_data*)
+  mov  [bp][link][2], ax
+(*%E*)
+  mov  word [bp][next], dx (* link in old hash list *)
+  mov  word [bp][list], -1
+
+  (* save work registers *)
+  push cx
+  push bp
+
+  (* recursively mark imported modules *)
+  mov  cx, bp
+(*%F near_init_data*)
+  push ds
+  mov  ds, ax
+(*%E*)
+(*%T near_init_code*)
+  add  si, 2
+(*%E*)
+(*%F near_init_code*)
+  add  si, 4
+(*%E*)
+$mark_adj_loop:
+  mov  ax, ds:[si]
+  cmp  ax, -1
+  je   $mark_adj_exit
+  push si
+(*%T near_init_data*)
+  mov  si, ax
+(*%E*)
+(*%F near_init_data*)
+  mov  si, ds:[si][2]
+  xchg ax, si
+  or   ax, ax
+  jz   $dataNotInMem
+(*%E*)
+  call $mark
+$dataNotInMem:
+  pop  si
+(*%T near_init_data*)
+  add  si, 2
+(*%E*)
+(*%F near_init_data*)
+  add  si, 4
+(*%E*)
+  call $follow
+  cmp  byte [bp][state], active
+  jne  $mark_adj_loop
+  cmp  bp, cx
+  jnb  $mark_adj_loop
+  mov  cx, bp
+  jmp  $mark_adj_loop
+$mark_adj_exit:
+
+(*%F near_init_data*)
+  pop  ds
+(*%E*)
+  pop  bp
+
+  cmp  bp, cx
+  je   $mark_done
+
+  mov  byte [bp][state], loop
+  mov  [bp][equal], cx
+  jmp  $restore
+
+$mark_done:
+  mov  byte [bp][state], done
+  mov  [bp][ticket], di
+  add  di, alloc_size (* allocate a new ticket *)
+
+$restore:
+  pop  cx  (* restore cx *)
+
+$mark_ret:
+  ret  0
+
+end
+
+

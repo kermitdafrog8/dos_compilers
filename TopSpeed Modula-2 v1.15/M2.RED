@@ -1,0 +1,13 @@
+*.def = c:\def;c:\SPC;
+*.obj = c:\obj;
+*.mod = c:\mod;c:\SPC;
+*.map = c:\map;
+*.exe = c:\exe;
+*.a   = c:\asm;
+*.siz = c:\siz;
+*.dal = c:\dal;
+*.dbd = c:\dbd;
+*.prf = c:\prf;
+vid.* = c:\;
+m2asm.* = c:\;
+*.mem = c:\mem;

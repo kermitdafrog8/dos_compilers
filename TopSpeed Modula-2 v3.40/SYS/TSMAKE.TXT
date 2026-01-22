@@ -1,0 +1,186 @@
+0996 Making @
+997 (%F %L) @
+998 (%F %L,%C) @
+999
+1000 Warning: |Syntax error: |Make error: |Link Error: @
+1004 No source or object for: @
+1005 No source for: @
+1006  is unresolved in file @
+1007 Absolute segment in file @
+1008 Too many segments (more than 255)
+1009 Unexpected group definition in file @
+1010  is unresolved for export
+1011
+1012 Group or Segclass exceeds 64K
+1013 Absolute segments not supported in protected mode
+1014 No entry point specification (initexe or initdll required)
+1015 Unsupported entry point specification
+1016 No project file for: @
+1017 More than one source for: @
+1018  : entry number mismatch
+
+1020 Estimate for header size did not agree
+1021  is duplicated, files involved are @
+1022  is duplicated (dll)
+1023  : type inconsistency, files involved are @
+1024 Relative call/jump to different segment
+
+1100 Linking @
+1101 Finding objects for @
+1102 Making objects for @
+1103 Making library for @
+1104 Reading @
+1105 Marking @
+1106 Writing @
+1107 Finding dates for @
+1108  and @
+
+1109 .OBJ
+1110 .LIB
+1111 .EXE
+1112 .DLL
+1113 .RES
+1114 .LNK
+1115 .MAP
+1116 .$$$
+1117 LINK.EXE
+1118 IMPLIB.EXE
+1119 LIB.EXE
+
+1120 MAKE.LST
+1121 TMPLIB.$$$
+1122 TMP1.$$$
+1123 TMP2.$$$
+
+1125  depended on @
+1126  Old date = @
+1127  New date = @
+1128  : options changed
+1129  : source dependency not found
+1130 Compiling @
+1131 Assumed to be ok: @
+1132 No need to recompile @
+1133 Link lists for @
+1134 object list = @
+1135 export list = @
+1136 lib    list = @
+
+1139  (1)
+1140  (2)
+1141 NOEMUL
+1142 R_EMUL
+1143 NOFLOAT
+1144 CACHE6
+1145 MOD
+1146 DEF
+1147 OVLLOAD.EXE
+1148 P_EMUL
+
+1150 %V expected
+
+1151 Error in configuration file %V
+1152 Boolean expression expected
+1153 Unknown command %V
+1154 Extra %V found where end-of-file expected
+1155 Unknown pragma %V
+1156 Illegal pragma value for %V
+1157 Token too long
+1158 Macro id too long
+1159 Unrecognised keyword %V
+1160 Include file not found
+1161 String expected
+1162 Mismatched '#pragma restore' command
+1163 Project aborted
+1164 Syntax Error, expected: on off <command>
+1165 Unrecognised option :
+1166 Error is in vicinity of string %V
+1167 File %V not found
+
+1169 LIBRARY expected
+1170 More than one source for %V
+1171 No compiler known for file %V (unknown extension)
+1172 Source file %V not found
+1173 No source for object %V
+1174 Project aborted due to error in %V
+1175 Maximum include nesting exceeded
+1176 Too many #pragma defines
+1177 Too many #declare_compilers
+1178 Too many items in link list
+1179 Hash table limit exceeded: %V
+
+1180 Linker small work area
+1181 Make input buffer overflow (possibly due to recursive #include or macro)
+1182 Make work stack
+1183 Make string table
+1184 Make string hash table
+1185 Make macro hash table
+1186 Make file cache
+1187 Make file hash
+1188 Pragma save area
+1189  Too many exports
+
+1190 copy delete move touch append redirect capture adderrors prompt
+1191 save saveall savewin loadwin refresh open
+1192 %V
+
+1194 File "%V" not found
+1195 makeall on prjname tsmode bat env editwin editfile main devsys dos os2 win errors warnings
+1196 "%V" : Editor number 0-9 expected
+1197 swap no_window pause timed session fail_abort rte_abort no_abort
+1198 scmlxtodef
+1199 small compact medium large xlarge mthread overlay dynalink extended extendmt
+
+1200 string eof '(' ')' '<' '>' ',' '/' '=' '#abort' '#and' '#autocompile' '#call' '#compile' '#declare_compiler' '#dolink' '#edit' '#else' '#elsif' '#endif' '#error' '#exemod' '#exists' '#expand' '#file' '#getkey' @
+1201 '#if' '#ignore' '#implib' '#include' '#link' '#message' '#mkexp' '#model' '#noedit' '#not' '#older' '#or' '#pragma' '#prompt' '#run' '#rundll'  '#scan' '#set' '#split' '#system' '#then' '#to' @
+1202 system filetype model jpicall TSMAKE.TXT TSPRJ.TXT link_arg compile_src compile link make run action pragmastring link linkfirst define on off stub shift emul debug vid link_option export case map pack oldexe overlay @
+1203 src obj save restore makeall name ext tail cpath opath cdir odir prompt reply windows pm non_pm decode share_const smart_method prot_mode extended wall warn auto devsys remake remake_jpi prjname parent @
+1204 #set regs="<ax,bx,cx,dx,si,di,ds,es,st0,st1,st2,st3,st4,st5,st6,st7>"
+1205 declare_pragma check(index=(off,on),range=(off,on),stack=(off,on),nil_ptr=(off,on),overflow=(off,on),guard=(off,on),field=(off,on)),
+1206 optimize(speed=(on,off),cse=(on,off),const=(on,off),peep_hole=(on,off),jump=(on,off),loop=(on,off),alias=(on,off),regass=(on,off),stk_frame=(on,off),cpu=(86,286,386,486),copro=(emu,87,287,387)),
+1207 name(upper_case=(off,on)),
+1208 call(near_call=(off,on),same_ds=(on,off),ds_entry=*,reg_param=%regs,reg_saved=%regs,reg_return=%regs,c_conv=(off,on),windows=(off,on),seg_name=*,overlay=(off,on),o_a_size=(on,off),o_a_copy=(on,off),
+1209      ds_eq_ss=(off,on),result_optional=(off,on),s_copy=(on,off),t_l_size=(off,on),t_l_copy=(off,on),var_str=(off,on),inline_max=*,standard_float=(off,on),standard_conv=(off,on),opt_var_arg=(on,off)),
+1210 module(init_code=(on,off),implementation=(on,off),init_priority=*,smart_link=(on,off),turbo_comp=(off,on)),
+1211 option(ansi=(off,on),iso=(off,on),lang_ext=(on,off),nest_cmt=(off,on),uns_char=(off,on),pre_proc=(off,on),incl_cmt=(off,on),min_line=(on,off),prototypes=(off,on),bit_opr=(off,on)),
+1212 expr(promote=(on,off)),
+1213 data(near_ptr=(on,off),seg_name=*,stack_size=*,heap_size=*,ds_dynamic=(off,on),c_far_ext=(off,on),far_ext=(off,on),share_global=(off,on),ss_in_dgroup=(on,off),threshold=*,const_in_code=(off,on),no_far_data=(off,on),
+1214      volatile_variant=(off,on),ext_record=(off,on),var_enum_size=(on,off),packed=(off,on),class_hierarchy=(on,off),cpp_compatible_class=(off,on),const_assign=(off,on)),
+1215 warn(wall=(on,err,off),wnid=(on,err,off),wait=(on,err,off),wcne=(on,err,off),wclt=(off,on,err),wcld=(on,err,off),wdne=(on,err,off),wpin=(on,err,off),watr=(on,err,off),wftn=(on,err,off),wfnd=(off,on,err),
+1216      wpnd=(off,on,err),wrfp=(on,err,off),wntf=(on,err,off),wnre=(off,on,err),wnrv=(off,on,err),wpnu=(off,on,err),wpcv=(on,err,off),wubd=(on,err,off),wral=(on,err,off),wsto=(on,err,off),wtxt=(on,err,off),
+1217      wprg=(on,err,off),wetb=(on,err,off),wcor=(on,err,off),wdnu=(on,err,off),wvnu=(on,err,off),wpic=(on,err,off),wovr=(on,err,off),wacc=(on,err,off),wdel=(on,err,off),wovl=(on,err,off),wcic=(on,err,off),wcrt=(on,err,off)),
+1218 debug(vid=(off,full,min),proc_trace=(off,on),line_num=(off,on),public=(off,on)),
+1219 link_option(case=(on,off),pack=(on,off),map=(on,off),decode=(off,on),share_const=(off,on),smart_method=(on,off),pm=(off,on),non_pm=(off,on),windows=(off,on),oldexe=(off,on),overlay=(off,on),export=(off,on),prot_mode=(off,on),extended=(off,on),
+1220             stub=*,shift=*,emul=*),define()
+
+1230 #compile %main #link %prjname
+1231 Internal error 1231
+1232 (pragma changed)
+1233 (file does not exist)
+1234 (source name changed)
+
+1240 Internal error 1240
+
+1242 Unexpected end of input
+1243 String truncated
+1245 Statement expected
+1246 Export name expected
+1247 Ordinal number expected
+1249 Number expected
+1251 Unsupported feature
+1252 Ordinal expected
+
+1254 Ordinal is out of sequence
+1255 String too long
+1256 String expected in %V command
+1257 Statement ignored in %V command
+1259 Precision lost in %V command
+1260 Executable type expected
+1261 Too many exports
+1262 Corrupt MAP file
+1264 Export entry bundle size incorrect in %V
+1266 Error reading file %V
+1267 File %V is not correct format
+1268 Identifier too long
+1269 Segment not found: %V
+
+

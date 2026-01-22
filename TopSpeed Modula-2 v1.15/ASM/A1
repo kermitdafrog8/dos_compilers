@@ -1,0 +1,41 @@
+module c:\MII\TSOBJ\A1
+
+extrn $StkChk
+extrn _main
+extrn asm2$
+extrn __initm
+
+segment STACK(STACK,00074H) (*segment length = 04000H*)
+org 04000H
+
+segment NEAR_STACK(BSS,00028H) (*segment length = 04000H*)
+                            public __near_stack_start:
+org 04000H
+
+segment NEAR_HEAP(BSS,00028H) (*segment length = 0FFFFH*)
+                            public __near_heap_start:
+org 0FFFFH
+
+segment _CONST(DATA,00028H) (*segment length = 00006H*)
+                            public _main:
+  dw $0
+  dw asm2$
+db 0FFH,0FFH
+
+segment _DATA(DATA,00028H) (*segment length = 00009H*)
+                            public __initx:
+  dd __initm
+db 000H,040H,0FFH,0FFH,001H
+
+segment _TEXT(CODE,00048H) (*segment length = 0000FH*)
+                            $0:
+(*0000 55*)                   push  bp
+(*0001 BD 06 00*)             mov   bp,6
+(*0004 E8 00 00*)             call  near $StkChk
+(*0007 8B EC*)                mov   bp,sp
+(*0009 E8 00 00*)             call  near _main
+(*000C 90*)                   nop   
+(*000D C9*)                   leave 
+(*000E C3*)                   ret 0 
+
+end

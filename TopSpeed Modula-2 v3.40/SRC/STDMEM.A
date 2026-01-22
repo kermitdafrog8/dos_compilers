@@ -1,0 +1,3409 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  STDMEM.A - Standard memory management for OS/2 and Extender             *
+*                                                                          *
+*  COPYRIGHT (C) 1991..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+include "stdmem.inc"
+
+_HeapCheck = 0          (* Set to 1 to generate checking version         *)
+
+module StdMem
+
+segment _DATA(DATA,28H)
+public  __MaxReallocHugeSegments: dw 16
+(*      __MaxReallocHugeSegments sets the maximum number of 64k
+         segments that the current allocation may be reallocated to.
+        It may be altered at run time.
+        The default maximum reallocation size is set to 1 megabyte.
+        This default will consume valuable resources so,set to 0 if
+         reallocation is not required *)
+
+segment _DATA(DATA,48H)
+
+public StdMem@HugeShift : dw  0
+
+(*%T _DLL *)
+(* ***** Dummy's to satisfy Dynalink Library ***** *)
+
+public __firstfree      : db  0
+public __firstheap      : db  0
+
+segment _BSS(BSS,48H)
+
+public __fheapsem       : db  0
+public __fheaptop       : db  0
+
+segment _TEXT(CODE,48H)
+
+public __heapwalk       :
+public __heapset        :
+public __heapchk        :
+public __osfreer        :
+public __memavl         :
+(*%T _fcall *)
+public __fheapwalk      :
+public __fheapset       :
+public __fheapchk       :
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+  (***********************************************************************)
+  (* $InitHeap - Initialize a new heaplette                              *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure - Near Call                                    *)
+  (*     Parameters:                                                     *)
+  (*       ax    = Size of heap                                          *)
+  (*       di    = Base of heap                                          *)
+  (*       es    = Heap Selector                                         *)
+  (*     Trashed:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    = Largest Allocation                                    *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+public $InitHeap :
+    push bx
+    mov  bx, memSegOverhead
+    sub  ax, bx
+    add  bx, di
+    mov  word es:[di][memFreeSize], 0  (* Dummy Size                     *)
+    mov  es:[di][memNextFree], bx      (* First Free                     *)
+    mov  es:[di][memLargestFree], ax   (* Largest                        *)
+    mov  es:[bx][memFreeSize], ax      (* 1st Segment Size               *)
+    mov  word es:[bx][memNextFree], 0  (* Next Free                      *)
+    pop  bx
+    ret  0
+
+section
+  (***********************************************************************)
+  (* $AllocHeap - Allocate memory from a heaplette                       *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     ax - Requested Size                                             *)
+  (*     di - Heap Base                                                  *)
+  (*     dx - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     none                                                            *)
+  (*   Returns:                                                          *)
+  (*     ax - Allocation Offset (0 if failed)                            *)
+  (*     bx - New maximum block size in heap                             *)
+  (*     dx - unchanged                                                  *)
+  (*   Assumption:                                                       *)
+  (*     Since the calling procedure must check, this procedure assumes  *)
+  (*     that the block it is searching contains a block large enough    *)
+  (*     to fill the request.                                            *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+
+public $AllocHeap :
+    push ds
+    push si
+    mov  ds, dx
+    mov  bx, di
+$$AllocLoop:                           (* Find large enough free block   *)
+    mov  si, bx
+    mov  bx, [bx][memNextFree]
+(*%T _HeapCheck *)
+    cmp  si, bx
+    jae  $$HeapCorrupt
+(*%E *)
+    cmp  [bx][memFreeSize], ax
+    jb   $$AllocLoop                   (* bx = block | si = Prev block   *)
+    je   $$Unlink
+    add  [si][memNextFree], ax         (* Increment prev Block pointer   *)
+    mov  si, [si][memNextFree]
+    sub  ax, [bx][memFreeSize]
+    neg  ax
+    mov  [si][memFreeSize], ax
+$$Unlink:
+    mov  ax, [bx][memNextFree]
+    mov  [si][memNextFree], ax
+    mov  ax, [di][memLargestFree]
+    cmp  ax, [bx][memFreeSize]
+    jne  $$AllocExit
+    mov  si, [di][memNextFree]
+    jmp  $$ScanStart
+$$ScanLoop:
+    cmp  ax, [si][memFreeSize]
+    ja   $$ScanContinue
+$$ScanStart:
+    mov  ax, [si][memFreeSize]
+$$ScanContinue:
+    mov  si, [si][memNextFree]
+    or   si, si
+    jnz  $$ScanLoop
+    mov  [di][memLargestFree], ax
+$$AllocExit:
+    xchg ax, bx
+    pop  si
+    pop  ds
+    ret  0
+
+(*%T _HeapCheck *)
+$$HeapCorrupt:
+    call far __FatalErrorPos
+    mov  cx, ERROR_HEAPCORRUPT
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+(*%E HeapCheck*)
+
+section
+  (***********************************************************************)
+  (* $ResizeHeap - Resize Allocated memory from a heaplette              *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     ax - Allocation Size                                            *)
+  (*     bx - Allocation Offset                                          *)
+  (*     cx - Heap Base                                                  *)
+  (*     dx - Requested Size                                             *)
+  (*     ds - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     es                                                              *)
+  (*   Returns:                                                          *)
+  (*     ax - New maximum block size in heap or 0 if failed              *)
+  (*     bx - New Allocation Offset                                      *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+public $ResizeHeap :
+    push si
+    push di
+    push cx
+    mov  si, cx
+$$ResizeLoop:
+    mov  di, [si][memNextFree]
+    or   di, di
+    jz   $$ResizeFound
+    cmp  di, bx
+    ja   $$ResizeFound
+    mov  si, di
+    jmp  $$ResizeLoop
+$$ResizeFound:
+    mov  cx, bx
+    add  cx, ax                        (* cx = ax + bx *)
+    cmp  ax, dx
+    jb   $$Expand
+    push bx
+    add  bx, dx
+    cmp  cx, di
+    jne  $$NoAttach
+    mov  cx, ax
+    sub  cx, dx
+    add  cx, [di][memFreeSize]
+    mov  [bx][memFreeSize], cx
+    mov  cx, [di][memNextFree]
+    jmp  $$Exit
+$$NoAttach:
+    mov  cx, ax
+    sub  cx, dx
+    mov  [bx][memFreeSize], cx
+    mov  cx, [si][memNextFree]
+$$Exit:
+    mov  [bx][memNextFree], cx
+    mov  [si][memNextFree], bx
+    pop  bx
+    jmp  near $$FindLargest
+$$Expand:
+    cmp  cx, di                        (* is following block free? *)
+    jne  $$PrependTest                 (* if not, try to prepend *)
+    mov  cx, ax                        (* cx = ax + di.size (available block) *)
+    add  cx, [di][memFreeSize]
+    push cx
+    cmp  cx, dx                        (* is it enough? *)
+    jae  $$Append                      (* if so, use it *)
+    mov  cx, si
+    add  cx, [si][memFreeSize]
+    cmp  cx, bx                        (* is previous block free? *)
+    pop  cx
+    jne  near $$ResizeFailed           (* if not, return failed *)
+    add  cx, [si][memFreeSize]
+    cmp  cx, dx                        (* is available space large enough? *)
+    jb   $$ResizeFailed
+    db   06AH, 000H                    (*I push 0                        *)
+    jmp  $$AppendAll
+$$Append:
+    jbe  $$AppendAll
+    push ax
+    sub  cx, dx  (* cx = new di free block size *)
+    mov  ax, [di][memNextFree]
+    mov  di, bx
+    add  di, dx
+    mov  [di][memFreeSize], cx
+    mov  [di][memNextFree], ax
+    pop  ax
+    jmp  $$AppendExit
+$$AppendAll:
+    sub  dx, [di][memFreeSize]
+    mov  di, [di][memNextFree]
+$$AppendExit:
+    mov  [si][memNextFree], di
+    pop  cx
+    jcxz $$PrependAllTest
+    jmp  $$FindLargest
+$$PrependTest:
+    mov  cx, si
+    add  cx, [si][memFreeSize]
+    cmp  cx, bx                        (* is previous block free? *)
+    jne  $$ResizeFailed                (* if not, return failed *)
+$$PrependAllTest:
+    mov  cx, ax
+    add  cx, [si][memFreeSize]
+    cmp  cx, dx                        (* is available space large enough? *)
+    jb   $$ResizeFailed
+    jne  $$Prepend
+    pop  di
+    push di
+    jmp  $$PrependStart
+$$PrependLoop:
+    mov  di, [di][memNextFree]
+$$PrependStart:
+    cmp  si, [di][memNextFree]
+    jne  $$PrependLoop
+    mov  cx, [si][memNextFree]
+    mov  [di][memNextFree], cx
+    xchg si, bx
+    jmp  $$PrependAll
+$$Prepend:
+    mov  cx, dx
+    sub  cx, ax
+    sub  [si][memFreeSize], cx
+    mov  si, bx
+    sub  bx, cx
+$$PrependAll:
+    mov  di, bx
+    mov  cx, ax
+    shr  cx, 1
+    push ds
+    pop  es
+    jnc  $$ShiftEven
+    movsb
+$$ShiftEven:
+    rep; movsw
+$$FindLargest:
+    pop  di
+    mov  si, di
+    xor  ax, ax
+$$FindLoop:
+    mov  di, [di][memNextFree]
+    or   di, di
+    jz   $$LargestFound
+    cmp  ax, [di][memFreeSize]
+    jae  $$FindLoop
+    mov  ax, [di][memFreeSize]
+    jmp  $$FindLoop
+$$LargestFound:
+    mov  [si][memLargestFree], ax
+$$Return:
+    pop  di
+    pop  si
+    ret  0
+
+$$ResizeFailed:
+    pop  ax
+    xor  ax, ax
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* $ReallocHeap - Re-Allocates Allocated memory from a heaplette.      *)
+  (*                Will not move the block in memory                    *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     ax - Allocation Size                                            *)
+  (*     bx - Allocation Offset                                          *)
+  (*     cx - Heap Base                                                  *)
+  (*     dx - Requested Size                                             *)
+  (*     ds - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     none                                                            *)
+  (*   Returns:                                                          *)
+  (*     ax - New maximum block size in heap or 0 if failed              *)
+  (*     bx - New Allocation Offset                                      *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+public $ReallocHeap :
+    push si
+    push di
+    push cx
+    mov  si, cx
+$$ResizeLoop:
+    mov  di, [si][memNextFree]
+    or   di, di
+    jz   $$ResizeFound
+    cmp  di, bx
+    ja   $$ResizeFound
+    mov  si, di
+    jmp  $$ResizeLoop
+$$ResizeFound:
+    mov  cx, bx
+    add  cx, ax                        (* cx = ax + bx *)
+    cmp  ax, dx
+    jb   $$Expand
+    push bx
+    add  bx, dx
+    cmp  cx, di
+    jne  $$NoAttach
+    mov  cx, ax
+    sub  cx, dx
+    add  cx, [di][memFreeSize]
+    mov  [bx][memFreeSize], cx
+    mov  cx, [di][memNextFree]
+    jmp  $$Exit
+$$NoAttach:
+    mov  cx, ax
+    sub  cx, dx
+    mov  [bx][memFreeSize], cx
+    mov  cx, [si][memNextFree]
+$$Exit:
+    mov  [bx][memNextFree], cx
+    mov  [si][memNextFree], bx
+    pop  bx
+    jmp  $$FindLargest
+$$Expand:
+    cmp  cx, di                        (* is following block free? *)
+    jne  $$ResizeFailed                (* if not, return failed *)
+    mov  cx, ax                        (* cx = ax + di.size (available block) *)
+    add  cx, [di][memFreeSize]
+    cmp  cx, dx                        (* is it enough? *)
+    je   $$AppendAll                   (* if exactly, use it all *)
+    jb   $$ResizeFailed                (* if not, return failed *)
+    sub  cx, dx                        (* if so, use it *)
+    mov  ax, [di][memNextFree]
+    mov  di, bx
+    add  di, dx
+    mov  [di][memFreeSize], cx
+    mov  [di][memNextFree], ax
+    jmp  $$AppendExit
+$$AppendAll:
+    mov  di, [di][memNextFree]
+$$AppendExit:
+    mov  [si][memNextFree], di
+$$FindLargest:
+    pop  di
+    mov  si, di
+    xor  ax, ax
+$$FindLoop:
+    mov  di, [di][memNextFree]
+    or   di, di
+    jz   $$LargestFound
+    cmp  ax, [di][memFreeSize]
+    jae  $$FindLoop
+    mov  ax, [di][memFreeSize]
+    jmp  $$FindLoop
+$$LargestFound:
+    mov  [si][memLargestFree], ax
+$$Return:
+    pop  di
+    pop  si
+    ret  0
+
+$$ResizeFailed:
+    pop  ax
+    xor  ax, ax
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* $FreeHeap - Deallocate memory from a heaplette                      *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     ax - Allocated Size                                             *)
+  (*     bx - Heap Offset                                                *)
+  (*     cx - Heap Base                                                  *)
+  (*     ds - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     none                                                            *)
+  (*   Returns:                                                          *)
+  (*     ax - New maximum block size in heap                             *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+
+public $FreeHeap :
+    push si
+    push di
+    mov  word [bx][memNextFree], 0
+    mov  [bx][memFreeSize], ax
+    mov  di, cx                        (* equ = mov  di, memFirstFree    *)
+$$FreeLoop:
+    mov  si, [di][memNextFree]
+    or   si, si
+    jz   $$PrependBlock                (* end of chain                   *)
+    cmp  si, bx
+    ja   $$AppendBlock                 (* Insert before si               *)
+    mov  di, si
+    jmp  $$FreeLoop
+$$AppendBlock:
+    mov  ax, [bx][memFreeSize]
+    add  ax, bx
+    cmp  ax, si                        (* Check for Merge Up             *)
+(*%T _HeapCheck *)
+    ja   $$HeapCorrupt
+(*%E *)
+    jne  $$NoAppend
+    mov  ax, [si][memFreeSize]
+    add  [bx][memFreeSize], ax
+    mov  ax, [si][memNextFree]
+    mov  [bx][memNextFree], ax
+    jmp  $$PrependBlock
+$$NoAppend:
+    mov  [bx][memNextFree], si
+$$PrependBlock:
+    mov  ax, [di][memFreeSize]
+    add  ax, di
+    cmp  ax, bx                        (* Check for Merge Down           *)
+(*%T _HeapCheck *)
+    ja   $$HeapCorrupt
+(*%E *)
+    jne  $$NoPrepend
+    mov  ax, [bx][memFreeSize]
+    add  [di][memFreeSize], ax
+    mov  ax, [bx][memNextFree]
+    mov  [di][memNextFree], ax
+    jmp  $$FreeExit
+$$NoPrepend:
+    mov  [di][memNextFree], bx
+    mov  di, bx
+$$FreeExit:
+    mov  si, cx
+    mov  ax, [si][memLargestFree]
+    mov  bx, [di][memFreeSize]
+    cmp  ax, bx
+    jae  $$NotLargest
+    mov  [si][memLargestFree], bx
+    mov  ax, bx
+$$NotLargest:
+    pop  di
+    pop  si
+    ret  0
+
+(*%T _HeapCheck *)
+$$HeapCorrupt:
+    call far __FatalErrorPos
+    mov  cx, ERROR_HEAPCORRUPT
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+(*%E _HeapCheck*)
+
+section
+  (***********************************************************************)
+  (* $MarkHeap - Return Current Heap Free State                          *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     bx - Heap Base                                                  *)
+  (*     ds - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     none                                                            *)
+  (*   Returns:                                                          *)
+  (*     bx - Mark Offset                                                *)
+  (*   Notes:                                                            *)
+  (*     Cannot corrupt es                                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+public $MarkHeap :
+    mov  bx, [bx][memNextFree]
+    cmp  word [bx][memNextFree], 0
+    jnz  $MarkHeap
+    ret  0
+
+section
+  (***********************************************************************)
+  (* $ReleaseHeap - Return Heap to Previous State                        *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (* Internal Procedure - Near Call                                      *)
+  (*   Parameters:                                                       *)
+  (*     ax - Heap Mark Offset                                           *)
+  (*     bx - Heap Base                                                  *)
+  (*     ds - Heap Selector                                              *)
+  (*   Trashes:                                                          *)
+  (*     none                                                            *)
+  (*   Returns:                                                          *)
+  (*     ax - Largest Free                                               *)
+  (*     bx - Available                                                  *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+public $ReleaseHeap :
+    push si
+    push di
+    push cx
+    mov  di, bx
+$$FindPrev:
+    mov  si, di
+    mov  di, [si][memNextFree]
+    or   di, di
+    jz   $$PrevFound
+    cmp  ax, di
+    ja   $$FindPrev
+    je   $$FindEnd
+$$PrevFound:
+    mov  cx, si
+    add  cx, [si][memFreeSize]
+    cmp  ax, cx
+    je   $$Concat
+    mov  [si][memNextFree], ax
+    jmp  $$FindEndStart
+$$Concat:
+    mov  ax, si
+    jmp  $$FindEndStart
+$$FindEnd:
+    mov  di, [di][memNextFree]
+    or   di, di
+    jz   $$FindLargestStart
+$$FindEndStart:
+    cmp  word [di][memNextFree], 0
+    jnz  $$FindEnd
+    mov  si, ax
+    mov  cx, di
+    sub  cx, ax
+    add  cx, [di][memFreeSize]
+    mov  [si][memFreeSize], cx
+    mov  word [si][memNextFree], 0
+$$FindLargestStart:
+    mov  di, bx
+    mov  si, bx
+    xor  ax, ax
+    mov  bx, ax
+$$FindLargest:
+    mov  di, [di][memNextFree]
+    or   di, di
+    jz   $$LargestFound
+    add  bx, [di][memFreeSize]
+    cmp  ax, [di][memFreeSize]
+    jae  $$FindLargest
+    mov  ax, [di][memFreeSize]
+    jmp  $$FindLargest
+$$LargestFound:
+    mov  [si][memLargestFree], ax
+    pop  cx
+    pop  di
+    pop  si
+    ret  0
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$InitNear - Standard Module Near Heap Initialization          *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Trashes:                                                          *)
+  (*     es                                                              *)
+  (*                                                                     *)
+  (*   Automatic Initialization Procedure                                *)
+  (*     Brought in by reference to @NearHeapAvail                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,48H)
+
+extrn $InitHeap
+extrn __heap_size
+extrn __near_heap_start                (* Magic label *)
+
+select _TEXT
+$$DoInit:
+
+select _INIT
+Init:         dw INIT_MAGIC
+              db initPri1
+(*%T _fcall *)
+              dd $$DoInit
+(*%E *)
+(*%F _fcall *)
+              dw $$DoInit
+(*%E *)
+
+select _DATA
+public @NearHeapLen     : dw  0
+public @NearHeapBase    : dw  0
+public @NearHeapAvail   : dw  0, Init
+
+select _TEXT
+public StdMem$InitNear :
+    push ax
+    push di
+(*%T _fdata *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+(*%F _fdata *)
+    mov  ax, ds
+(*%E *)
+    mov  es, ax
+    mov  ax, __near_heap_start
+    add  ax, 3
+    and  al, 0FEH
+    mov  di, ax
+    mov  [@NearHeapBase], di
+    add  ax, [__heap_size]
+    jnc  $$SizeSet
+    mov  ax, 0FFFDH
+    jmp  $$NearHeapGood
+$$SizeSet:
+    dec  ax
+    dec  ax
+    push ax
+    sub  ax, 10H
+    cmp  ax, di
+    pop  ax
+    ja   $$NearHeapGood
+    xor  ax, ax
+    jmp  $$NoNearHeap
+$$NearHeapGood:
+    sub  ax, di
+    mov  [@NearHeapLen], ax
+  (* Near Heap Initialization *)
+    or   ax, ax
+    jz   $$NoNearHeap
+    call $InitHeap
+$$NoNearHeap:
+    mov  [@NearHeapAvail], ax
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  ax
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$AllocNear - Standard Near Heap Memory Allocation             *)
+  (*                                                                     *)
+  (*   PROCEDURE AllocNear(Size:CARDINAL):NearADDRESS                    *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Allocation Size Request                               *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Allocation Address                                    *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$AllocMem in Near Pointer Models                        *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapBase
+extrn @NearHeapAvail
+extrn $AllocHeap
+
+(*%F _fptr *)
+public StdMem$AllocMem :
+(*%E *)
+public StdMem$AllocNear :
+    push bx
+    push dx
+    push di
+(*%T _fdata *)
+    push ds
+    mov  dx, _DATA
+    mov  ds, dx
+(*%E *)
+(*%F _fdata *)
+    mov  dx, ds
+(*%E *)
+    add  ax, 3
+    and  al, 0FCH
+    push ax
+    mov  di, [@NearHeapBase]
+    cmp  ax, [di][memLargestFree]
+    ja   $$NoMemory
+    call $AllocHeap
+    pop  bx
+    sub  [@NearHeapAvail], bx
+$$AllocExit:
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  dx
+    pop  bx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$NoMemory:
+    pop  ax
+    xor  ax, ax
+    jmp  $$AllocExit
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$ResizeNear - Standard Near Heap Memory Reallocation          *)
+  (*                                                                     *)
+  (*   PROCEDURE ResizeNear(Addr:NearADDRESS;OldSize,NewSize:CARDINAL):BOOLEAN*)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Reallocation Address                                  *)
+  (*       bx    - Original Block Size                                   *)
+  (*       cx    - Requested Block Size                                  *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       ax    - New Reallocation Address (0 = Failed)                 *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$ResizeMem in Near Pointer Models                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapBase
+extrn @NearHeapAvail
+extrn $ResizeHeap
+
+(*%F _fptr *)
+public StdMem$ResizeMem :
+(*%E *)
+public StdMem$ResizeNear :
+    push dx
+(*%T _fdata *)
+    push ds
+    mov  dx, _DATA
+    mov  ds, dx
+(*%E *)
+    add  bx, 3                         (* Round Sizes up to nearest 4    *)
+    and  bl, 0FCH
+    add  cx, 3
+    and  cl, 0FCH
+    cmp  bx, cx
+    je   $$Return
+    push cx
+    push bx
+    xchg ax, bx
+    mov  dx, cx
+    mov  cx, [@NearHeapBase]
+    call $ResizeHeap
+    or   ax, ax
+    jz   $$ResizeFailed
+    pop  ax
+    add  [@NearHeapAvail], ax
+    pop  ax
+    sub  [@NearHeapAvail], ax
+    mov  ax, bx
+$$Return:
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$ResizeFailed:
+    add  sp, 4
+    jmp  $$Return
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$ReallocNear - Standard Near Heap Memory Reallocation         *)
+  (*                                                                     *)
+  (*   PROCEDURE ReallocNear(Addr:NearADDRESS;OldSize,NewSize:CARDINAL):BOOLEAN*)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Reallocation Address                                  *)
+  (*       bx    - Original Block Size                                   *)
+  (*       cx    - Requested Block Size                                  *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - New Reallocation Address (0 = Failed)                 *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$ReallocMem in Near Pointer Models                      *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapBase
+extrn @NearHeapAvail
+extrn $ReallocHeap
+
+(*%F _fptr *)
+public StdMem$ReallocMem :
+(*%E *)
+public StdMem$ReallocNear :
+    push dx
+(*%T _fdata *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    add  bx, 3                         (* Round Sizes up to nearest 4    *)
+    and  bl, 0FCH
+    add  cx, 3
+    and  cl, 0FCH
+    cmp  bx, cx
+    je   $$Return
+    push cx
+    push bx
+    xchg ax, bx
+    mov  dx, cx
+    mov  cx, [@NearHeapBase]
+    call $ReallocHeap
+    or   ax, ax
+    jz   $$ResizeFailed
+    pop  ax
+    add  [@NearHeapAvail], ax
+    pop  ax
+    sub  [@NearHeapAvail], ax
+    mov  ax, bx
+$$Return:
+(*%T _fcall *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$ResizeFailed:
+    add  sp, 4
+    jmp  $$Return
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$DeallocNear - Standard Near Heap Memory Deallocation         *)
+  (*                                                                     *)
+  (*   PROCEDURE DeallocNear(Addr:NearADDRESS;Size:CARDINAL):BOOLEAN     *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Deallocation Address                                  *)
+  (*       bx    - Deallocation Size Request                             *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Success/Failure                                       *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$DeallocMem in Far Pointer Models                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapBase
+extrn @NearHeapAvail
+extrn $FreeHeap
+
+(*%F _fptr *)
+public StdMem$DeallocMem :
+(*%E *)
+public StdMem$DeallocNear :
+    push cx
+    xchg ax, bx
+(*%T _fdata *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    add  ax, 3
+    and  al, 0FCH
+    push ax
+    mov  cx, [@NearHeapBase]
+    call $FreeHeap
+    pop  bx
+    add  [@NearHeapAvail], bx
+    mov  ax, 1
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  cx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$AvailNear - Standard Near Heap Memory Available              *)
+  (*                                                                     *)
+  (*   PROCEDURE AvailNear():CARDINAL                                    *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax - Near Heap Available (bytes)                              *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapAvail
+
+public StdMem$AvailNear :
+(*%T _fdata *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [@NearHeapAvail]
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$LargestNear - Standard Near Heap Memory Largest Block        *)
+  (*                      Available.                                     *)
+  (*                                                                     *)
+  (*   PROCEDURE LargestNear():CARDINAL                                  *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax - Near Heap Largest Block Available (bytes)                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @NearHeapBase
+
+public StdMem$LargestNear :
+    push bx
+(*%T _fdata *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  bx, [@NearHeapBase]
+    mov  ax, [bx][memLargestFree]
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  bx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$MarkNear - Pascal Near Heap Memory Marker                    *)
+  (*                                                                     *)
+  (*   PROCEDURE MarkNear(VAR p:ADDRESS)                                 *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax - pointer to mark                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       TURBOSYS$MARK - in Near Models                                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn $MarkHeap
+extrn @NearHeapBase
+
+(*%F _fptr *)
+public TURBOSYS$MARK :
+(*%E *)
+public StdMem$MarkNear :
+    push bx
+(*%T _fdata *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    mov  bx, [@NearHeapBase]
+    call $MarkHeap
+    xchg ax, bx
+    mov  [bx], ax
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  bx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* StdMem$ReleaseNear - Pascal Near Heap Memory Mark Releaser          *)
+  (*                                                                     *)
+  (*   PROCEDURE ReleaseNear(VAR p:ADDRESS)                              *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax - pointer to mark                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       TURBOSYS$RELEASE - in Near models                             *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn $ReleaseHeap
+extrn @NearHeapBase
+extrn @NearHeapAvail
+
+(*%F _fptr *)
+public TURBOSYS$RELEASE :
+(*%E *)
+public StdMem$ReleaseNear :
+    push bx
+(*%T _fdata *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    mov  bx, ax
+    mov  ax, [bx]
+    mov  bx, [@NearHeapBase]
+    call $ReleaseHeap
+    mov  [@NearHeapAvail], bx
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  bx
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+  (***********************************************************************)
+  (* StdMem$InitFar - Standard Module Far Heap Initialization            *)
+  (*                                                                     *)
+  (* OS/2 and Extender Memory Models                                     *)
+  (*                                                                     *)
+  (*   Automatic Initialization Procedure                                *)
+  (*     Brought in by reference to @memSelTable                         *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,48H)
+
+extrn $InitHeap
+extrn __FatalError
+extrn __FatalErrorPos
+extrn DOSALLOCSEG
+extrn DOSGETHUGESHIFT
+extrn StdMem@HugeShift
+
+select _TEXT
+$$DoInit:
+
+select _INIT
+Init:         dw INIT_MAGIC
+              db initPri1
+(*%T _fcall *)
+              dd $$DoInit
+(*%E *)
+(*%F _fcall *)
+              dw $$DoInit
+(*%E *)
+
+select _DATA
+public @memSelTable     : dw 0, Init
+
+select _TEXT
+public StdMem$InitFar :
+    push ax
+    push di
+    push ds
+(*%T _fdata *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+  (* Save Huge Shift Value *)
+    push ds
+    db   068H; dw StdMem@HugeShift     (*I push word immed *)
+    call far DOSGETHUGESHIFT
+    mov  cx, [StdMem@HugeShift]
+    mov  ax, 1
+    shl  ax, cl
+    mov  [StdMem@HugeShift], ax
+  (* Far Heap Initialization - Allocate Selector Table *)
+    db   068H; dw (memEntrySize * memInitEntries) (*I push word immed *)
+    push ds
+    db   068H; dw @memSelTable         (*I push word immed *)
+    db   06AH, 000H                    (*I push 0 *)
+    call far DOSALLOCSEG
+    or   ax, ax
+    jne  $$InitAllocFailed
+  (* Allocate First Segment & Initialize Selector Table *)
+    mov  ds, [@memSelTable]
+    push ax                            (* ax = 0 *)
+    push ds
+    db 06AH, memSelector               (*I push 2 *)
+    push ax
+    call far DOSALLOCSEG
+    or   ax, ax
+    jne  $$InitAllocFailed
+    mov  [memTerminator], ax            (* Terminate Table *)
+    mov  es, [memSelector]
+    xor  di, di
+    call $InitHeap
+    mov  [memLargest], ax
+    pop  ds
+    pop  di
+    pop  ax
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$InitAllocFailed:
+    call far __FatalErrorPos
+    mov  cx, ERROR_MEMINIT
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+
+section
+  (***********************************************************************)
+  (* StdMem$AllocFar - Standard Far Heap Memory Allocation               *)
+  (*                                                                     *)
+  (*   PROCEDURE AllocFar(Size:CARDINAL):FarADDRESS                      *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax - Allocation Size Request                                  *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Allocation Address                                    *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$AllocMem in Far Pointer Models                         *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @memSelTable
+extrn $InitHeap
+extrn $AllocHeap
+extrn DOSALLOCSEG
+
+(*%T _fptr *)
+public StdMem$AllocMem :
+(*%E *)
+public StdMem$AllocFar :
+    push ds
+    push bx
+    push di
+    push si
+(*%T _fdata *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ds, [@memSelTable]
+    xor  si, si
+    cmp  ax, si
+    jz   $$ScanStart
+    add  ax, 3                         (* Round Size up to nearest 4     *)
+    and  al, 0FCH
+    cmp  ax, memThreshold
+    jb   $$AllocStart
+    jmp  $$ScanStart
+$$ScanTable:
+    add  si, memEntrySize
+$$ScanStart:
+    cmp  word [si][memSelector], 0
+    jnz  $$ScanTable
+    xor  di, di
+    mov  [si][memLargest], di
+    mov  [si][memTerminator], di       (* Terminate List                 *)
+    mov  di, ax
+    push ax
+    push ds
+    lea  ax, [si][memSelector]
+    push ax
+    db   06AH, 000H                    (*I push 0 *)
+    call far DOSALLOCSEG
+    mov  dx, [si][memSelector]
+    or   ax, ax
+    je   $$AllocExit
+    mov  [si][memSelector], ax         (* Failed, Re-terminate List      *)
+    mov  ax, di
+    xor  si, si
+    jmp  $$AllocStart
+$$AllocLoop:
+    add  si, memEntrySize
+    cmp  word [si][memSelector], 0
+    jz   $$BlockNotFound
+$$AllocStart:
+    cmp  ax, [si][memLargest]
+    ja   $$AllocLoop
+$$BlockFound:
+    mov  dx, [si][memSelector]
+    xor  di, di
+    call $AllocHeap
+    or   ax, ax
+    jz   $$AllocFailed
+    mov  [si][memLargest], bx
+    jmp  $$AllocExit
+$$BlockNotFound:
+    push ax
+    db   06AH, 000H                    (*I push 0 *)
+    push ds
+    lea  ax, [si][memSelector]
+    push ax
+    db   06AH, 000H                    (*I push 0 *)
+    call far DOSALLOCSEG
+    or   ax, ax
+    jne  $$AllocFailedPop
+    mov  [si][memTerminator], ax       (* Terminate Table *)
+    mov  es, [si][memSelector]
+    xor  di, di
+    call $InitHeap
+    mov  [si][memLargest], ax
+    pop  ax
+    jmp  $$BlockFound
+$$AllocExit:
+    pop  si
+    pop  di
+    pop  bx
+    pop  ds
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$AllocFailedPop:
+    pop  ax
+$$AllocFailed:
+    xor  ax, ax
+    cwd
+    jmp  $$AllocExit
+
+section
+  (***********************************************************************)
+  (* StdMem$ResizeFar - Standard Far Heap Memory Reallocation            *)
+  (*                                                                     *)
+  (*   PROCEDURE ResizeFar(Addr:FarADDRESS;OldSize,NewSize:CARDINAL):BOOLEAN*)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Reallocation Address                                  *)
+  (*       cx    - Original Block Size                                   *)
+  (*       dx    - Requested Block Size                                  *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Reallocation Address (0:0 = Failed)               *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$ResizeMem in Far Pointer Models                        *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @memSelTable
+extrn $ResizeHeap
+
+(*%T _fptr *)
+public StdMem$ResizeMem :
+(*%E *)
+public StdMem$ResizeFar :
+    push ds
+    push si
+(*%T _fdata *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ds, [@memSelTable]
+    xor  si, si
+    add  cx, 3                         (* Round Sizes up to nearest 4    *)
+    and  cl, 0FCH
+    add  dx, 3
+    and  dl, 0FCH
+    cmp  cx, dx
+    jne  $$ResizeStart
+    mov  dx, bx
+    jmp  $$Return
+$$ResizeLoop:
+    add  si, memEntrySize
+    cmp  word [si][memSelector], 0
+    jz   $$HeapCorrupt
+$$ResizeStart:
+    cmp  [si][memSelector], bx
+    jne  $$ResizeLoop
+$$SelectorFound:
+    push ds
+    push bx
+    mov  ds, bx
+    mov  bx, ax
+    mov  ax, cx
+    xor  cx, cx
+    call $ResizeHeap
+    pop  dx
+    pop  ds
+    or   ax, ax
+    jz   $$ResizeFailed
+    mov  [si][memLargest], ax
+    mov  ax, bx
+$$Return:
+    pop  si
+    pop  ds
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$HeapCorrupt:
+    xor  ax, ax
+$$ResizeFailed:
+    cwd
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* StdMem$ReallocFar - Standard Far Heap Memory Reallocation           *)
+  (*                                                                     *)
+  (*   PROCEDURE ReallocFar(Addr:FarADDRESS;OldSize,NewSize:CARDINAL):BOOLEAN*)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Reallocation Address                                  *)
+  (*       cx    - Original Block Size                                   *)
+  (*       dx    - Requested Block Size                                  *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Reallocation Address (0:0 = Failed)               *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$ResizeMem in Far Pointer Models                        *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @memSelTable
+extrn $ReallocHeap
+
+(*%T _fptr *)
+public StdMem$ReallocMem :
+(*%E *)
+public StdMem$ReallocFar :
+    push ds
+    push si
+(*%T _fdata *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ds, [@memSelTable]
+    xor  si, si
+    add  cx, 3                         (* Round Sizes up to nearest 4    *)
+    and  cl, 0FCH
+    add  dx, 3
+    and  dl, 0FCH
+    cmp  cx, dx
+    jne  $$ResizeStart
+    mov  dx, bx
+    jmp  $$Return
+$$ResizeLoop:
+    add  si, memEntrySize
+    cmp  word [si][memSelector], 0
+    jz   $$HeapCorrupt
+$$ResizeStart:
+    cmp  [si][memSelector], bx
+    jne  $$ResizeLoop
+$$SelectorFound:
+    push ds
+    push bx
+    mov  ds, bx
+    mov  bx, ax
+    mov  ax, cx
+    xor  cx, cx
+    call $ReallocHeap
+    pop  dx
+    pop  ds
+    or   ax, ax
+    jz   $$ResizeFailed
+    mov  [si][memLargest], ax
+    mov  ax, bx
+$$Return:
+    pop  si
+    pop  ds
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$HeapCorrupt:
+    xor  ax, ax
+$$ResizeFailed:
+    cwd
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* $FreeSelector - Free an Empty Segment back to the Operating System  *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure - Near Call                                    *)
+  (*     Parameters:                                                     *)
+  (*       bx - Deallocation Segment                                     *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+extrn DOSFREESEG
+
+public $FreeSelector:
+    push ax
+    push cx
+    push si
+    push di
+    push bx
+    call far DOSFREESEG
+    or   ax, ax
+    jnz  $$HeapCorrupt
+    mov  cx, ds
+    mov  es, cx
+$$ScanTable:
+    cmp  [si][memSelector], bx
+    jz   $$EntryFound
+    add  si, memEntrySize
+    jmp  $$ScanTable
+$$EntryFound:
+    xor  cx, cx
+    mov  di, si
+$$ScanEnd:
+    add  di, memEntrySize
+    add  cx, memEntrySize
+    cmp  word [di][memSelector], 0
+    jnz  $$ScanEnd
+    mov  di, si
+    add  si, memEntrySize
+    rep; movsb
+$$FreeExit:
+    pop  di
+    pop  si
+    pop  cx
+    pop  ax
+    ret  0
+
+$$HeapCorrupt:
+    call far __FatalErrorPos
+    mov  cx, ERROR_HEAPCORRUPT
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+
+section
+  (***********************************************************************)
+  (* StdMem$DeallocFar - Standard Far Heap Memory Deallocation           *)
+  (*                                                                     *)
+  (*   PROCEDURE DeallocFar(Addr:FarADDRESS;Size:CARDINAL):BOOLEAN       *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Deallocation Address                                  *)
+  (*       cx    - Deallocation Size Request                             *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Success/Failure                                       *)
+  (*     Aliases:                                                        *)
+  (*       StdMem$DeallocMem in Far Pointer Models                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn @memSelTable
+extrn $FreeHeap
+extrn $FreeSelector
+
+(*%T _fptr *)
+public StdMem$DeallocMem :
+(*%E *)
+public StdMem$DeallocFar :
+    push ds
+    push si
+(*%T _fdata *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  ds, [@memSelTable]
+    xor  si, si
+    add  cx, 3
+    and  cl, 0FCH                      (* Round Size up to nearest 4     *)
+    or   ax, ax
+    jnz  $$DeallocStart
+    call $FreeSelector
+    jmp  $$DeallocExit
+$$DeallocLoop:
+    add  si, memEntrySize
+    cmp  word [si][memSelector], 0
+    jz   $$HeapCorrupt
+$$DeallocStart:
+    cmp  [si][memSelector], bx
+    jne  $$DeallocLoop
+$$SelectorFound:
+    push ds
+    push bx
+    mov  ds, bx
+    mov  bx, ax
+    mov  ax, cx
+    xor  cx, cx
+    call $FreeHeap
+    pop  bx
+    pop  ds
+    mov  [si][memLargest], ax
+    or   si, si
+    jz   $$DeallocExit
+    cmp  ax, memSegEmpty
+    jae  $$SegEmpty
+$$DeallocExit:
+    mov  ax, TRUE
+$$DeallocRet:
+    pop  si
+    pop  ds
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$SegEmpty:
+    call $FreeSelector
+    jmp  $$DeallocExit
+
+$$HeapCorrupt:
+    xor  ax, ax
+    jmp  $$DeallocRet
+
+section
+  (***********************************************************************)
+  (* StdMem$MarkFar - Pascal Far Heap Memory Marker                      *)
+  (*                                                                     *)
+  (*   PROCEDURE MarkFar(VAR p:ADDRESS)                                  *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - pointer to mark                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       TURBOSYS$MARK - in Far Models                                 *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn $MarkHeap
+extrn @memSelTable
+
+(*%T _fptr *)
+public TURBOSYS$MARK :
+(*%E *)
+public StdMem$MarkFar :
+    push si
+    push ds
+(*%T _fdata *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  es, bx
+    mov  bx, ax
+    mov  ds, [@memSelTable]
+    xor  si, si
+    jmp  $$FindSelStart
+$$FindSelector:
+    add  si, memEntrySize
+$$FindSelStart:
+    cmp  word [si][memTerminator], 0
+    jnz  $$FindSelector
+    mov  si, [si][memSelector]
+    mov  es:[bx][2], si
+    mov  ds, si
+    mov  si, bx
+    xor  bx, bx
+    call $MarkHeap
+    mov  es:[si], bx
+    pop  ds
+    pop  si
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* StdMem$ReleaseFar - Pascal Far Heap Memory Mark Releaser            *)
+  (*                                                                     *)
+  (*   PROCEDURE ReleaseFar(VAR p:ADDRESS)                               *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - pointer to mark                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       TURBOSYS$RELEASE - in Far models                              *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn $ReleaseHeap
+extrn $FreeSelector
+extrn @memSelTable
+
+(*%T _fptr *)
+public TURBOSYS$RELEASE :
+(*%E *)
+public StdMem$ReleaseFar :
+    push ds
+    push si
+    mov  es, bx                        (* es:si = Pointer to Mark *)
+    mov  si, ax
+    lds  ax, es:[si]                   (* ds:ax = Mark *)
+    mov  si, ds                        (* Save Mark Segment in si *)
+    xor  bx, bx                        (* bx = 0 (heap base) *)
+    call $ReleaseHeap                  (* Release Heaplette *)
+    mov  bx, _DATA
+    mov  ds, bx
+    mov  ds, [@memSelTable]            (* ds:bx = Selector Table Start *)
+    xor  bx, bx
+    jmp  $$FindSelStart
+$$FindSelector:                        (* Find Mark Selector *)
+    add  bx, memEntrySize
+$$FindSelStart:
+    cmp  si, [bx][memSelector]
+    jnz  $$FindSelector
+    mov  [bx][memLargest], ax          (* Update Largest Free Block *)
+    mov  si, bx
+$$FindEnd:                             (* Free any segments allocated *)
+    add  si, memEntrySize              (*   Since Mark *)
+    mov  bx, [si][memSelector]
+    or   bx, bx
+    jz   $$Return
+    call $FreeSelector
+    mov  word [si][memSelector], 0
+    jmp  $$FindEnd
+$$Return:
+    pop  si
+    pop  ds
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* StdMem$AllocHuge - Standard Far Heap Allocation for larger than     *)
+  (*                    One segment allocations                          *)
+  (*                                                                     *)
+  (*   PROCEDURE AllocHuge(Para:CARDINAL):FarADDRESS                     *)
+  (*                                                                     *)
+  (* OS/2 & Extender Memory Models                                       *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Number of paragraphs to allocate                      *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Far Pointer to memory                                 *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn DOSALLOCHUGE
+extrn  __MaxReallocHugeSegments
+
+public StdMem$AllocHuge:
+      mov  dx,bx              (* test for null request *)
+      or   dx,ax
+      jz   Done               (* null request *)
+      cmp  bx,1000H           (* too many paragraphs ? *)
+      jae  Fail               (* yes *)
+      add  ax,ax;adc bx,bx    (* convert to bytes *)
+      add  ax,ax;adc bx,bx
+      add  ax,ax;adc bx,bx
+      add  ax,ax;adc bx,bx
+      push ax                 (* space for selector return area *)
+      mov  dx,sp              (* address of selector return area *)
+      push bx                 (* args for DOSALLOCHUGE. 64k's of reqest *)
+      push ax                 (* remainder of request *)
+      push ss                 (* segment of selector return area *)
+      push dx                 (* offset of selector return area *)
+(*%F SameDS *)
+      mov  dx,seg __MaxReallocHugeSegments
+      mov  es,dx
+      push es:[__MaxReallocHugeSegments]
+(*%E NOT SameDS *)
+(*%T SameDS *)
+      push [__MaxReallocHugeSegments]
+(*%E SameDS *)
+      db   06AH, 000H         (*I push 0 *)  (* non share,non discardable *)
+      call far DOSALLOCHUGE
+      or   ax, ax             (* did allocation fail ? *)
+      pop  dx                 (* returned selector  *)
+      jz   Done               (* no problem *)
+Fail: xor  ax,ax              (* allocation failed-return NULL *)
+      cwd
+Done: db   Ret0@
+
+section
+  (***********************************************************************)
+  (* StdMem$DeallocHuge - Standard Far Heap Deallocation for blocks      *)
+  (*                      Allocated with StdMem$AllocHuge                *)
+  (*                                                                     *)
+  (*   PROCEDURE DeallocHuge(Addr:FarADDRESS):BOOLEAN                    *)
+  (*                                                                     *)
+  (* OS/2 & Extender Memory Models                                       *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Far Pointer to memory block                           *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - success/failure                                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn DOSFREESEG
+
+public StdMem$DeallocHuge :
+    push bx             (* push segment *)
+    call far DOSFREESEG
+    neg  ax             (* set carry if failed *)
+    sbb  ax,ax          (* ax = 0 if success,ax =-1 if failed *)
+    inc  ax             (* ax = 1 if success,ax = 0 if failed *)
+    db   Ret0@
+
+  (*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*)
+  (*                                                                     *)
+  (*@ C Run-Time Memory Management                                      @*)
+  (*                                                                     *)
+  (*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*@*)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __nmalloc - C Near Heap Allocation                                  *)
+  (*                                                                     *)
+  (* void near *_nmalloc(size_t size)                                    *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Request Size                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Address of Huge Allocation                            *)
+  (*     Aliases:                                                        *)
+  (*       malloc - in Near Pointer Models                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$AllocNear
+
+Size                    = Frame
+
+(*%F _fptr *)
+public _malloc :
+(*%E *)
+public __nmalloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Size]
+(*%E *)
+(*%T _jpicall *)
+    push bx
+(*%E *)
+    or   ax, ax
+    jz   $$Return
+    add  ax, 2
+    jc   $$TooBig
+    push ax
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$AllocNear
+    or   ax, ax
+    jz   $$Failed
+    mov  bx, ax
+    pop  [bx]
+    inc  ax
+    inc  ax
+$$Return:
+(*%T _jpicall *)
+    pop  bx
+(*%E *)
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$TooBig:
+    xor  ax, ax
+    jmp  $$Return
+$$Failed:
+    pop  bx
+    jmp  $$Return
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __ncalloc - C Near Heap Initialized Allocation                      *)
+  (*                                                                     *)
+  (* void near *_ncalloc(size_t number,size_t size)                      *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Number of units requested                             *)
+  (*       bx    - Unit Size                                             *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       ax    - Offset Address of Allocation                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,48H)
+
+extrn __nmalloc
+
+Size                    = Frame + 2
+Number                  = Frame
+
+(*%F _fptr *)
+public _calloc :
+(*%E *)
+public __ncalloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Size]
+    mov  bx, [bp][Number]
+(*%E *)
+    push di
+(*%T _jpicall *)
+    push cx
+    xchg ax, bx
+    mov  cx, dx
+(*%E *)
+    mul  bx
+(*%T _jpicall *)
+    mov  dx, cx
+(*%E *)
+    jo   $$Invalid
+    or   ax, ax
+    jz   $$Invalid
+(*%T _jpicall *)
+    mov  cx, ax
+(*%E *)
+(*%F _jpicall *)
+    push ax
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __nmalloc
+(*%F _jpicall *)
+    pop  cx
+(*%E *)
+    mov  bx, ax
+    or   ax, ax
+    jz   $$Return
+(*%T SameDS *)
+    mov  di, ds
+(*%E SameDS *)
+(*%F SameDS *)
+    mov  di, _DATA
+(*%E NOT SameDS *)
+    mov  es, di
+    mov  di, ax
+    xor  ax, ax
+    shr  cx, 1
+    rep; stosw
+    jnc  $$ClearMem
+    stosb
+$$ClearMem:
+    mov  ax, bx
+$$Return:
+(*%T _jpicall *)
+    pop  cx
+(*%E *)
+    pop  di
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$Invalid:
+    xor  ax, ax
+    jmp  $$Return
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __nrealloc - C Near Heap Change Allocation                          *)
+  (*                                                                     *)
+  (* void near *_nrealloc(void near *buffer,size_t size)                 *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Buffer address                                        *)
+  (*       bx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       ax    - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       _realloc - in near pointer models                             *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn __nmalloc
+extrn __nfree
+extrn StdMem$ResizeNear
+
+extrn _errno
+
+Size                    = Frame + 2
+Buffer                  = Frame
+
+(*%F _fptr *)
+public _realloc :
+(*%E *)
+public __nrealloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Buffer]
+    mov  bx, [bp][Size]
+(*%E *)
+(*%T _jpicall *)
+    push cx
+(*%E *)
+    push di
+    push si
+(*%F SameDS *)                        (* set DS to _DATA *)
+    push ds
+    mov  si,_DATA
+    mov  ds,si
+(*%E NOT SameDS *)
+    or   ax, ax                        (* is Buffer = NIL *)
+    jnz  $$GoodPtr
+(*%T _jpicall *)
+    mov  ax, bx                        (* if so, just malloc *)
+(*%E *)
+(*%F _jpicall *)
+    push bx
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __nmalloc
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    jmp  $$Return
+$$GoodPtr:
+    or   bx, bx                        (* is size = 0 *)
+    jnz  $$GoodSize
+(*%F _jpicall *)
+    push ax
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __nfree                       (* if so, just free *)
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    xor  ax, ax
+    jmp  $$Return
+$$GoodSize:
+    inc  bx                            (* make room for size word *)
+    inc  bx
+    push bx
+    dec  ax                            (* point si at allocated size *)
+    dec  ax
+    mov  si, ax
+    mov  cx, bx
+    mov  bx, [si]
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$ResizeNear
+    pop  cx
+    mov  di, ax
+    or   ax, ax                        (* was it resizable? *)
+    jnz  $$Exit
+(*%T _jpicall *)
+    mov  ax, cx                        (* if not, we have to do it *)
+(*%E *)
+(*%F _jpicall *)
+    push cx
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __nmalloc
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    or   ax, ax                        (* Was malloc successful *)
+    jne  $$MallocGood
+    mov  word [_errno], ERROR_NOMEMORY (* if not report error & return *)
+    jmp  $$Return
+$$Exit:
+    mov  [di], cx
+    inc  di
+    inc  di
+    mov  ax, di
+    jmp  $$Return
+$$MallocGood:
+    mov  di, ax
+    push di
+    mov  ax, [si]
+    inc  si
+    inc  si
+    push si
+    cmp  ax, cx
+    jae  $$Copy
+    mov  cx, ax
+$$Copy:
+    push ds        (* set ES to _DATA *)
+    pop  es
+    shr  cx, 1
+    rep; movsw
+    adc  cx, cx
+    rep; movsb
+(*%T _jpicall *)
+    pop  ax
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __nfree
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    pop  ax
+$$Return:
+(*%F SameDS *)
+    pop  ds
+(*%E NOT SameDS *)
+    pop  si
+    pop  di
+(*%T _jpicall *)
+    pop  cx
+(*%E *)
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __nexpand - C Near Heap Change Allocation                           *)
+  (*                                                                     *)
+  (* void near *_nexpand(void near *buffer,size_t size)                  *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Buffer address                                        *)
+  (*       bx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       ax    - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       __expand - in near pointer models                             *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$ReallocNear
+
+Size                    = Frame + 2
+Buffer                  = Frame
+
+(*%F _fptr *)
+public __expand :
+(*%E *)
+public __nexpand :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Size]
+    mov  bx, [bp][Buffer]
+    dec  bx
+    dec  bx
+(*%E *)
+(*%T _jpicall *)
+    push cx
+    dec  ax                            (* Point at size *)
+    dec  ax
+    xchg ax, bx                        (* index address with bx *)
+(*%E *)
+    inc  ax                            (* make room for size *)
+    inc  ax
+    push ax                            (* save size *)
+    mov  cx, [bx]
+    xchg ax, bx
+    xchg bx, cx
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$ReallocNear
+    pop  cx                            (* GetSize *)
+    or   ax, ax                        (* was it resizable? *)
+    jz   $$Return
+    mov  bx, ax
+    mov  [bx], cx
+    inc  ax
+    inc  ax
+$$Return:
+(*%T _jpicall *)
+    pop  cx
+(*%E *)
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __nfree - C Near Heap Deallocation                                  *)
+  (*                                                                     *)
+  (* void _nfree(void near *buffer)                                      *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       _free - in Near Pointer Models                                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$DeallocNear
+
+Buffer                  = Frame
+
+(*%F _fptr *)
+public _free :
+(*%E *)
+public __nfree :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Buffer]
+(*%E *)
+    or   ax, ax
+    jz   $$Return
+(*%T _jpicall *)
+    push bx
+(*%E *)
+    dec  ax
+    dec  ax
+    mov  bx, ax
+    mov  bx, [bx]
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$DeallocNear
+(*%T _jpicall *)
+    pop  bx
+(*%E *)
+$$Return:
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __nmsize - C Query Size of Near Heap Allocation                     *)
+  (*                                                                     *)
+  (* int _nmsize(void near *buffer)                                      *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Size of Original Allocation                           *)
+  (*     Aliases:                                                        *)
+  (*       _msize - in Near Pointer Models                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+Buffer                  = Frame
+
+(*%F _fptr *)
+public __msize :
+(*%E *)
+public __nmsize :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  bx, [bp][Buffer]
+(*%E *)
+(*%T _jpicall *)
+    push bx
+    mov  bx, ax
+(*%E *)
+    mov  ax, [bx][-2]
+    dec  ax
+    dec  ax
+(*%T _jpicall *)
+    pop  bx
+(*%E *)
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* _nearcoreleft - C Query Near Heap Available                         *)
+  (*                                                                     *)
+  (* unsigned _nearcoreleft(void) + C Stack Convention                   *)
+  (*                                                                     *)
+  (* All Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Bytes available on near heap                          *)
+  (*     Aliases:                                                        *)
+  (*       __memavl                                                      *)
+  (*       _coreleft - in Near Memory Models                             *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$AvailNear
+
+(*%F _fptr *)
+public _coreleft :
+(*%E *)
+public __memavl :
+public _nearcoreleft :
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$AvailNear
+    add  ax, -5
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+(*%F _DLL *)
+  (***********************************************************************)
+  (* __memmax - C Query Near Heap Largest Block Available                *)
+  (*                                                                     *)
+  (* unsigned __memmax(void)                                             *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Bytes available on near heap                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$LargestNear
+
+public __memmax :
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$LargestNear
+    add  ax, -5
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+(*%E _DLL *)
+
+section
+  (***********************************************************************)
+  (* __fmalloc - C Far Heap Allocation                                   *)
+  (*                                                                     *)
+  (* void far *_fmalloc(size_t size)                                     *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Request Size                                          *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Huge Allocation                            *)
+  (*     Aliases:                                                        *)
+  (*       malloc - in Far Pointer Models                                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$AllocFar
+
+Size                    = Frame
+
+(*%T _fptr *)
+public _malloc :
+(*%E *)
+public __fmalloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Size]
+(*%E *)
+    push bx
+    or   ax, ax
+    jz   $$BadArg2
+    add  ax, 2
+    jc   $$BadArg
+    push ax
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$AllocFar
+    mov  bx, ax
+    or   bx, dx
+    jz   $$Failed
+$$Continue:
+    mov  es, dx
+    mov  bx, ax
+    pop  es:[bx]
+    inc  ax
+    inc  ax
+$$Return:
+    pop  bx
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$BadArg:
+    xor  ax, ax
+$$BadArg2:
+    cwd
+    jmp  $$Return
+$$Failed:
+    pop  bx
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* __fcalloc - C Far Heap Initialized Allocation                       *)
+  (*                                                                     *)
+  (* void far *_fcalloc(size_t number,size_t size)                       *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Number of units requested                             *)
+  (*       bx    - Unit Size                                             *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Allocation                                 *)
+  (*     Aliases:                                                        *)
+  (*      _calloc - in far pointer models                                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn __fmalloc
+
+Size                    = Frame + 2
+Number                  = Frame
+
+(*%T _fptr *)
+public _calloc :
+(*%E *)
+public __fcalloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][Size]
+    mov  bx, [bp][Number]
+(*%E *)
+    push di
+(*%T _jpicall *)
+    push cx
+    xchg ax, bx
+(*%E *)
+    mul  bx
+    jo   $$Invalid
+    or   ax, ax
+    jz   $$Invalid
+    mov  cx, ax
+(*%F _jpicall *)
+    push ax
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __fmalloc
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    mov  bx, ax
+    or   ax, dx
+    jz   $$Return
+    mov  es, dx
+    mov  di, bx
+    xor  ax, ax
+    shr  cx, 1
+    jnc  $$ClearMem
+    stosb
+$$ClearMem:
+    rep; stosw
+    mov  ax, bx
+$$Return:
+(*%T _jpicall *)
+    pop  cx
+(*%E *)
+    pop  di
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+$$Invalid:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+
+section
+  (***********************************************************************)
+  (* __frealloc - C Far Heap Change Allocation                           *)
+  (*                                                                     *)
+  (* void far *_frealloc(void far *buffer,size_t size)                   *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       cx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       _realloc - in far pointer models                              *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn __fmalloc
+extrn __ffree
+extrn StdMem$ResizeFar
+
+extrn _errno
+
+Size                    = Frame + 4
+Buffer                  = Frame
+
+(*%T _fptr *)
+public _realloc :
+(*%E *)
+public __frealloc :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ds
+    push di
+    push si
+(*%T _jpicall *)
+    mov  es, bx                        (* Seg to es *)
+(*%E *)
+(*%F _jpicall *)
+    les  ax, [bp][Buffer]
+    mov  bx, es
+    mov  cx, [bp][Size]
+(*%E *)
+    mov  si, ax                        (* Ofs to si *)
+    or   ax, bx                        (* is Buffer = NIL *)
+    jnz  $$GoodPtr
+(*%T _jpicall *)
+    mov  ax, cx                        (* if so, just malloc *)
+(*%E *)
+(*%F _jpicall *)
+    push cx
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __fmalloc
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    jmp  $$Return
+$$GoodPtr:
+    or   cx, cx                        (* is size = 0 *)
+    jnz  $$GoodSize
+(*%T _jpicall *)
+    mov  ax, si                        (* if so, just free *)
+(*%E *)
+(*%F _jpicall *)
+    push bx
+    push si
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __ffree
+(*%F _jpicall *)
+    add  sp, 4
+(*%E *)
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+$$GoodSize:
+    inc  cx                            (* make room for size word *)
+    inc  cx
+    push cx
+    dec  si                            (* point si at allocated size *)
+    dec  si
+    mov  di, es
+    mov  dx, cx
+    mov  cx, es:[si]
+    mov  ax, si
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$ResizeFar
+    pop  cx
+    mov  bx, di
+    mov  di, ax
+    or   ax, dx                        (* was it resizable? *)
+    jnz  $$Exit
+(*%T _jpicall *)
+    mov  ax, cx                        (* if not, we have to do it *)
+(*%E *)
+(*%F _jpicall *)
+    push cx
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __fmalloc
+(*%F _jpicall *)
+    inc  sp
+    inc  sp
+(*%E *)
+    mov  di, ax
+    or   ax, dx                        (* Was malloc successful *)
+    jne  $$MallocGood
+(*%T _fdata *)
+    mov  di, _DATA
+    mov  ds, di
+(*%E *)
+    mov  word [_errno], ERROR_NOMEMORY (* if not report error & return *)
+    jmp  $$Return
+$$Exit:                 (* cx = new size | dx:si = pointer to memory *)
+    mov  ds, dx
+    mov  [di], cx
+    inc  di
+    inc  di
+    mov  ax, di
+    jmp  $$Return
+$$MallocGood:
+    push dx
+    push di
+    inc  si
+    inc  si
+    push bx
+    push si
+    push ds
+    mov  ds, bx
+    mov  ax, [si][-2]
+    cmp  ax, cx
+    jae  $$Copy
+    mov  cx, ax
+$$Copy:
+    mov  es, dx
+    test di, 1
+    je   $$CopyEven
+    movsb
+    dec  cx
+$$CopyEven:
+    shr  cx, 1
+    rep; movsw
+    adc  cx, cx
+    rep; movsb
+    pop  ds
+(*%T _jpicall *)
+    pop  ax
+    pop  bx
+(*%E *)
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call __ffree
+(*%F _jpicall *)
+    add  sp, 4
+(*%E *)
+    pop  ax
+    pop  dx
+$$Return:
+    pop  si
+    pop  di
+    pop  ds
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* __fexpand - C Far Heap Change Allocation                            *)
+  (*                                                                     *)
+  (* void far *_fexpand(void far *buffer,size_t size)                    *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       cx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       __expand - in far pointer models                              *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$ReallocFar
+
+Size                    = Frame + 4
+Buffer                  = Frame
+
+(*%T _fptr *)
+public __expand :
+(*%E *)
+public __fexpand :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    les  ax, [bp][Buffer]
+    mov  bx, es
+    mov  cx, [bp][Size]
+(*%E *)
+    push si
+    inc  cx                            (* make room for size word *)
+    inc  cx
+    push cx
+    dec  ax                            (* point ax at allocated size *)
+    dec  ax
+    mov  si, ax                        (* Ofs to si *)
+(*%T _jpicall *)
+    mov  es, bx                        (* Seg to es *)
+(*%E *)
+    mov  dx, cx
+    mov  cx, es:[si]
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$ReallocFar
+    pop  cx
+    mov  si, ax
+    or   ax, dx                        (* was it resizable? *)
+    jz   $$Return
+    mov  es, dx
+    mov  es:[si], cx
+    mov  ax, si
+    inc  ax
+    inc  ax
+$$Return:
+    pop  si
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* __ffree - C Far Heap Deallocation                                   *)
+  (*                                                                     *)
+  (* void _ffree(void far *buffer)                                       *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       _free - in Far Pointer Models                                 *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn StdMem$DeallocFar
+
+Buffer                  = Frame
+
+(*%T _fptr *)
+public _free :
+(*%E *)
+public __ffree :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    les  ax, [bp][Buffer]
+    mov  bx, es
+(*%E *)
+(*%T _jpicall *)
+    push cx
+    mov  es, bx
+(*%E *)
+    mov  cx, bx
+    or   cx, ax
+    jz   $$Return
+    dec  ax
+    dec  ax
+    xchg bx, ax
+    mov  cx, es:[bx]
+    xchg bx, ax
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call StdMem$DeallocFar
+$$Return:
+(*%T _jpicall *)
+    pop  cx
+(*%E *)
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* __fmsize - C Query Size of Far Heap Allocation                      *)
+  (*                                                                     *)
+  (* int _fmsize(void far *buffer)                                       *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Size of Original Allocation                           *)
+  (*     Aliases:                                                        *)
+  (*       _msize - in Far Pointer Models                                *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+Buffer                  = Frame
+
+(*%T _fptr *)
+public __msize :
+(*%E *)
+public __fmsize :
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+    les  bx, [bp][Buffer]
+(*%E *)
+(*%T _jpicall *)
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+    mov  ax, es:[bx][-2]
+    dec  ax
+    dec  ax
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* _farcoreleft - C Query Far Heap Available                           *)
+  (*                                                                     *)
+  (* unsigned long _farcoreleft(void)                                    *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax = 0                                                     *)
+  (*     Aliases:                                                        *)
+  (*       _coreleft                                                     *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+(*%T _fptr *)
+public _coreleft :
+(*%E *)
+public _farcoreleft :
+    xor  ax, ax
+    cwd
+(*%T _fcall *)
+    ret  far 0
+(*%E *)
+(*%F _fcall *)
+    ret  0
+(*%E *)
+
+section
+  (***********************************************************************)
+  (* _halloc - C Huge Far Heap Allocation                                *)
+  (*                                                                     *)
+  (* void huge *halloc(unsigned long size)                               *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Request Size                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Huge Allocation                            *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn __MaxReallocHugeSegments
+extrn DOSALLOCHUGE
+SizeLo                  = CodePtrSize
+SizeHi                  = CodePtrSize + 2
+
+public _halloc :
+(*%F _jpicall *)
+      mov  bx, sp
+      mov  ax, ss:[bx][SizeLo]     (* 64k's of request *)
+      mov  bx, ss:[bx][SizeHi]     (* remainder of request *)
+(*%E *)
+public $halloc :
+      mov  dx,bx              (* test for null request *)
+      or   dx,ax
+      jz   Done               (* null request *)
+      push ax                 (* space for selector *)
+      mov  dx,sp              (* address of selector *)
+      push bx                 (* 64k's of reqest *)
+      push ax                 (* remainder of request *)
+      push ss                 (* segment of selector *)
+      push dx                 (* offset of selector *)
+(*%F SameDS *)
+      mov  dx,seg __MaxReallocHugeSegments
+      mov  es,dx
+      push es:[__MaxReallocHugeSegments]
+(*%E NOT SameDS *)
+(*%T SameDS *)
+      push [__MaxReallocHugeSegments]
+(*%E SameDS *)
+      db   06AH, 000H         (*I push 0-non share,non discardable *)
+      call far DOSALLOCHUGE
+      or   ax, ax             (* did allocation fail ? *)
+      pop  dx                 (* returned segment *)
+      jz   Done               (* no problem *)
+      xor  ax,ax              (* allocation failed-return NULL *)
+      cwd
+Done: db   Ret0@
+
+section
+  (***********************************************************************)
+  (* _hcalloc - C Huge Far Heap Initialized Allocation                   *)
+  (*                                                                     *)
+  (* void huge *hcalloc(unsigned long number,unsigned long size)         *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Number of units requested                             *)
+  (*       dx:cx - Unit Size                                             *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Huge Allocation                            *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn $halloc
+extrn F$UnsMol
+extrn StdMem@HugeShift
+
+NumLo                   = Frame
+NumHi                   = Frame + 2
+SizeLo                  = Frame + 4
+SizeHi                  = Frame + 6
+
+public _hcalloc:
+(*%F _jpicall *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+(*%T _fdata *)
+    push ds
+    mov  di, _DATA
+    mov  ds, di
+(*%E *)
+(*%F _jpicall *)
+    mov  ax, [bp][NumLo]
+    mov  bx, [bp][NumHi]
+    mov  cx, [bp][SizeLo]
+    mov  dx, [bp][SizeHi]
+(*%E *)
+    push dx
+    push cx
+    push bx
+    push ax
+    call far F$UnsMol
+    push ax              (* push part seg *)
+    mov  bx, dx
+(*%T _fcall *)
+    push cs
+(*%E *)
+    call $halloc
+    or   dx, dx       (* did allocation fail ? *)
+    jz   $$Return     (* yes *)
+    mov  es, dx       (* es = allocation's 1'st segment *)
+    or   bx, bx       (* 64k's in allocation ? *)
+    jz   $$Exit       (* no *)
+$$ClearLoop:          (* clear mem 1 64k seg at a time *)
+    mov  cx, 08000H
+    sub  di,di
+    rep; stosw
+    mov  cx, es
+    add  cx, [StdMem@HugeShift]
+    mov  es, cx
+    dec  bx
+    jnz  $$ClearLoop
+$$Exit:
+    sub  di,di
+    pop  cx         (* part segment remainder *)
+    shr  cx, 1
+    rep; stosw
+    jnc  $$NotOdd
+    stosb
+$$NotOdd:
+Done:
+(*%T _fdata *)
+    pop  ds
+(*%E *)
+    pop  di
+(*%F _jpicall *)
+    pop  bp
+(*%E *)
+    db   Ret0@
+$$Return:
+   pop  cx
+   jmp  Done
+
+section
+  (***********************************************************************)
+  (* _hrealloc - C Far Heap Change Huge Allocation                       *)
+  (*                                                                     *)
+  (* void huge *_hrealloc(void huge *buffer,unsigned long size)          *)
+  (*                                                                     *)
+  (* All Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       dx:cx - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       None                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn $hfree
+extrn $halloc
+extrn DOSREALLOCHUGE
+
+Buffer                  = Frame
+SizeLo                  = Frame + 4
+SizeHi                  = Frame + 6
+
+public _hrealloc :
+(*%T StkParam *)
+      push  bp
+      mov   bp, sp
+      mov   dx,[bp][SizeHi]    (* 64'ks requested *)
+      mov   cx,[bp][SizeLo]    (* remainder requested *)
+      mov   bx,[bp][2][Buffer] (* old segment *)
+      pop   bp
+(*%E StkParam *)
+      mov   ax,cx
+      or    bx,bx              (* valid segment ? *)
+      jnz   Valid              (* yes *)
+      mov   bx,dx              (* allocate only *)
+      jmp   near $halloc
+Valid:or    ax,dx              (* non-zero request ? *)
+      jnz   Not0               (* not 0 byte requested *)
+      call  $hfree             (* free block only *)
+      jmp   Fail
+Not0: push  dx                 (* 64'ks requested *)
+      push  cx                 (* remainder requested *)
+      push  bx                 (* old segment *)
+      xchg  bx,dx              (* dx = old seg. bx:cx=request size *)
+      call  far DOSREALLOCHUGE (* attempt to grow/shrink cur block *)
+      or    ax, ax
+      jz    Done               (* sucess *)
+Fail: xor   ax,ax              (* failed-return 0 *)
+      cwd
+Done: db  Ret0@
+section
+  (***********************************************************************)
+  (* hfree - Standard Far Heap Deallocation for blocks                   *)
+  (*                      Allocated with halloc,hcalloc,or hrealloc      *)
+  (*                                                                     *)
+  (*   PROCEDURE DeallocHuge(Addr:FarADDRESS):BOOLEAN                    *)
+  (*                                                                     *)
+  (* OS/2 & Extender Memory Models                                       *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Far Pointer to memory block                           *)
+  (*     Trashes:                                                        *)
+  (*       ax                                                            *)
+  (*     Return:  none                                                   *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn DOSFREESEG
+
+public _hfree :
+(*%T StkParam *)
+    mov  bx,sp
+    mov  bx,ss:[bx][2][CodePtrSize]  (* segment to be freed *)
+(*%E StkParam *)
+public $hfree:
+    push bx             (* push segment *)
+    call far DOSFREESEG
+    db   Ret0@
+
+end

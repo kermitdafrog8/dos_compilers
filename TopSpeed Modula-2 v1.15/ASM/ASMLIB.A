@@ -1,0 +1,1548 @@
+(* Copyright (C) 1987 Jensen & Partners International *)
+(*Global equates *)
+
+(*
+   The "ROM" string denotes those sections requiring modification when
+   creating ROMmable code.
+*)
+
+(*ROM
+   A number of these routines make use of the Int 8 timer tick - they are
+   marked with an "(*INT8*)" string.  If the target machine does not provide
+   a user timer tick via Int 8, then 1) don't use any of the facilities that
+   need it; or 2) implement an Int 8.
+*)
+
+True=1
+False=0
+
+Timer=40H  (* 8253-5 Programmable Interval Timer *)
+PPIport=60H  (* 8255A-5 Programmable Peripheral Interface *)
+KBCtrl=61H
+
+module AsmLib
+
+segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$HashString : ssize= 12; segm=10; offs=8; modulus=6;
+  push bp; mov bp,sp
+  push ds; push es; push si; push di;
+  sub dx,dx
+  sub ax,ax
+  mov cx,[bp][ssize]
+  jcxz $Exit
+  mov ds,[bp][segm]
+  mov si,[bp][offs]
+  sub bx,bx
+  mov di,[bp][ssize]
+$loop:
+  lodsb
+  or al,al
+  jz $EndLoop
+  xor dl,al
+  rol dx,1
+  rol dx,1
+  rol dx,1
+  add dx,di
+  sub dx,cx
+  loop $loop
+$EndLoop:
+  mov ax,dx
+  sub dx,dx
+  div word [bp][modulus]
+$Exit:
+  mov ax,dx
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Move : s_seg=14; s_ofs=12; d_seg=10; d_ofs=8; len=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  mov si,[bp][s_ofs]
+  mov di,[bp][d_ofs]
+  mov ax,[bp][s_seg]
+  mov bx,[bp][d_seg]
+  mov cx,si
+  mov dx,di
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr dx,1
+  shr dx,1
+  shr dx,1
+  shr dx,1
+  add ax,cx
+  add bx,dx
+  mov cx,[bp][len]
+  and si,000FH;
+  and di,000FH;
+  cld
+  mov ds,ax
+  mov es,bx
+  cmp ax,bx
+  ja $Forwards    (* (at least a paragraph apart) *)
+  jb $Backwards
+  cmp si,di
+  ja $Forwards
+  je $Exit
+  cmp si,di
+  jae $Forwards
+$Backwards:
+  add si,cx
+  add di,cx
+  dec si
+  dec di
+  std
+$Forwards:
+  rep
+  movsb
+  cld
+$Exit:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 10
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$WordMove : s_seg=14; s_ofs=12; d_seg=10; d_ofs=8; len=6;
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  mov si,[bp][s_ofs]
+  mov di,[bp][d_ofs]
+  mov ax,[bp][s_seg]
+  mov bx,[bp][d_seg]
+  mov cx,si
+  mov dx,di
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr dx,1
+  shr dx,1
+  shr dx,1
+  shr dx,1
+  add ax,cx
+  add bx,dx
+  mov cx,[bp][len]
+  and si,000FH
+  and di,000FH
+  cld
+  mov ds,ax
+  mov es,bx
+  cmp ax,bx
+  ja $Forwards    (* (at least a paragraph apart) *)
+  jb $Backwards
+  cmp si,di
+  ja $Forwards
+  je $Exit
+  cmp si,di
+  jae $Forwards
+$Backwards:
+  mov ax,cx
+  dec ax
+  shl ax,1
+  add si,ax
+  add di,ax
+  std
+$Forwards:
+  rep
+  movsw
+  cld
+$Exit:
+  pop di; pop si; pop es; pop ds;
+  pop bp; ret far 10
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Fill : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di
+  mov cx,[bp][len]
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  mov ah,al
+  shr cx,1
+  rep
+  stosw
+  jnc $Exit
+  stosb
+$Exit:
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$WordFill : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di
+  mov cx,[bp][len]
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  rep
+  stosw
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+
+public @NormPtr :
+  mov cx,ax
+  and ax,000FH
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  shr cx,1
+  add dx,cx
+  ret near 0
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @NormPtr
+
+public AsmLib$AddAddr : a_H=10; a_L=8; c_val=6
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  add ax,[bp][c_val]
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @NormPtr
+
+public AsmLib$SubAddr : a_H=10; a_L=8; c_val=6
+  push bp; mov bp,sp
+  mov ax,[bp][a_L]
+  mov dx,[bp][a_H]
+  sub ax,[bp][c_val]
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @NormPtr
+
+public AsmLib$IncAddr : a_ptrH=10; a_ptrL=8; incr=6
+  push bp; mov bp,sp
+  push ds
+  lds bx,[bp][a_ptrL]
+  mov ax,[bx]
+  mov dx,[bx][2]
+  add ax,[bp][incr]
+  jnc $NoOverflow
+  add dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+  pop ds
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @NormPtr
+
+public AsmLib$DecAddr : a_ptrH=10; a_ptrL=8; decr=6
+  push bp; mov bp,sp
+  push ds
+  lds bx,[bp][a_ptrL]
+  mov ax,[bx]
+  mov dx,[bx][2]
+  sub ax,[bp][decr]
+  jnc $NoOverflow
+  sub dx,1000H
+$NoOverflow:
+  call near @NormPtr
+  mov [bx],ax
+  mov [bx][2],dx
+  pop ds
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @UserBreak
+
+public AsmLib$UserBreak :
+  mov bp,sp
+  jmp @UserBreak
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @Abort
+
+public AsmLib$FatalError:
+(* three parameters len,a_ptrH,a_ptrL *)
+  pop ax
+(*public AsmLib@FatalError:*)
+  pop ax
+  pop si
+  pop ds
+  pop cx
+  sub sp,cx
+  sub sp,2
+  mov di,sp
+  push ss
+  pop es
+  jcxz $abort
+$Loop:
+  lodsb
+  or al,al
+  jz $EndLoop
+  stosb
+  loop $Loop
+$EndLoop:
+  mov al,36 (* '$' *)
+  stosb
+  push es
+  pop ds
+  mov dx,sp
+  mov ah,9
+  int 21H
+$abort:
+  jmp @Abort
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @D_DATA
+extrn @ErrorCode
+
+public AsmLib$SetReturnCode : retcode=6
+  push bp ; mov bp, sp; push ds
+  mov ax,[bp][retcode]
+  mov ds, cs:[@D_DATA]
+  mov [@ErrorCode],al
+  pop ds; pop bp; ret far 2
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @SetBreakInterrupt
+
+public AsmLib$EnableBreakCheck :
+  call @SetBreakInterrupt
+  ret far 0
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @ResetBreakInterrupt
+
+public AsmLib$DisableBreakCheck :
+  push ds
+  call @ResetBreakInterrupt
+  sub ax,ax
+  mov ds,ax
+  pushf
+  cli
+  mov word ds:[23H*4], DummyBreak
+  mov word ds:[23H*4][2],cs
+  popf
+  pop ds
+  ret far 0
+
+DummyBreak :
+  iret
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$SetJmp :
+  push bp
+  mov bp,sp
+  les di,[bp][6]  (* buffer *)
+  push ss
+  pop ds
+  mov si,sp
+  movsw
+  movsw
+  movsw
+  mov ax,sp
+  stosw
+  sub ax,ax
+JmpReturn:
+  pop bp
+  ret far 4
+
+public AsmLib$LongJmp :
+  add sp,4  (* remove return *)
+  pop ax    (* return value *)
+  pop si    (* buffer *)
+  pop ds
+  mov sp,[si][6]
+  push ss
+  pop es
+  mov di,sp
+  movsw
+  movsw
+  movsw
+  jmp JmpReturn
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$ScanR : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  repne
+  scasb
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$ScanL : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di;
+  mov cx,[bp][len]
+  jcxz ExitScan
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  std
+  repne
+  scasb
+  cld
+  jne ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$ScanNeR : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  repe
+  scasb
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$ScanNeL : d_seg=12; d_ofs=10; len=8; val=6
+  push bp; mov bp,sp
+  push es; push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+  les di,[bp][d_ofs]
+  mov ax,[bp][val]
+  std
+  repe
+  scasb
+  cld
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di; pop es
+  pop bp; ret far 8
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Compare : s_seg=14; s_ofs=12; d_seg=10; d_ofs=8; len=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  mov cx,[bp][len]
+  jcxz ExitScan
+  lds si,[bp][s_ofs]
+  les di,[bp][d_ofs]
+  repe
+  cmpsb
+  je ExitScan
+  inc cx
+ExitScan:
+  mov ax,[bp][len]
+  sub ax,cx
+  pop di; pop si; pop es; pop ds;
+  pop bp; ret far 10
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Sound : FreqHz=6
+(*ROM
+   Generate sounds via the speaker.  The machine may not have a speaker, or it
+   may be accessed in a different way.
+*)
+  push bp; mov bp,sp
+  mov bx,[bp][FreqHz]
+  mov ax,34DDH  (* 1.193181 MHz *)
+  mov dx,0012H
+  cmp dx,bx
+  jnb SOU9
+  div bx
+  mov bx,ax
+  in al,PPIport+1
+  test al,03H
+  jnz SOU1
+  or al,03H
+  out PPIport+1,al
+                (* 10              11       011     0   *)
+  mov al,0B6H  (* Select timer 2, LSB,MSB, mode 3, bin *)
+  out Timer+3,al
+SOU1:
+  mov al,bl
+  out Timer+2,al
+  mov al,bh
+  out Timer+2,al
+SOU9:
+  pop bp; ret far 2
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$NoSound :
+(*ROM
+   Stop producing sound via the speaker.  See the above comments.
+*)
+  in al,PPIport+1
+  and al,0FCH
+  out PPIport+1,al
+  ret far 0
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Speaker : TotalTime=10; OnTime=8; OffTime=6
+(*ROM
+   Generate sounds via the speaker.  See the above comments.
+*)
+  push bp; mov bp,sp
+  in al,KBCtrl
+  push ax
+  mov bx,TotalTime
+$MainLoop:
+  and al,0FCH
+  jmp $Next
+$Next:
+  out KBCtrl,al
+  mov cx,OffTime
+$OffLoop:
+  loop $OffLoop
+  or al,2
+  out KBCtrl,al
+  mov cx,OnTime
+$OnLoop:
+  loop $OnLoop
+  dec bx
+  jnz $MainLoop
+  pop ax
+  out KBCtrl,al
+  ret far 6
+
+section;
+
+segment D_DATA(M_DATA,28H)
+segment INITCODE(CODE,28H)
+segment C_CODE(CODE,28H)
+group G_CODE(INITCODE,C_CODE)
+
+select D_DATA
+
+@DelayFactor : org 2
+Iter         : org 2
+Count        : org 2
+Semaphor     : org 2
+
+select C_CODE
+
+extrn @D_DATA
+
+public AsmLib$Delay : p_time=6
+  push bp; mov bp,sp; push ds
+  mov  ax, [bp][p_time]
+  mov ds, cs:[@D_DATA]
+  mov  ds:[Iter], ax
+MoreDelay:
+  cmp word ds:[Iter],0
+  jz   DelayEnd
+  mov  ax,ds:[@DelayFactor]
+  mov  ds:[Count],ax
+Here:
+  mov  ax, ds:[Count]
+  or   ax,ax
+  jz   Here2
+  dec word ds:[Count]
+  jmp  Here
+Here2:
+  dec word ds:[Iter]
+  jmp  MoreDelay
+DelayEnd:
+  pop ds; pop bp; ret far 2
+
+
+(* the Int 1C ISR, installed below *)
+
+TimeTrap:
+  push ds
+  mov ds, cs:[@D_DATA]
+  inc word ds:[Semaphor]        (* used when establishing delay factor *)
+  pop ds
+  iret
+
+
+select INITCODE
+
+(* calibrate timer *)
+
+(*ROM
+(*INT8*)
+  This routine uses the INT 1C hardware tick, instead of the INT 8 user timer
+  tick.  It relies on the hardware tick happening at the rate defined for
+  PC's.
+*)
+
+  xor ax,ax
+  mov es,ax
+  push es:[70H]
+  push es:[72H]
+  mov ds, cs:[@D_DATA]
+  mov word ds:[Semaphor],0
+  mov word ds:[@DelayFactor],55
+  mov word ds:[Iter],0
+  mov word ds:[Count],0
+  cli
+  mov word es:[70H],TimeTrap
+  mov es:[72H],cs
+  sti
+Estab1:
+  cmp word ds:[Semaphor],2
+  jne  Estab1
+Estab2:
+  cmp word ds:[Semaphor],3
+  jz   Estab5
+  mov  ax,ds:[@DelayFactor]
+  mov  ds:[Count],ax
+Estab3:
+  mov  ax,ds:[Count]
+  or   ax,ax
+  jz   Estab4
+  dec word ds:[Count]
+  jmp  Estab3
+Estab4:
+  inc word ds:[Iter]
+  jmp  Estab2
+Estab5:
+  cli
+  pop es:[72H]
+  pop es:[70H]
+  sti
+  mov ax,ds:[Iter]
+  mov ds:[@DelayFactor],ax
+
+  in al,PPIport+1
+  and al,0FCH
+  out PPIport+1,al
+
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+
+axr=0;  bxr=2;  cxr=4;  dxr=6;  bpr=8;
+sir=10; dir=12; dsr=14; esr=16; flags=18
+
+public @LoadRegisters :
+(* loads register in register pack pointed to by DS:SI *)
+  push  [si][dsr]
+  push  [si][sir]
+  mov  ax,[si][axr]
+  mov  bx,[si][bxr]
+  mov cx,[si][cxr]
+  mov  dx,[si][dxr]
+  mov  di,[si][dir]
+  mov  bp,[si][bpr]
+  mov  es,[si][esr]
+  pop  si
+  pop  ds
+  ret near 0
+
+public @SaveRegisters :
+(* saves register in register pack pointed to by pointer on stack *)
+  push ds
+  push si
+  mov si,sp
+  lds si,ss:[si][6]
+  pushf
+  pop  [si][flags]
+  pop  [si][sir]
+  pop  [si][dsr]
+  mov  [si][axr],ax
+  mov  [si][bxr],bx
+  mov  [si][cxr],cx
+  mov  [si][dxr],dx
+  mov  [si][dir],di
+  mov  [si][bpr],bp
+  mov  [si][esr],es
+  ret near 4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @D_DATA
+extrn @LoadRegisters
+extrn @SaveRegisters
+extrn @InProgramFlag
+extrn @StopProgramFlag
+extrn AsmLib$FatalError
+
+msg1 : db 'Fatal error: Dos reentered',0
+
+public AsmLib$Dos : p_seg=8; p_off=6
+(*ROM
+   Perform a DOS call.  Since you're in ROM, DOS probably doesn't exist.  All
+   references to this procedure should be removed.
+*)
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  pushf
+  mov ds, cs:[@D_DATA]
+  cmp byte [@InProgramFlag], 1
+  je ok
+  cld
+  mov ax,100
+  push ax
+  push cs
+  mov ax, msg1
+  push ax
+  push cs
+  call near AsmLib$FatalError
+ok:
+  cmp byte [@StopProgramFlag], 1
+  je Stop                     (* wait for timer to stop us *)
+  mov byte [@InProgramFlag], 0
+  lds  si,[bp][p_off]
+  push ds                     (* save register pointer *)
+  push si
+  call @LoadRegisters
+
+  int  21H
+
+  call @SaveRegisters
+
+  mov ds, cs:[@D_DATA]
+  mov byte [@InProgramFlag], 1
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 4
+Stop:
+  sti
+  jmp Stop
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @LoadRegisters
+extrn @SaveRegisters
+
+public AsmLib$Intr : p_seg=10; p_off=8; p_num=6
+(*ROM
+   Perform a software interrupt.  This procedure uses self-modifying code to
+   generate an arbitrary interrupt.
+*)
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  pushf
+  lds  si,[bp][p_off]
+  push ds                     (* save register pointer *)
+  push si
+
+  mov al,[bp][p_num]
+  cli
+  mov cs:[InterruptNo],al
+
+  call @LoadRegisters
+
+  db   0CDH                   (* INT *)
+InterruptNo :
+  db   0
+
+  call @SaveRegisters
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @D_DATA
+extrn @PSP
+
+public AsmLib$Environment : p_n=6
+(*ROM
+   Get an environment string.  The environment is set up by DOS, which
+   probably doesn't exist.
+*)
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  mov  ds, cs:[@D_DATA]
+  mov  ds, [@PSP]
+  mov  es, ds:[2CH]
+  mov  di,0
+  mov  cx,[bp][p_n]
+  xor  ax,ax
+  jcxz  EnFound
+  cmp  byte es:[di],0
+  je  EnFound
+  mov  bx,cx
+EnSeMo:
+  mov  cx,8000H
+  repne
+  scasb
+  cmp  es:[di],al
+  je  EnFound
+  dec  bx
+  jnz  EnSeMo
+EnFound:
+  mov dx,es
+  mov ax,di
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 2
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn AsmLib@CommandLine
+
+comma=44
+space=32
+
+public AsmLib$ParamStr : p_sl=12; p_sh=10; p_s=8; p_n=6
+(*ROM
+   Get an argument from the command line.  Since DOS probably doesn't exist,
+   there won't be a command line.
+*)
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  les di,[bp][p_s]
+  mov  ax, seg AsmLib@CommandLine
+  mov ds,ax
+  lds si,ds:[AsmLib@CommandLine]
+  mov cx,[bp][p_n]
+  jcxz $Finished
+  jmp $Loop1
+$Loop:
+  lodsb
+  cmp al,0
+  je $Finished
+  cmp al,comma
+  je $Loop1
+  cmp al,space
+  ja $Loop
+  (* remove leading separators *)
+$Loop1:
+  lodsb
+  cmp al,0
+  je $Finished
+  cmp al,comma
+  je $Loop1
+  cmp al,space
+  jbe $Loop1
+  loop $Loop
+
+  mov cx,[bp][p_sl]
+  add cx,di
+
+$Loop2:
+  stosb
+  cmp di,cx
+  je $Exit
+  lodsb
+  cmp al,0
+  je $Finished
+  cmp al,comma
+  je $Finished
+  cmp al,space
+  ja $Loop2
+$Finished:
+  sub al,al
+  stosb
+$Exit:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 8
+
+public AsmLib$ParamCount :
+(*ROM
+   Return the number of arguments on the command line.  See the above comment.
+*)
+  push di; push si
+  push bx
+  mov si,sp
+  sub di,di
+$Loop3:
+  inc di
+  mov ax,1
+  push ax
+  push ss
+  push si
+  push di
+  call far AsmLib$ParamStr
+  cmp byte ss:[si],0
+  jne $Loop3
+  dec di
+  mov ax,di
+  pop bx
+  pop si; pop di
+  ret far 0
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Caps : Slen=10; Sseg=8; Sofs=6
+  push bp; mov bp,sp
+  push ds; push si
+
+  lds si,[bp][Sofs]
+  mov cx,[bp][Slen]
+$loop:
+  lodsb
+  cmp al,97 (* 'a' *)
+  jb $notSmall
+  cmp al,122 (* 'z' *)
+  ja $notSmall
+  sub al,32
+  mov [si][-1],al
+$notSmall:
+  or al,al
+  loopnz $loop
+
+  pop si; pop ds
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Length : Slen=10; Sseg=8; Sofs=6
+  push bp; mov bp,sp
+  push es; push di
+
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne ExitLength
+  inc cx
+ExitLength:
+  mov ax,[bp][Slen]
+  sub ax,cx
+  pop di; pop es
+  pop bp; ret far 6
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$CompareStr : S1len=16; S1seg=14; S1ofs=12; S2len=10; S2seg=8; S2ofs=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  lds si,[bp][S1ofs]
+  les di,[bp][S2ofs]
+  mov bx,[bp][S1len]
+  mov dx,[bp][S2len]
+  mov cx,bx
+  cmp cx,dx
+  jb CompareLoop
+  mov cx,dx
+CompareLoop:
+  lodsb
+  scasb
+  jne NotEqual
+  or al,al
+  loopne CompareLoop
+  je Equal
+  cmp bx,dx
+  je Equal
+  ja CheckSi
+  cmp byte es:[di],0
+  je Equal
+Less:
+  mov ax,-1
+  jmp Return
+CheckSi:
+  cmp byte [si],0
+  je Equal
+Greater:
+  mov ax,1
+  jmp Return
+NotEqual:
+  cmp al,es:[di][-1]
+  jb Less
+  jmp Greater
+Equal:
+  sub ax,ax
+Return:
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far 12
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+
+public AsmLib$Concat : NSlen=22; NSseg=20; NSofs=18; S1len=16; S1seg=14; S1ofs=12; S2len=10; S2seg=8; S2ofs=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  mov cx,[bp][S2len]
+  sub sp,cx
+  lds si,[bp][S2ofs]
+  push ss
+  pop es
+  mov di,sp
+  rep
+  movsb
+
+  mov bx,[bp][NSlen]
+  lds si,[bp][S1ofs]
+  les di,[bp][NSofs]
+
+  mov cx,[bp][S1len]
+CopyLoop1:
+  lodsb
+  or al,al
+  jz Finished1
+  stosb
+  dec bx
+  loopnz CopyLoop1
+  jz Exit
+Finished1:
+  push ss
+  pop ds
+  mov si,sp
+  mov cx,[bp][S2len]
+CopyLoop2:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop2
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  add sp,[bp][S2len]
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far NSlen-4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Append : NSlen=16; NSseg=14; NSofs=12; Slen=10; Sseg=8; Sofs=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  les di,[bp][NSofs]
+
+  mov cx,[bp][NSlen]
+  sub al,al
+  repne
+  scasb
+  jne Exit
+  dec di
+  mov bx,cx
+  inc bx
+  lds si,[bp][Sofs]
+  mov cx,[bp][Slen]
+CopyLoop:
+  lodsb
+  stosb
+  or al,al
+  jz Exit
+  dec bx
+  loopnz CopyLoop
+  jz Exit
+  sub al,al
+  stosb
+Exit:
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far NSlen-4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Copy : NSlen=16; NSseg=14; NSofs=12; Slen=10; Sseg=8; Sofs=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax,[bp][Slen]
+  sub ax,cx
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+  lds si,[bp][ Sofs]
+  les di,[bp][NSofs]
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far NSlen-4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Slice : NSlen=20; NSseg=18; NSofs=16; Slen=14; Sseg=12; Sofs=10; P=8; L=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc
+  inc cx
+LengthCalc:
+  mov ax,[bp][Slen]
+  sub ax,cx
+
+  mov bx,[bp][P]
+  sub ax,bx
+  ja NotBeyondEnd
+  sub ax,ax
+NotBeyondEnd:
+  cmp ax,[bp][L]
+  jb OffEnd
+  mov ax,[bp][L]
+OffEnd:
+  lds si,[bp][Sofs]
+  add si,[bp][P]
+  mov cx,[bp][NSlen]
+  cmp ax,cx
+  ja SourceBigger
+  mov cx,ax
+SourceBigger:
+  les di,[bp][NSofs]
+  rep
+  movsb
+  jae Exit
+  sub al,al
+  stosb
+Exit:
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far NSlen-4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+public AsmLib$Pos : Slen=16; Sseg=14; Sofs=12; Plen=10; Pseg=8; Pofs=6
+  push bp; mov bp,sp
+  push ds; push si; push es; push di
+
+  les di,[bp][Sofs]
+  mov cx,[bp][Slen]
+  mov bx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc1
+  inc cx
+LengthCalc1:
+  sub bx,cx
+  les di,[bp][Pofs]
+  mov cx,[bp][Plen]
+  mov dx,cx
+  sub al,al
+  repne
+  scasb
+  jne LengthCalc2
+  inc cx
+LengthCalc2:
+  sub dx,cx
+  sub bx,dx
+  jb NotFound
+
+  mov ds,[bp][Sseg]
+  sub ax,ax
+SearchLoop:
+  mov si,[bp][Sofs]
+  add si,ax
+  mov di,[bp][Pofs]
+  mov cx,dx
+  repe
+  cmpsb
+  je Found
+  inc ax
+  cmp ax,bx
+  jbe SearchLoop
+NotFound:
+  mov ax,0FFFFH
+Found:
+Exit:
+  pop di; pop es; pop si; pop ds
+  pop bp; ret far Slen-4
+
+section ;
+segment D_DATA(M_DATA,28H); segment C_CODE(CODE,28H); group G_CODE(C_CODE);
+
+(*ROM
+   These values are for direct-memory access to the screen memory.
+*)
+
+ColorStatusReg    =03DAH  (* port value for color status register *)
+ColorRetrace      =1      (* mask in color status for horiz. retrace *)
+ColorVertRetrace  =8      (* mask in color status for vert. retrace *)
+
+extrn @D_DATA
+
+select D_DATA
+
+public AsmLib@ActivePage : org 1
+public AsmLib@IsColor    : org 1
+public AsmLib@IsSnow     : org 1
+
+select C_CODE
+
+public AsmLib@BWSeg      : dw 0B000H
+public AsmLib@ColorSeg   : dw 0B800H
+
+public AsmLib$BufferWrite : BuffH=16; BuffL=14; StrH=12; StrL=10; Len=8; Attr=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  mov cx,[bp][Len]
+  jcxz $Exit
+  mov bx,[bp][Attr]
+  lds si,[bp][StrL]
+  les di,[bp][BuffL]
+LDoWrite:
+  cld
+  mov ah,bl
+LWriteLoop:
+  lodsb
+  stosw
+  loop LWriteLoop
+$Exit:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far BuffH-4
+
+public AsmLib$PalXlat : ToH=18; ToL=16; FromH=14; FromL=12; Len=10; PalH=8; PalL=6
+  push bp; mov bp,sp
+
+  push ds; push es; push si; push di
+  mov cx,[bp][Len]
+  jcxz PXExit
+  sub sp,10
+  mov di,sp
+(* copy pallette onto stack *)
+  lds si,[bp][PalL]
+  push ss
+  pop es
+  mov cx,5
+  rep
+  movsw
+  mov bx,sp
+  lds si,[bp][FromL]
+  les di,[bp][ToL]
+  mov cx,[bp][Len]
+PXloop:
+  lodsw
+  xchg al,ah
+  db 36H        (* ss override for xlat *)
+  xlat
+  xchg al,ah
+  stosw
+  loop PXloop
+  add sp,10
+
+PXExit:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far ToH-4
+
+public AsmLib$BufferToScreen : X=14; Y=12; SourceH=10; SourceL=8; Len=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  lds si,[bp][SourceL]
+  mov ax,[bp][Y]
+  mov di,[bp][X]
+
+  mov cl,4
+  shl ax,cl  (* 16Y *)
+  add di,ax
+  shl ax,1
+  shl ax,1
+  add di,ax  (* +64Y=80Y *)
+  shl di,1
+  mov cx,[bp][Len]
+  mov es,cs:[AsmLib@BWSeg]
+  push ds
+  mov ds, cs:[@D_DATA]
+  cmp byte [AsmLib@IsColor],True
+  jne BtsIsBW
+  cmp byte [AsmLib@IsSnow],True
+  mov es,cs:[AsmLib@ColorSeg]
+  jne BtsNoSnowMove
+  pop ds
+  pushf
+  mov dx,ColorStatusReg
+  mov bl,1
+  cld
+  sti
+  push bp
+BtsLoop:
+  lodsw
+  mov bp,ax
+BtsWaitNotHoriz:
+  in al,dx
+  rcr al,1
+  jc BtsWaitNotHoriz
+  cli
+BtsWait:
+  in al,dx
+  rcr al,1
+  jnc BtsWait
+  xchg ax,bp
+  stosw
+  sti
+  loop BtsLoop
+  pop bp
+  popf
+  jmp BtsRet
+BtsNoSnowMove:
+BtsIsBW:
+  pop ds
+  cld
+  rep
+  movsw
+BtsRet:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far X-4
+
+public AsmLib$ScreenToBuffer : X=14; Y=12; DestH=10; DestL=8; Len=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  les di,[bp][DestL]
+  mov ax,[bp][Y]
+  mov si,[bp][X]
+
+  mov cl,4
+  shl ax,cl  (* 16Y *)
+  add si,ax
+  shl ax,1
+  shl ax,1
+  add si,ax  (* +64Y=80Y *)
+  shl si,1
+  mov cx,[bp][Len]
+  mov ds, cs:[@D_DATA]
+  cmp byte [AsmLib@IsColor],True
+  mov ds, cs:[AsmLib@BWSeg]
+  jne StbIsBW
+  mov ds, cs:[@D_DATA]
+  cmp byte [AsmLib@IsSnow],True
+  mov ds, cs:[AsmLib@ColorSeg]
+  jne StbNoSnowMove
+  pushf
+  mov dx,ColorStatusReg
+  add cx,cx              (* bytes *)
+  mov bl,1
+  cld
+StbLoop:
+StbWaitNotHoriz:
+  in al,dx
+  rcr al,1
+  jc StbWaitNotHoriz
+  cli
+StbWait:
+  in al,dx
+  rcr al,1
+  jnc StbWait
+  movsb
+  sti
+  loop StbLoop
+  popf
+  jmp StbRet
+StbNoSnowMove:
+StbIsBW:
+  cld
+  rep
+  movsw
+StbRet:
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far X-4
+
+public AsmLib$SetVideoPage : NewPage=6
+  push bp; mov bp,sp; push ds
+  mov ax,[bp][NewPage]
+  mov ds, cs:[@D_DATA]
+  mov [AsmLib@ActivePage],al
+  mov ah,5
+  push bp
+  int 10H
+  pop bp
+  mov ax,[bp][NewPage]
+  mov bx,100H
+  mul bx
+  add ax,0B800H
+  mov cs:[AsmLib@ColorSeg],ax
+  pop ds; pop bp; ret far NewPage-4
+
+public AsmLib$ActivePage :
+  push ds
+  mov ds, cs:[@D_DATA]
+  mov al, [AsmLib@ActivePage]
+  cbw
+  pop ds; ret far 0
+
+(* initialize screen type *)
+public AsmLib$InitScreenType : IsSnow=6
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+  mov ds, cs:[@D_DATA]
+  mov byte [AsmLib@IsColor],True
+  mov byte [AsmLib@ActivePage],0
+  mov ah,15
+  push bp
+  int 10H
+  pop bp
+  cmp al,7
+  jne LIsColor
+  mov byte [AsmLib@IsColor],False
+LIsColor:
+  mov ax,[bp][IsSnow]
+  mov [AsmLib@IsSnow],al
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far 2
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+SaveSS : dw 0
+SaveSP : dw 0
+
+public AsmLib$DosExec : NameLen=14; NameSeg=12; NameOfs=10; ParamSeg=8; ParamOfs=6
+(*ROM
+   Execute a DOS program.  Even if, for some very strange reason, a ROMmed
+   program could call this, it wouldn't work - this procedure needs to alter
+   certain values in the code segment (which is presumably ROM).
+*)
+  push bp; mov bp,sp
+  push ds; push es; push si; push di
+
+  pushf
+  mov ax,4B00H
+  mov ds,[bp][NameSeg]
+  mov dx,[bp][NameOfs]
+  mov es,[bp][ParamSeg]
+  mov bx,[bp][ParamOfs]
+  push bp
+  push ss:[2EH]            (* where DOS doth tread *)
+  push ss:[30H]
+  push cs:[SaveSS]                (* to restore code seg *)
+  push cs:[SaveSP]
+  mov cs:[SaveSS],ss
+  mov cs:[SaveSP],sp
+  int 21H
+  mov ss,cs:[SaveSS]
+  mov sp,cs:[SaveSP]
+  pop cs:[SaveSP]
+  pop cs:[SaveSS]
+  pop ss:[30H]
+  pop ss:[2EH]
+  pop bp
+  jc ExitExec
+  sub ax,ax
+ExitExec:
+  popf
+  pop di; pop si; pop es; pop ds
+  pop bp; ret far NameLen-4
+
+section ; segment C_CODE(CODE,28H); group G_CODE(C_CODE); select C_CODE
+
+extrn @D_DATA
+extrn @InProgramFlag
+
+public AsmLib$SetInProgramFlag : on=6
+  push bp; mov bp,sp; push ds
+  mov al, [bp][on]
+  mov ds, cs:[@D_DATA]
+  mov [@InProgramFlag], al
+  pop ds; pop bp; ret far 2
+
+public AsmLib$GetInProgramFlag :
+  push ds
+  sub ah,ah
+  mov ds, cs:[@D_DATA]
+  mov al, [@InProgramFlag]
+  pop ds
+  ret far 0
+
+section
+
+extrn @D_DATA
+extrn @PSP
+
+segment INITCODE(CODE,28H); group G_CODE(INITCODE)
+
+segment D_DATA(M_DATA,28H);
+
+select D_DATA
+
+public AsmLib@CommandLine : org 4
+public AsmLib@PSP : org 2
+
+select INITCODE
+
+(*ROM
+   All of this initialization deals with the PSP and command line.  It should
+   be safe to just comment it out.
+*)
+
+(* set up PSP and command line *)
+
+  mov ds, cs:[@D_DATA]
+  mov ds, [@PSP]
+  mov ax, D_DATA
+  mov es, ax
+  mov es:[AsmLib@PSP],ds
+  mov es:[AsmLib@CommandLine][2],ds
+  mov word es:[AsmLib@CommandLine],81H
+
+(* make command line into asciiz string *)
+
+  mov byte bl,ds:[80H]   (* make it a asciiz string *)
+  xor bh,bh
+  add bx,81H
+  mov byte [bx],0
+  mov bx,81H
+again:
+  cmp byte [bx],0
+  je EndFound
+  cmp byte [bx],32   (* skip blanks *)
+  jne StartFound
+  inc bx
+  jmp again
+EndFound:
+StartFound:
+  mov  es:[AsmLib@CommandLine],bx
+
+end
+

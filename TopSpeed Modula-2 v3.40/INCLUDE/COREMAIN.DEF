@@ -1,0 +1,63 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMAIN.DEF - Modula-2 interface to COREMAIN.A                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# save *)
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+DEFINITION MODULE CoreMain;
+
+TYPE
+    ParamBlock = RECORD
+		     Env: CARDINAL;
+		     Com: FarADDRESS;
+		     FCB5: FarADDRESS;
+		     FCB6: FarADDRESS;
+                 END;
+
+PROCEDURE exit(Code: INTEGER);
+PROCEDURE _exit(Code: INTEGER);
+
+(*# save *)
+(*# call(reg_saved => (ds, si, di,st1,st2)) *)
+
+PROCEDURE _exec(Path: ARRAY OF CHAR; VAR PBlock: ParamBlock): CARDINAL;
+PROCEDURE _get_retcode(): CARDINAL;
+(*# restore *)
+PROCEDURE _getheapbase(): FarADDRESS;
+
+VAR
+(*# save *)
+(*# call(reg_param=>(ax)) *)
+  _shr_mem: PROCEDURE(): CARDINAL;   (* near procedure variable - points to *)
+                                     (* routine to shrink heap *)
+  _fix_mem: PROCEDURE(CARDINAL);
+  _res_mem: PROCEDURE;
+(*# restore *)
+  _nmemsetup: BOOLEAN;
+  _fmemsetup: BOOLEAN;
+  _fmodmemsetup: BOOLEAN;
+  _heap_size: CARDINAL;
+  _near_heap_start: SHORTCARD;
+  _osmajor:  CARDINAL;
+  _osminor:  CARDINAL;           (* DOS version *)
+  _psp : CARDINAL;
+  _argc : CARDINAL;
+  _argv : ARRAY [0..31] OF POINTER TO ARRAY [0..127] OF CHAR;
+  _env_var : ARRAY [0..31] OF ADDRESS;
+  env : CARDINAL;
+  stklen : CARDINAL;
+  osmode : CARDINAL;
+  _exit_io: PROCEDURE();
+
+END CoreMain.
+
+

@@ -1,0 +1,876 @@
+
+!!------- Menu definition for TS Environment  ------------------
+
+! LinePull                             | [ TopSpeed ]  <F10> <AltF9> <AltF10>
+
+  {F}iles                              | [Files]      <AltF>
+
+    {L} - Load file       <F3>             | LoadFile     <F3>
+    {V} - View file  <ShiftF3>             | LoadF RO     <ShiftF3>
+    {P} - Pick file    <AltF3>             | PickFile     <AltF3>
+    {S} - Save file       <F2>             | SaveFile     <F2>
+    {A} - All save                         | SaveAllF
+    {C} - Change dir                       | ChangeDir
+    {F} - Files dir                        | Directory
+    {D} - DOS shell     <AltD>             | DOSShell      <AltD>
+    {E} - Execute                          | Execute
+    {Q} - Quit          <AltX>             | Quit          <AltX>
+
+  {E}dit                               | Editor        <AltE>
+
+  {C}ompile                            | Compiler      <AltC>
+
+  {L}ink                               | Linker        <AltL>
+
+  {M}ake                               | Make          <AltM>
+
+  {R}un                                | Run program   <AltR>
+
+  {P}roject                                      | {ProjOptions} [Project Options] <AltP>
+    {N} - New project              : ________    | ProjNew
+    {E} - Edit project file                      | ProjEdit
+    ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+    {S} - System                   : ________    | MakeOpt[S|auto|dos|os2|win]  { SYSTEMFI }
+    {T} - Target type              : ___         | MakeOpt[T|exe|lib|dll]       { TARGETTY }
+    {M} - Memory model             : ________    |                              { MEMORYMO }
+!if smallmodel
+      {S} - Small                                | ModelOpt[small]
+!end
+!if compactmodel
+      {C} - Compact                              | ModelOpt[compact]
+!end
+!if mediummodel
+      {M} - Medium                               | ModelOpt[medium]
+!end
+!if largemodel
+      {L} - Large                                | ModelOpt[large]
+!end
+!if xlargemodel
+      {X} - XLarge                               | ModelOpt[xlarge]
+!end
+!if mthreadmodel
+      {T} - MThread                              | ModelOpt[mthread]
+!end
+!if overlaymodel
+      {O} - Overlay                              | ModelOpt[overlay]
+!end
+!if dynalinkmodel
+      {D} - Dynalink                             | ModelOpt[dynalink]
+!end
+!if extendedmodel
+      {E} - Extended                             | ModelOpt[extended]
+!end
+!if extendmtmodel
+      {F} - ExtendMT                             | ModelOpt[extendmt]
+!end
+    {V} - VID                      : ____        | MakeOpt[debug|vid]           { VID:off }
+    {C} - Runtime checks...                      |                              { Runtime checks... }
+       {N} - Nil pointer checks         : ___    | MakeOpt [check|nil_ptr]      { Nil pointer checks }
+       {A} - Array index checks         : ___    | MakeOpt [check|index]        { Array index checks }
+       {S} - Stack overflow checks      : ___    | MakeOpt [check|stack]        { Stack overflow checks }
+       {R} - Range checks               : ___    | MakeOpt [check|range]        { Range checks }
+       {O} - Overflow checks            : ___    | MakeOpt [check|overflow]     { Overflow checks }
+!if pas|mod
+       {G} - Guard conversions (Pas/M2) : ___    | MakeOpt [check|guard]        { Guard conversions (Pas/M2) }
+!end
+!if pas
+       {V} - Variant records      (Pas) : ___    | MakeOpt [check|field]        { Variant records (Pas) }
+!end
+    {O} - Optimisation options...                | [ Optimizations ]            { Optimization options... }
+      {T} - Optimize for speed     : _____       | MakeOpt [optimize|speed]     { Optimize for speed }
+      {E} - Common subexpressions  : ___         | MakeOpt [optimize|cse]       { Common subexpressions }
+      {C} - Constant optimization  : ___         | MakeOpt [optimize|const]     { Constant optimization }
+      {H} - Peephole               : ___         | MakeOpt [optimize|peep_hole] { Peephole }
+      {J} - Jump optimization      : ___         | MakeOpt [optimize|jump]      { Jump optimization }
+      {L} - Loop optimization      : ___         | MakeOpt [optimize|loop]      { Loop optimization }
+      {A} - Alias optimization     : ___         | MakeOpt [optimize|alias]     { Alias optimization }
+      {R} - Register usage         : ___         | MakeOpt [optimize|regass]    { Register usage }
+      {F} - Stack frame            : ___         | MakeOpt [optimize|stk_frame] { Stack frame }
+      ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+      {P} - Processor              : ___         | MakeOpt [optimize|cpu]       { Processor }
+      {Q} - Coprocessor            : ___         | MakeOpt [optimize|copro]     { Coprocessor }
+      {S} - Smart linking          : ___         | MakeOpt [module|smart_link]  { Smart linking }
+    {P} - Project options...                     |                              { Project options... }
+       {J} - Calling convention        : _____    | MakeOpt[J|jpi|stack]        { Calling convention }
+       {M} - Map file                  : ___      | MakeOpt [link_option|map]   { Map file }
+       {C} - Case sensitive link       : ___      | MakeOpt [link_option|case]  { Case sensitive link }
+       {S} - SmartMethod linking       : ___      | MakeOpt [link_option|smart_method] { SmartMethod linking }
+       {H} - Share identical constants : ___      | MakeOpt [link_option|share_const]  { Share identical constants }
+       {L} - Linker warnings           : ___      | EnvOpt  [L]                 { Linker warnings }
+       {W} - Warnings limit            : ___      | EnvOpt  [W]                 { Warnings limit }
+       {E} - Errors limit              : ___      | EnvOpt  [E]                 { Errors limit }
+       {R} - Remake all                : ___      | EnvOpt  [R]                 { Remake all }
+    {L} - Language options...                    |                              { Language options... }
+!if pas
+       {P} - Pascal auto syntax check       : ___ | EnvOpt[V]                   { Pascal auto syntax check }
+       {I} - Strict ISO standard   (Pascal) : ___ | MakeOpt[option|iso]         { Strict ISO standard (Pascal) }
+!end
+!if mod
+       {M} - Modula-2 auto syntax check     : ___ | EnvOpt[U]                   { Modula-2 auto syntax check }
+       {B} - Bitwise boolean operators (M2) : ___ | MakeOpt[option|bit_opr]     { Bitwise boolean operators (M2) }
+!end
+!if c|cpp
+       {A} - ANSI keywords only     (C/C++) : ___ | MakeOpt[option|ansi]        { ANSI keywords only (C/C++) }
+       {E} - Language extensions    (C/C++) : ___ | MakeOpt[option|lang_ext]    { Language extensions (C/C++) }
+       {N} - Nested comments        (C/C++) : ___ | MakeOpt[option|nest_cmt]    { Nested comments (C/C++) }
+       {J} - Default char unsigned  (C/C++) : ___ | MakeOpt[option|uns_char]    { Default char unsigned (C/C++) }
+       {Z} - Generate prototypes   (C only) : ___ | MakeOpt[option|prototypes]  { Generate prototypes (C only) }
+       {O} - Preprocessor output...               |                             { Preprocessor output... }
+          {P} - Preprocessor output only : ___    | MakeOpt[option|pre_proc]    { Preprocessor output... }
+          {L} - Minimize blank lines     : ___    | MakeOpt[option|min_line]    { Preprocessor output... }
+          {C} - Preserve comments        : ___    | MakeOpt[option|incl_cmt]    { Preprocessor output... }
+       ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+       {V} - ANSI Violation Warnings...           | [ ANSI Violations ]         { ANSI Violation Warnings... }
+         {A} - Pointer conversion                         : _____ | MakeOpt [warn|wpcv] { Pointer conversion }
+         {B} - Declaration has no effect                  : _____ | MakeOpt [warn|wdne] { Declaration has no effect }
+         {C} - Storage class redeclared in declaration    : _____ | MakeOpt [warn|wsto] { Storage class redeclared in declaration }
+         {D} - Unexpected text in preprocessor command    : _____ | MakeOpt [warn|wtxt] { Unexpected text in preprocessor command }
+         {E} - No expression in return statement          : _____ | MakeOpt [warn|wnre] { No expression in return statement }
+         {F} - No value returned in function              : _____ | MakeOpt [warn|wnrv] { No value returned in function }
+         {G} - Value of escape sequence is too big        : _____ | MakeOpt [warn|wetb] { Value of escape sequence is too big }
+         {H} - Value of constant is out of range          : _____ | MakeOpt [warn|wcor] { Value of constant is out of range }
+         {I} - Default type promotion on parameter        : _____ | MakeOpt [warn|wpin] { Default type promotion on parameter }
+         {J} - Function redeclared with fixed parameters  : _____ | MakeOpt [warn|wrfp] { Function redeclared with fixed parameters }
+         {K} - Constant expression overflows              : _____ | MakeOpt [warn|wovr] { Constant expression overflows }
+         {L} - Parameter type incompatible with previous  : _____ | MakeOpt [warn|wpic] { Parameter type incompatible with previous }
+       {T} - Type Check Warnings...               | [ Type Checking ]                   { Type Check Warnings... }
+         {A} - Function not declared                      : _____ | MakeOpt [warn|wfnd] { Function not declared }
+         {B} - Function has no prototype                  : _____ | MakeOpt [warn|wpnd] { Function has no prototype }
+         {C} - Different 'const' attributes               : _____ | MakeOpt [warn|watr] { Different 'const' attributes }
+         {D} - Far to near pointer conversion             : _____ | MakeOpt [warn|wftn] { Far to near pointer conversion }
+         {E} - Near to far pointer conversion             : _____ | MakeOpt [warn|wntf] { Near to far pointer conversion }
+         {F} - Conversion may lose significant digits     : _____ | MakeOpt [warn|wcld] { Conversion may lose significant digits }
+         {G} - Constant is long                           : _____ | MakeOpt [warn|wclt] { Constant is long }
+       {X} - Possible errors...                   | [ Possible Errors ]                 { Possible errors... }
+         {A} - Code has no effect                         : _____ | MakeOpt [warn|wcne] { Code has no effect }
+         {B} - Assignment in test expression              : _____ | MakeOpt [warn|wait] { Assignment in test expression }
+         {C} - Returns the address of a local variable    : _____ | MakeOpt [warn|wral] { Returns the address of a local variable }
+         {D} - Variable declared but never used           : _____ | MakeOpt [warn|wdnu] { Variable declared but never used }
+         {E} - Variable is assigned but never used        : _____ | MakeOpt [warn|wvnu] { Variable is assigned but never used }
+         {F} - Possible use of variable before assignment : _____ | MakeOpt [warn|wubd] { Possible use of variable before assignment }
+         {G} - Parameter never used in function           : _____ | MakeOpt [warn|wpnu] { Parameter never used in function }
+         {H} - Unknown pragma                             : _____ | MakeOpt [warn|wprg] { Unknown pragma }
+         {I} - Address for local variable not in DGROUP   : _____ | MakeOpt [warn|wnid] { Address for local variable not in DGROUP }
+!if cpp
+       {C} - C++ warnings...                   | [ C++ Warnings ]                       { C++ warnings... }
+         {A} - No access specifier for base class         : _____ | MakeOpt [warn|wacc] { No access specifier for base class }
+         {B} - Obsolete 'overload' keyword                : _____ | MakeOpt [warn|wovl] { Obsolete 'overload' keyword }
+         {C} - Obsolete expression in delete              : _____ | MakeOpt [warn|wdel] { Obsolete expression in delete }
+         {D} - Object in code segment initialized         : _____ | MakeOpt [warn|wcic] { Object in code segment initialized }
+         {E} - Class definition in function return type   : _____ | MakeOpt [warn|wcrt] { Class definition in function return type }
+!end
+!end
+  {O}ptions                            | [ Options ] {Options} <AltO>
+!if os2
+    {V} - VIO screen output           : ___ | EnvOpt[S]    { Snowcheck/VIO }
+!end
+!if dos
+    {V} - Snow check                  : ___ | EnvOpt[S]    { Snowcheck/VIO }
+!end
+    {D} - Delayed screen update       : ___ | EnvOpt[D]    { Delayed screen update }
+!if dos
+    {H} - High background             : ___ | EnvOpt[H]    { High background }
+!end
+    {C} - Solid cursor                : ___ | EnvOpt[C]    { Solid cursor }
+!if dos
+    {X} - Use expanded memory         : ___ | EnvOpt[M]    { Use expanded memory }
+!end
+    {N} - Enable mouse                : ___ | EnvOpt[N]    { Enable mouse }
+    {Q} - Help line                   : ___ | EnvOpt[Q]    { Help line }
+    {R} - Run options...                     |             { Run options... }
+      {C} - Command line                     | Command Line
+      {A} - Auto make    : ___               | RunOpt[A]
+!if os2
+      {S} - Session run  : ___               | RunOpt[S]
+!end
+      {T} - Timed run    : ___               | RunOpt[T]
+    {S} - Setup options...    <AltS>          | [Setup] <AltS> { Setup options... <AltS> }
+      {A} - Auto save files             : ___ | EdOpt[A]       { Setup options... <AltS> }
+      {F} - Default editor filenames...       | Default Filenames
+      {X} - Default editor extensions...      | Default Extensions
+      {N} - Number of backups           : ___ | No Of Backups
+      {T} - Top editor scroll zone      : ___ | Top Scroll Zone
+      {B} - Bottom editor scroll zone   : ___ | Bottom Scroll Zone
+      ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+      {R} - Load redirection file             | Load Red File
+      {E} - Edit redirection file             | Red Edit
+      {J} - Load keyboard macro file          | Load Macs
+      {K} - Save keyboard macro file          | Save Macs
+      {L} - Load option/window cfg file       | Load Config File
+      {O} - Save option/window cfg file       | Save Config File
+  {U}tilities                          | [Utilities] {Utilities} <AltU>
+    {A} - ASCII table          <AltA>      | Asciitab      <AltA>
+    {C} - Calculator           <AltB>      | Calculator    <AltB>
+    {E} - Find run-time error              | Find Error
+    {F} - File search            <F4>      | WildSearch    <F4>
+    {S} - Search list         <AltF4>      | Search List   <AltF4>
+    {L} - Locate file                      | Locate File
+    {K} - Keyboard codes                   | ScanCodes
+    {P} - Print file                       | Print
+    {Q} - Print settings                   | PrintSet
+    {R} - Review DOS screen   <AltF5>      | Review Screen <AltF5>
+    {V} - View file as data                | View File
+    {H} - Help window          <AltH>      | Help          <AltF1> <AltH>
+    {I} - System Info          <AltI>      | Info          <AltI>
+
+  {V}ID                                    | {VID}         Run program[VID]  <AltV>
+
+! key                                  | Edit1         <Alt1>
+! key                                  | Edit2         <Alt2>
+! key                                  | Edit3         <Alt3>
+! key                                  | Edit4         <Alt4>
+! key                                  | Edit5         <Alt5>
+! key                                  | Edit6         <Alt6>
+! key                                  | Edit7         <Alt7>
+! key                                  | Edit8         <Alt8>
+! key                                  | Edit9         <Alt9>
+! key                                  | Edit0         <Alt0>
+! key                                  | Zoom Window   <F5>
+! key                                  | Cycle Windows <F6>
+! key                                  | CutKey        <AltK>
+! key                                  | WinKey        <AltW>
+
+
+!!----- Editor menus and keys - Active in editor windows ------
+! Editor
+! Pop Up                               | [ Editor Menu ] {Edit1}    <F9> <AltF9>
+  {L} - load new file                  | Ed Load File        <F3>
+  {V} - view file read only            | Ed Load F RO        <ShiftF3>
+  {S} - save file                      | Save File
+  {W} - write to ...                   | Ed Write File
+  {Q} - quick commands                 | [ Quick Menu ]      <CtrlQ>
+    {F} - find                         | Ed Find             <CtrlQ F>
+    {A} - replace                      | Ed Replace          <CtrlQ A>
+    {E} - top of window                | Ed Start Screen     <CtrlQ E> <CtrlHome>
+    {X} - bottom of window             | Ed End Screen       <CtrlQ X> <CtrlEnd>
+    {R} - top of file                  | Ed Start File       <CtrlQ R> <CtrlPageUp>
+    {C} - bottom of file               | Ed End File         <CtrlQ C> <CtrlPageDown>
+    {S} - start of line                | Ed Start Line       <CtrlQ S> <Home>
+    {D} - end of line                  | Ed End Line         <CtrlQ D> <End>
+    {B} - beginning of block           | Ed Goto Begin Block <CtrlQ B>
+    {K} - end of block                 | Ed Goto End Block   <CtrlQ K>
+    {P} - previous position            | Ed Prev Position    <CtrlQ P>
+    {Y} - delete to end of line        | Ed Del End Line     <CtrlQ Y>
+    {L} - restore line                 | Ed Restore Line     <CtrlQ L>
+    {G} - goto line                    | Ed Goto Line        <CtrlQ G>
+    {1} - goto marker 1                | Ed Goto M1          <CtrlQ 1>
+    {2} - goto marker 2                | Ed Goto M2          <CtrlQ 2>
+  {K} - block commands                 | [ Block Menu ]      <CtrlK>
+    {D} - save file                    | Save File           <CtrlK D>
+    {A} - all save                     | Save All Files      <CtrlK A>
+    {B} - begin block                  | Ed Begin Block      <CtrlK B>
+    {K} - end block                    | Ed End Block        <CtrlK K>
+    {H} - hide block                   | Ed Hide Block       <CtrlK H>
+    {T} - mark word                    | Ed Mark Word        <CtrlK T>
+    {L} - mark line                    | Ed Mark Line        <CtrlK L>
+    {C} - copy block                   | Ed Copy Block       <CtrlK C>
+    {V} - move block                   | Ed Move Block       <CtrlK V>
+    {Y} - delete block                 | Ed Del Block        <CtrlK Y>
+    {R} - read block                   | Ed Read Block       <CtrlK R>
+    {W} - write block                  | Ed Write Block      <CtrlK W>
+    {G} - get block                    | Ed Get Block        <CtrlK G>
+    {P} - print block                  | Ed Print Block      <CtrlK P>
+    {I} - indent block                 | Ed Indent Block     <CtrlK I>
+    {U} - undo deletion                | Ed Undo             <CtrlK U>
+    {Q} - quit file                    | Ed Quit             <CtrlK Q>
+    {1} - set marker 1                 | Ed Set M1           <CtrlK 1>
+    {2} - set marker 2                 | Ed Set M2           <CtrlK 2>
+
+  {O} - editor options                 | [ Options Menu ]    <CtrlO>
+    {V} - insert mode    : ___         | EdOpt[V]            <CtrlO V> <CtrlV> <Ins>
+    {I} - auto indent    : ___         | EdOpt[I]            <CtrlO I>
+    {T} - hard tabs      : ___         | EdOpt[T]            <CtrlO T>
+    {C} - control chars  : ___         | EdOpt[C]            <CtrlO C>
+    {R} - read only      : ___         | Toggle RO           <CtrlO R>
+    {W} - tab width      : ___         | Ed Tab Width        <CtrlO W>
+!if mod
+    {U} - auto uppercase : ___         | EdOpt[U]            <CtrlO U>
+!end
+
+! key                                  | Ed Word Left        <CtrlA> <CtrlLeftArr>
+! key                                  | Ed Page Down        <CtrlC> <PageDown>
+! key                                  | Ed Move Right       <CtrlD> <RightArr>
+! key                                  | Ed Move Up          <CtrlE> <UpArr>
+! key                                  | Ed Word Right       <CtrlF> <CtrlRightArr>
+! key                                  | Ed Del Forward      <CtrlG> <Del>
+! key                                  | Ed Del Backward     <CtrlH>
+! key                                  | Ed Tab              <CtrlI>
+! key                                  | Ed Find Again       <CtrlL>
+! key                                  | Ed Ins Line         <CtrlM>
+! key                                  | Ed Ins Below        <CtrlN>
+! key                                  | Ed Prefix           <CtrlP>
+! key                                  | Ed Page Up          <CtrlR> <PageUp>
+! key                                  | Ed Move Left        <CtrlS> <LeftArr>
+! key                                  | Ed Del Word         <CtrlT>
+! key                                  | Ed Upper Case       <CtrlU>
+! key                                  | Ed Scrl Down        <CtrlW>
+! key                                  | Ed Move Down        <CtrlX> <DownArr>
+! key                                  | Ed Del Line         <CtrlY>
+! key                                  | Ed Scrl Up          <CtrlZ>
+! key                                  | Ed Next Error       <F8>
+! key                                  | Ed Prev Error       <F7>
+! key                                  | Ed Case Correct     <ShiftF7>
+! key                                  | Ed Err Extension    <ShiftF8>
+! key                                  | Paste               <AltJ>
+
+
+!! Text messages for TopSpeed environment
+!! ======================================
+
+! MsgText
+001 7
+002 TopSpeed Release 3.10
+003 Clarion Software Corporation               Copyright (C) 1992
+004 Multi-Language Programming Environment       DOS Release 3.10
+!if os2
+005 Multi-Language Programming Environment      OS/2 Release 3.10
+!end
+!if xtd
+005 Multi-Language Programming Environment       XTD Release 3.10
+!end
+006 Serial number: @
+007 Copyright (C) 1988-1992
+008 Release 3.10
+009 Clarion Software Corporation
+010 Error: Menu text line @
+011  : "
+012 " duplicate key
+013 " not recognized
+014 TS.MNU : Too many keys defined
+015 Menu definition too large
+016 Not Enough Memory
+017 Date Not set
+018 Not enough memory to run Help
+019 Save file @
+020 Sharing @
+021 Change directory to @
+022 Load file
+023 New file: @
+024 Window 1: |Window 2: |Window 3: |Window 4: |Window 5: |Window 6: |Window 7: |Window 8: |Window 9: @
+025 BAK
+026 BKn
+027 Saving @
+028 Write to file: @
+029 Writing @
+030 Write block to file: @
+031 Read block
+032 File to read: @
+033 File not found.
+034 PRN
+035 Printing
+036 \_!%$@?
+037 Window to copy block from: @
+038 Block not defined in window.
+039 Indent size: (+/-)
+040 Search string not found.
+041 Find:    |Options: @
+042 Find:         |Replace with: |Options:      @
+043  {Esc}-cancel
+044  Replace
+045 Line length error
+046 ^P
+047  Insert  @
+048 Overwrite
+049 Line @
+050 Col @
+051 Total file size is too big! (>1MB)
+052 File too big! (>500KB)
+053 Warning, Disk almost full!
+054 Failed to load file @
+055 File read failure on @
+056 Copy Data fail (source)
+057 Load file
+058 New file: @
+059  (Y/N): @
+060  {~17~217}-select  {~25}-pick file  {Tab}-history  {Esc}-cancel
+061 YN
+062  Press Esc @
+063  {~17~217}-select  {Tab}-history  {Esc}-cancel
+064  Recolor   {~27~26}-background  {~24~25}-foreground  {PgUp}/{PgDn}/{*}-select area       {Esc}-exit @
+065  Window @
+066 Write fail, Disk full? @
+067 Execute failure on @
+068 Error: @
+069 SYSTEM ERROR @
+070 File: @
+071 Terminate environment?
+072 Abort or Retry? (A/R)
+073 AR
+074 Project name: @
+075 Run
+076 Command line: @
+077 Change directory
+078 New directory: @
+079 File directory
+080 File mask: @
+081 pm
+082 am
+083 All     : |Window 1: |Window 2: |Window 3: |Window 4: |Window 5: |Window 6: |Window 7: |Window 8: |Window 9: |Window 0: @
+!! 84-88 spare
+089 Swapping out TopSpeed Environment
+090  ..More:<ShiftF8>
+091 View file (read only)
+092 Filename: @
+093 File not found
+094 Invalid CFG file
+095 Too many lines in redirection file
+096 OS Command Shell
+097 Type EXIT to return to TopSpeed Environment
+098 Program terminated
+099 .EXE
+100 on @
+101 off
+102 Redirection filename: @
+103 Set High Background on exit from Environment?
+104 Top scroll zone size: @
+105 Bottom scroll zone size: @
+106 No of backups: @
+107 Execute: @
+108 Goto line: @
+109 Tab width: @
+110 Searching @
+111 Block delete too big to be "undone" - Delete anyway?
+!! 112-115 *spare*
+116  {F1}-help  {~24~25}-choose  {~17~217}-select  {CtrlY}-delete  {Esc}-close
+117  Pick file @
+!! 118 *spare*
+119  {F1}-help  {~27~26~24~25}-choose  {~17~217}-select  {Esc}-close
+120   <Dir>
+121 Invalid directory: @
+122 Overwrite old @
+123 File "
+124 " not found.
+125 File: @
+126 Compile
+127  Cut text   {~27~26~24~25}-move  {Ctrl~27~26}-fast move   {B}-begin block   {~17~217}-end block
+128 ALL
+129 Error: Unknown extension: @
+130 Search string:   |Files to search: |Options:         @
+131 Directories not allowed
+132 No match found
+133 Syntax Error
+134  Project: @
+135 New limit: @
+!!136-138 spare
+139 Sizes = Code: @
+140 Const: @
+141 Data: @
+142 PR
+143 Copy project from: @
+144                          Press {Esc} to abort
+145                          Press any key to continue
+146 Project   @
+147 Alt|Ctrl|Shift|UpArr|PgDn|DownArr|PgUp|Home|End|Del|Tab|Equal|LeftArr|RightArr|Ins|Enter|Esc|PageDown|PageUp|Space
+148 Options:
+149                          {~17~217}-edit warnings/errors                {Esc}-continue
+150 Time taken (H:M:S:HS) =
+151 File not found: @
+152 TopSpeed r3.5á
+154 Save Macro File?
+155 Read Only
+156                          Press {CtrlBreak} to abort
+157  Made @
+158 Line
+159  found
+160  warning @
+161  warnings
+162  error   @
+163  errors  @
+164 No
+165 Make: @
+166 Link: @
+167 Run: @
+!!168 spare
+169 Make completed
+170 Press Ù to edit
+171 Press key to continue
+172 Compile completed
+173 Make aborted
+174 RED
+175 TS.RED
+176 CFG
+177 TS.CFG
+178 TS.SES
+179  {U}-no case  {W}-word  {B}-back  {G}-global  {L}-local  {R}-rest  {N}-no ask  {num}-repeat num
+180 BUWGLNR*
+181 {~27~26~24~25 Home End PgUp PgDn}-move @
+182 {Shift ~27~26~24~25}-resize @
+183 {~17~217}-recolor @
+184 Execute : unable to find @
+!! default filename
+185 *.*
+!! default extension
+186    @
+187 Filename not found or extension not recognized: @
+188 C:\OSO001.MSG
+189 TS.MAC
+190 MAC
+191 Press key to define
+192 Too many errors/warnings
+193 /C START "TS SHELL" /F/K @
+194 Compiler not installed for this language
+195  {F1}-help  {F10}-main menu                                   {Esc}-close  {Alt-X}-exit
+196  {F1}-help  {F5}-zoom  {F6}-cycle  {F9}-edit menu  {F10}-main menu  {Esc}-close  {Alt-X}-exit
+197  Recording macro for key: {}               Press Alt= to End.
+198  {ScrlLock}-exit @
+199  {AltW}-exit @
+
+!! OS Errors
+200 Out of memory
+201 Dynamic pool limit exceeded
+210 Invalid function number
+211 File not found
+212 Path not found
+213 Too many open files (no handles left)
+214 Access denied
+215 Invalid handle
+216 Memory control blocks destroyed
+217 Insufficient memory
+218 Invalid memory block address
+219 Invalid environment
+220 Invalid format
+221 Invalid access code
+222 Invalid data
+223 DOS System Error: @
+224 Invalid drive was specified
+225 Attempt to remove the current directory
+226 Not same device
+227 No more files
+228 Attempt to write on write-protected diskette
+229 Unknown unit
+230 Drive not ready
+231 Unknown command
+232 Data error (CRC)
+233 Bad request structure length
+234 Seek error
+235 Unknown media type
+236 Sector not found
+237 Printer out of paper
+238 Write fault
+239 Read fault
+240 General failure
+241 Sharing Violation
+242 Lock Violation
+243 Invalid disk change
+244 FCB unavailable
+245 File exists
+246 Write failed (disk full?)
+
+300 Print File
+301 Lines per page     : |Page width         : |Top margin         : |Left margin        : |Page heading       : |Init string        : |
+302 Form Feed string   : |Final string       : |Output file/device : |Options            : @
+303 Printer Options   {H}-Heading  {F}ile date  {W}-Wrap       {Esc}-Exit
+305 Printing @
+306 Printer Settings
+307 File to print: @
+308 Locate file: |Drives     : @
+309 Files found: @
+
+
+310 Unexpected option: @
+311 Valid options are:
+312   filename     Edit filename.
+313   /n filename  Edit file in editor window n (1-9).
+314   /L           Set 43/50 line mode
+315   /N           New session (ignore TS.SES).
+319 DLL load failed: @
+322 Total size loaded
+323 Time|Date|Current Directory|#|Editor Windows|Size|Disk Free Space|Processor|Co-Processor|TopSpeed Version
+325  Environment Information @
+331 Unknown|V20|V30|8088|8086|80188|80186|80286|80386|i486
+333 None|8087|80287|80387
+
+340  TopSpeed Help System @
+341  {*}-wildcard search {U}-ignore case  {1-9}-editor to load  {R}-use redirection
+342 *UR
+349 Cannot find file ERRORINF.$$$
+350 ERRORINF.$$$
+351 Program        : @
+352 Error          : @
+353 at CS:IP       : @
+354 Segment        : @
+355 Source         : @
+356 Near procedure : @
+357  Line @
+358  Col @
+359 Not enough information to find error
+360 Remake program with debug information
+361 DBD
+362 EXE
+363 MAP
+364 Find error in source?
+365 HLP
+366 TSMAIN
+367 $index
+368  {F1}-index  {~27~26~24~25}-choose {~17~217}-select topic                                {Esc}-close
+369  {F1}-index  {~27~26~24~25}-choose {~17~217}-select topic                {PgDn}-next page  {Esc}-close
+370  {F1}-index  {~27~26~24~25}-choose {~17~217}-select topic {PgUp}-prev page                 {Esc}-close
+371  {F1}-index  {~27~26~24~25}-choose {~17~217}-select topic {PgUp}-prev page {PgDn}-next page  {Esc}-close
+372 Help file "
+373 " not found.
+374 More..
+375 ÍKeyboard codesÍDecÍÍHexÍÍÍÍÍÍÍ
+376  Keyboard character codes    Press any key       Press {Esc} twice to exit
+377  Ascii code   : @
+378  Extended code: @
+379  Key name     : @
+380 ÍDÍÍHÍÍChÍÍCtrlÍNmÍÍÍÍÍDÍÍHÍÍChÍÍCtrlÍÍNm
+381 ÍDÍÍHÍÍChÍÍÍDÍÍHÍÍChÍÍÍDÍÍHÍÍChÍÍDÍÍHÍÍCh
+382 ÍDÍÍHÍÍChÍÍÍDÍÍHÍÍChÍÍÍDÍÍHÍDisplayÍAttrÍ
+383  Ascii Table   {PgUp}-prev page  {PgDn}-next page   {Esc}-Close
+384 Black|Blue|Green|Cyan|Red|Magenta|Brown|Light Gray|Dark Gray|Light Blue|Light Green|Light Cyan|Light Red|Light Magenta|Yellow|White
+385  View File     {PgUp}-prev page  {PgDn}-next page   {Esc}-Close
+386 File to view: @
+387 File: @
+390 ÉÍÍÍËÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍ»
+391 º   º                  º   º
+392 ÈÍÍÍÊÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍ¼
+393  {d}ec {a}nd ³ {+} {-} {s} ³    {m+} {m-}
+394  {h}ex {o}r  ³ {*} {/} {%} ³    {m*} {m/}
+395  {b}in {x}or ³ {=} {c}lr ³ {m=} {mr} {mc}
+396 Dec|Hex|Bin|M
+397 0123456789ABCDEF>dhbaox+-s*/%=cmr
+398 Calculator
+
+400 UNNAMED
+401 TEMPLATE
+402  does not exist. Create? @
+403 Error in project file
+
+!! Help to extension mapping
+450 TSMOD *.mod *.def
+451 TSPAS *.pas *.itf
+452 TSC *.c *.h
+453 TSCPP *.cpp *.hpp
+454 TSASM *.a *.inc
+
+!! Include file extensions (used by /ZI)
+499 DEF ITF H HPP INC
+
+!! Overlay/DLL run-time errors (+500)
+500 DLL error: @
+501 Loader cannot find entry point of main program.
+502 Module count exceeded.
+503 Wrong DLL version.
+504 DLL corrupt.
+505 Illegal fixup type found in imported module.
+506 Imported module not found.
+507 Relocation information corrupt.
+508 Imported module not and .EXE or .DLL file.
+509 Incorrect .DLL file format.
+510 No memory available - load phase 1.
+511 Module failed to initialize.
+512 Error opening file.
+513 No memory available - load phase 2.
+514 Error reading file.
+515 Error seeking file.
+516 Internal error.
+
+!! Runtime errors (+600)
+599 User error
+600 Unknown type of error :
+601 Stack overflow
+602 Null pointer de-reference
+603 Termination caused by signal.  (User break or Floating point)
+604 Arithmetic Overflow
+605 Variable out of range
+606 No return value from function
+607 No matching Case Label
+608 Long Integer Divide By Zero
+609 Index out of range
+610 Pure Virtual Function Called
+616 Memory allocation initialisation (Out Of Memory)
+617 I/O initialisation (Out Of Memory)
+618 Invalid use of near heap in DLL
+619 Complex Number Error
+633 Dos Re-entered
+634 NullProc Called
+648 Invalid window
+649 Use memory allocation
+650 Settitle memory allocation
+651 Initialisation error
+652 new, Out Of Memory
+653 dispose, Invalid Pointer
+654 _wrint, Illegal Parameter
+655 _wrint, Conversion Error
+656 _wrchar, Illegal Parameter
+657 _wrbool, Illegal Parameter
+658 _wrastr, Illegal Parameter
+659 _wrcstr, Illegal Parameter
+660 _wrreal, Illegal Parameter
+661 _wrreal, Conversion Error
+662 _f_wrint, Illegal Parameter
+663 _f_wrint, Conversion Error
+664 Too many processes
+665 New process memory allocation
+666 Signal memory allocation
+667 Scheduler memory allocation
+668 Initialisation error
+669 Stop process error
+672 StopProcess - Corrupt Process
+673 TRANSFER - Corrupt Process
+674 ExecCmd, Memory Failure
+675 ExecCmd, Command Line Too Long
+676 ExecCmd, Command Processor Failed To Load
+680 StartScheduler error
+681 StopScheduler error
+682 StartProcess error
+683 SEND error
+684 WAIT error
+685 Notify error
+686 Init error
+687 Delay error
+688 Illegal Assignment
+696 Dos environment memory allocation
+697 _f_wrchar, Illegal Parameter
+698 _f_wrbool, Illegal Parameter
+699 _f_wrastr, Illegal Parameter
+700 _f_wrcstr, Illegal Parameter
+701 _f_wrreal, Illegal Parameter
+702 _f_wrreal, Conversion Error
+703 _rdint, Invalid Integer
+704 _rdreal, Invalid Real Number
+705 _f_rdint, Invalid Integer
+706 _f_rdreal, Invalid Real Number
+707 assign, File Already Open
+708 reset, No File Name
+709 put, Invalid Mode
+710 put, Write Error
+711 put, Write Error
+737 NearMakeHeap, Invalid Argument
+738 NearHeapAllocate, Invalid Argument
+739 NearHeapDeallocate, Invalid Argument
+740 NearHeapAvail, Invalid Argument
+741 NearHeapTotalAvail, Invalid Argument
+742 NearHeapChangeSize, Invalid Argument
+743 NearHeapChangeAlloc, Invalid Argument
+744 FarHeapAllocate, Out Of Memory
+745 FarHeapDeallocate, Invalid Argument
+746 FarHeapDeallocate, Heap Corrupt
+747 FarHeapChangeAlloc, Invalid Argument
+748 FarAllocate, Out Of Memory
+749 NearMakeHeap, Size Too Small
+750 NearHeapAllocate, Out Of Memory
+751 NearHeapDellocate, Invalid Argument
+752 NearAllocate, Out Of Memory
+753 Far Heap Call, Not Supported Under OS2
+754 ShtHeap.Initialize, Heap too small
+755 ShtHeap.Increase, Not Enough Space
+756 ShtHeap.Allocate, Size Error
+757 ShtHeap.Allocate, Out Of Memory
+758 ShtHeap.Free, Invalid Pointer
+759 ShtHeap.Test, Heap Corruption
+760 Close, Invalid Handle
+762 Open, File Access Error
+763 OpenRead, File Access Error
+764 Append, File Access Error
+765 Create, File Access Error
+766 WrBin Error
+767 RdBin Error
+768 FIO Internal Error, Write Error Flushing File
+769 GetPos, Write Seek Error
+770 Seek, Write Seek Error
+772 Truncate, File Write Error
+774 Erase, File Name Error
+775 Rename, File Name Error
+776 ChDir, Directory Name Error
+777 MkDir, Directory Name Error
+778 RmDir, Directory Name Error
+779 GetDir, Drive Number Error
+780 ReadFirstEntry Error
+781 ReadNextEntry Error
+785 Assign Buffer, Invalid File Handle
+786 Assign Buffer, Invalid Buffer Size
+787 Assign Buffer, Stream Table Full
+788 FIO Directory Call, Not Supported Under OS2
+790 IO.RedirectInput Error
+791 IO.RedirectOutput Error
+792 StartScheduler, System Error
+793 StartProcess, System Error
+794 StartProcess, SetPriority - System Error
+795 StartProcess, SuspendThread - System Error
+796 SEND, Semaphore System Error
+797 WAIT, Semaphore System Error
+798 Notify, Semaphore System Error
+799 Init, Semaphore System Error
+800 Delay, Sleep System Error
+801 Launch, System Error
+802 NewProcess, Too Many Threads
+803 IOTRANSFER, Invalid Argument
+809 Graphics Call, Not Supported Under OS2
+810 OSFatalError, Operating System Error
+824 Undefined method called
+825 get, Invalid Mode
+826 get, End Of File
+827 get, Read Error
+828 close, Invalid Operation
+829 eoln, End Of File
+830 eoln, Invalid File
+831 eoln, End Of File
+832 eof, Invalid Operation
+833 ln, Illegal Parameter
+834 sqrt, Illegal Parameter
+835 put, File Undefined
+836 get, File Undefined
+837 FlsBuf, Stream Not Buffered
+838 FilBuf, Stream Not Buffered
+840 BlockRead, I/O Error
+841 GetMem, Out Of Memory
+842 FilePos, Invalid File
+843 FileSize, Invalid File
+844 Seek, Invalid File
+845 Rename, Invalid File
+846 Append, File Not Assiged
+847 MkDir, Invalid Path
+848 RmDir, Invalid Path
+849 ChDir, Invalid Path
+850 OS2 Library, Function Not Supported
+851 Windows Library, Function Not Supported
+855 User Break
+
+
+!! Batch introductory screen
+!! =========================
+
+940 ÉÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ»
+941 º  TopSpeed Release 3.10     Copyright (C) 1992 Clarion Software Corporation  º
+942 º                                                                             º
+943 º  Usage:  TSC filename(s) [options]             Compile file(s)              º
+944 º          TSC projectname /m [options]          Make project                 º
+945 º          TSC projectname /l [options]          Link project                 º
+946 ÇÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ Options ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¶
+947 º  /v0    no VID information                 /v1    minimum VID information   º
+948 º  /v2    full VID information               /b     generate line numbers     º
+949 º                                                                             º
+950 º  /rs    stack overflow checking            /rn    nil pointer checking      º
+951 º  /ro    overflow checking                  /rr    range checking            º
+952 º  /ri    array index checking               /cc    const in code             º
+953 º  /a+    Strict ANSI only                   /e-    language extensions off   º
+954 º  /j+    default char is unsigned           /n+    allow nested comments     º
+955 º  /dnnn  define macro                       /unnn  undefine predefined macro º
+956 º  /p     preprocessor output                /pc    ... with comments         º
+957 º  /pl    ... minimize blank space           /zg    generate prototypes       º
+958 º  /wxxx+ enable warning xxx                 /wxxx- disable warning xxx       º
+959 º  /wxxx* treat warning as an error          /w+    enable all warnings       º
+960 º  /w-    disable all warnings               /w*    turn warnings into errors º
+961 More..                                                                        º
+962 ÇÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ Model Options ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¶
+963 º  /ms    small model                        /mm    medium model              º
+964 º  /mc    compact model                      /ml    large model               º
+965 º  /mx    extra large model                  /mt    multi thread model        º
+966 º  /mo    overlay model                      /md    dynalink model            º
+967 º  /me    extended model                     /mf    extended mthread model    º
+968 ÇÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ Optimization Options ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¶
+969 º  /ox-   disable all optimizations                                           º
+970 º  /ot-   disable time optimization          /oe-   disable CSE optimization  º
+971 º  /oc-   disable constant optimization      /oh-   disable peep hole optim.  º
+972 º  /oj-   disable jump optimization          /ol-   disable loop optimization º
+973 º  /oa-   disable alias optimization         /or-   disable register optim.   º
+974 º  /of-   disable stack frame optim.         /opx   select processor 80x86    º
+975 º  /oq0   select fp-emulator (default)       /oqx   select co-processor 80x87 º
+976 ÇÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ Misc. Options ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¶
+977 º  /fpnnn define project file                /y     use DOS environment vars  º
+978 º  /Iddd  include files directory            /zq    quiet mode                º
+979 º  /snnn=nnn  set project system macro       /r     remake all                º
+980 ÈÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼
+

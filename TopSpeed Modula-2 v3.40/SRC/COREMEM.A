@@ -1,0 +1,5881 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMEM.A - common memory management (real mode)                        *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+include "standard.inc"
+
+module CoreMem
+
+(************************************************************************)
+segment _BSS(BSS, 28H)
+
+public __memtype :      org 2   (* OS2 memory allocation type *)
+public __fheaptop :     org 2   (* top of far heap *)
+
+segment _DATA(DATA, 28H)
+
+public __firstfree :  dw  -1    (* first free block *)
+
+segment _BSS(BSS, 28H)
+
+public __fheapsem :  org 4      (* process control semaphore *)
+
+segment _BSS(BSS, 28H)
+
+public __nheapstart : org 2     (* beginning of near heap *)
+public __nheaptop :   org 2     (* end of near heap *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - calloc, _ncalloc.
+
+   PRECONDITIONS - near heap initialised.
+
+   POSTCONDITIONS - If successful, block of size*num bytes allocated and
+                    cleared to zero.
+                    If size = 0 or heap full, errno set to ENOMEM.
+
+   IN PARAMETERS -  Number of blocks requested(size_t),
+                    Size of block requested(size_t)
+
+   OUT PARAMETERS - If successful Near pointer to allocated block.
+                    On error NULL pointer.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Jumps to shared code in malloc.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize  = 0
+nearnextBlock = 2
+
+extrn __nmallocError
+extrn __ncallocEntry
+extrn __nheaptop
+extrn __nfirstfree
+extrn __farstack
+extrn _errno
+
+select _TEXT
+
+
+public __ncalloc :
+(*%T NearPtr *)
+public _calloc :
+(*%E *)
+
+num   = frame
+size  = 2+frame
+
+currentblock = -2
+newsize      = -4
+prevblock    = -6
+flag         = -8
+request      = -10
+dgroup       = -12
+locals       =  12
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]
+(*%E *)
+    or   ax, ax                            (* Error if size = 0 *)
+    je   near __nmallocError
+(*%F RegParam *)
+    mov  dx, [bp][num]
+(*%E *)
+(*%T RegParam *)
+    mov  dx, bx
+(*%E *)
+    or   dx, dx
+    je   near __nmallocError
+    mul  dx
+    or   dx, dx
+    jne  near __nmallocError               (* over flow *)
+    mov  byte [bp][flag], 1
+    jmp  __ncallocEntry
+
+(*%E *)
+
+section
+(*********************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - malloc, _nmalloc.
+
+   PRECONDITIONS - near heap initialised.
+
+   POSTCONDITIONS - If successful, block of size bytes allocated and
+                    cleared to zero.
+                    If size = 0 or heap full, errno set to ENOMEM.
+
+   IN PARAMETERS -  Size of block requested(size_t)
+
+   OUT PARAMETERS - If successful Near pointer to allocated block.
+                    On error NULL pointer.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - .
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize  = 0
+nearnextBlock = 2
+
+extrn __nheaptop
+extrn __nfirstfree
+extrn __farstack
+extrn _errno
+
+select _TEXT
+
+num   = frame
+size  = 2+frame
+
+currentblock = -2
+newsize      = -4
+prevblock    = -6
+flag         = -8
+request      = -10
+dgroup       = -12
+locals       =  12
+
+public __nmalloc :
+(*%T NearPtr *)
+public _malloc :
+(*%E *)
+
+
+size  = frame
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]
+(*%E *)
+    or   ax, ax
+    je   near __nmallocError               (* return NULL if size = 0 *)
+    mov  byte [bp][flag], 0
+public __ncallocEntry :
+    test ax, 1
+    jz   sizeEven
+    inc  ax
+    or   ax, ax
+    jz   near __nmallocError
+sizeEven:
+    add  ax, 2                             (* block + header *)
+    jc   near __nmallocError
+    mov  [bp][request], ax
+    mov  di, [__nfirstfree]
+    or   di, di
+    jz   mallocFull
+    cmp  di, -1
+    je   near __nmallocError
+heapSearch:
+    mov  word [bp][prevblock], 0
+heapLoop:                                  (* search for big enough block *)
+    cmp  ax, [di][nearFreeSize]
+    jbe  blockFound                        (* found a free block big enough *)
+    mov  bx, [di][nearnextBlock]
+    or   bx, bx
+    je   atHeapTop                         (* last free block *)
+    mov  [bp][prevblock], di
+    mov  di, bx
+    jmp  heapLoop                          (* try next block *)
+
+mallocFull:                                (* no free blocks *)
+atHeapTop:                                 (* last block too small *)
+    jmp   __nmallocError
+
+blockFound:                                (* di is current block header *)
+    mov  bx, di
+    mov  cx, [di][nearnextBlock]           (* spliced into the list *)
+    cmp  ax, [di][nearFreeSize]            (* is block an exact fit ? *)
+    je   exactFit
+    mov  dx, [di][nearFreeSize]
+    sub  dx, 4
+    cmp  dx, ax
+    jae  bkEnough
+    mov  ax, [di][nearFreeSize]
+    mov  [bp][request], ax
+    jmp  exactFit
+bkEnough:
+    add  dx, 4
+    mov  [di][nearFreeSize], ax            (* size of allocated block *)
+    sub  dx, ax                            (* size of new block *)
+    add  ax, bx                            (* offset of new free block *)
+    mov  di, ax
+    mov  [di][nearFreeSize], dx
+    mov  [di][nearnextBlock], cx
+hsSetPrevious:
+    mov  cx, [bp][prevblock]
+    jcxz hsFirst
+    mov  di, cx
+    mov  [di][nearnextBlock], ax           (* adjust previous block *)
+    jmp  hsDone
+hsFirst:
+    mov  [__nfirstfree], ax
+hsDone:
+    mov  ax, bx
+    add  ax, 2
+    jmp  mallocDone
+exactFit:                                  (* special case - an exact fit *)
+    mov  ax, cx
+    jmp  hsSetPrevious
+
+public __nmallocError :                    (* arrive here to return NULL *)
+    mov  word [_errno], ENOMEM
+    sub  ax, ax
+    jmp  mallocExit
+
+mallocDone:
+    cmp  byte [bp][flag], 0
+    jz   noFill
+    push ax
+    mov  dx, ds
+    mov  es, dx
+    mov  di, ax
+    sub  ax, ax
+    mov  cx, [bp][request]
+    shr  cx, 1
+    dec cx
+rep ; stosw
+    pop  ax
+noFill:
+mallocExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(* _malloc ENDP *)
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE -  coreleft, memavl, nearcoreleft.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - Returns number of bytes unallocated in near heap(int).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Causes near heap to be initalised.
+
+   VERSION - _OS2 and MSDOS (Not DLL's).
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize  = 0
+nearnextBlock = 2
+
+extrn __nfirstfree
+
+select _TEXT
+
+(*%T NearPtr *)
+public _coreleft :
+public __memavl :
+(*%E *)
+public _nearcoreleft :
+
+    push bx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    sub  ax, ax
+    mov  bx, [__nfirstfree]
+    cmp  bx, -1
+    je   leftEnd
+leftLoop:
+    or   bx, bx
+    jz   leftEnd
+    add  ax, [bx][nearFreeSize]
+    mov  bx, [bx][nearnextBlock]
+    jmp  leftLoop
+leftEnd:
+    and  ax, 0FFFEH
+    sub  ax, 2
+    jnc  leftOK
+    sub  ax, ax
+leftOK:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _nfree, free.
+
+   PRECONDITIONS - Near heap initialised.
+
+   POSTCONDITIONS - block merged into free list.
+
+   IN PARAMETERS - near pointer to block allocated from near heap.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Always merges neighbouring free blocks.
+
+   VERSION - _OS2 and MSDOS.
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize  = 0
+nearnextBlock = 2
+
+extrn __nheapstart
+extrn __nheaptop
+extrn __nfirstfree
+extrn __farstack
+
+select _TEXT
+
+buffer = frame
+
+currentblock = -2
+
+locals = 2
+
+
+public __nfree :
+(*%T NearPtr *)
+public _free :
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push ax
+(*%E *)
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  dx, [bp][buffer]                (* normalise and validate pointer *)
+(*%E *)
+(*%T RegParam *)
+    mov  dx, ax
+(*%E *)
+    sub  dx, 2
+    cmp  dx, [__nheapstart]
+    jb   freeError
+    cmp  dx, [__nheaptop]
+    jae  freeError
+inHeap:
+    mov  di, [__nfirstfree]
+    or   di, di
+    jz   freeFull                        (* heap is full *)
+    sub  ax, ax
+freeLoop:
+    cmp  di, dx                          (* are we past block ? *)
+    jae  freeFound
+    mov  ax, di                          (* save lower block *)
+    mov  di, [di][nearnextBlock]
+    or   di, di
+    jnz  freeLoop
+    jmp  freeFound2
+freeFull:                                (* special case *)
+    mov  [__nfirstfree], dx              (* a new first free *)
+    mov  di, dx
+    mov  word [di][nearnextBlock], 0
+    jmp  freeNoMerge
+freeFound:                               (* ax is lower block *)
+    je   freeError                       (* block is already free *)
+freeFound2:
+    or   ax, ax
+    jne  notFirst
+    mov  cx, [__nfirstfree]
+    mov  [__nfirstfree], dx              (* set a new first free block *)
+    mov  di, dx
+    mov  [di][nearnextBlock], cx
+    jmp  freeNoLower
+notFirst:
+    mov  di, ax
+    mov  cx, [di][nearnextBlock]         (* splice free block into list *)
+    mov  [di][nearnextBlock], dx
+    mov  di, dx
+    mov  [di][nearnextBlock], cx         (* ax still lower block *)
+    mov  di, ax
+    add  ax, [di][nearFreeSize]
+    cmp  ax, dx                          (* is prev free contiginous *)
+    jne  freeNoLower
+    call __nheap_merge                   (* yes - merge *)
+    jmp  freeLowDone
+freeNoLower:
+    mov  di, dx
+freeLowDone:
+    cmp  word [di][nearnextBlock], 0     (* is there a lower block *)
+    je   freeNoMerge
+    mov  ax, di
+    add  ax, [di][nearFreeSize]
+    cmp  ax, [di][nearnextBlock]         (* is next free contiginous *)
+    jne  freeNoMerge
+    call __nheap_merge                   (* yes - merge *)
+freeNoMerge:                             (* are we in the last block ? *)
+freeDone:
+freeError:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F RegParam *)
+    pop  ax
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __nheap_merge :
+
+    mov  si, [di][nearnextBlock]
+    mov  cx, [si][nearnextBlock]
+    mov  ax, [si][nearFreeSize]
+    add  [di][nearFreeSize], ax
+    mov  [di][nearnextBlock], cx
+    ret  0
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE -  _memmax.
+
+   PRECONDITIONS - Near Heap initialised.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - Returns size of largest unallocated block in near heap
+                    in bytes (int).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Causes near heap to be initalised.
+
+   VERSION - _OS2 and MSDOS.
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize  = 0
+nearNextBlock = 2
+
+extrn __nfirstfree
+
+select _TEXT
+
+public __memmax :
+
+    push bx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    sub  ax, ax
+    mov  bx, [__nfirstfree]
+    cmp  bx, -1
+    je   maxEnd
+maxLoop:
+    or   bx, bx
+    jz   maxEnd
+    cmp  ax, [bx][nearFreeSize]
+    jae  axBigger
+    mov  ax, [bx][nearFreeSize]
+axBigger:
+    mov  bx, [bx][nearNextBlock]
+    jmp  maxLoop
+maxEnd:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _DLL*)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _msize, _nmsize.
+
+   PRECONDITIONS - Block must be allocated from near heap.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - Near pointer to memory block.
+
+   OUT PARAMETERS - Returns size in bytes of memory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+select _TEXT
+
+(*%T NearPtr *)
+public __msize :
+(*%E *)
+public __nmsize :
+
+(*%F RegParam *)
+buffer = frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  bx, [bp][buffer]
+(*%E *)
+(*%T RegParam *)
+    push bx
+    mov  bx, ax
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [bx][-2]
+    sub  ax, 2
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bx
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL*)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapchk, _nheapchk, _heapset, _nheapset.
+
+   PRECONDITIONS - Near heap must be initialised.
+
+   POSTCONDITIONS - _heapset fills each free block with the parameter value.
+
+   IN PARAMETERS - _heapset takes fill value(int).
+
+   OUT PARAMETERS - Returns state of heap.
+                     0 _HEAPOK if OK
+                    -1 _HEAPEMPTY if heap not initialised
+                    -2 _HEAPBADBEGIN if initial header bad
+                    -3 _HEAPBADNODE  if heap is damaged
+                    -4 _HEAPOVERFLOW if heap past ceiling
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+mem_reg_saved = 6
+
+extrn __nheapstart
+extrn __nheaptop
+extrn __nfirstfree
+
+select _TEXT
+
+public __nheapchk :
+(*%T NearPtr *)
+public __heapchk :
+(*%E *)
+
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+
+    push bx
+    push cx
+    push dx
+    sub  bx, bx                        (* dont fill *)
+    jmp  hpShared
+
+fill = frame+mem_reg_saved
+
+
+public __nheapset :
+(*%T NearPtr *)
+public __heapset :
+(*%E *)
+
+    push bx
+    push cx
+    push dx
+    mov  bh, 1
+hpShared:
+    push bp
+    mov  bp, sp
+    push di
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  al, [bp][fill]
+(*%E *)
+    mov  ah, bh
+    mov  di, [__nheapstart]
+    or   di, di
+    je   chkEmpty                          (* no heap *)
+chkNext:
+    mov  dx, [__nfirstfree]
+chkLoop:
+    cmp  di, dx                            (* is it in free list *)
+    jne  chkNotFree                        (* no - continue *)
+    mov  cx, [di][nearFreeSize]
+    mov  dx, [di][nearNextBlock]            (* get next free *)
+    or   ah, ah
+    je   NodeOK                            (* fill if ah *)
+    push ax
+    mov  ah, al
+    push di
+    mov  bx, _DATA
+    mov  es, bx
+    add  di, 4
+    sub  cx, 4
+rep ; stosb
+    pop  di
+    pop  ax                                 (* fill free block *)
+    jmp  NodeOK
+chkNotFree:
+    jb   NodeOK
+    or   dx, dx
+    jne  chkBadNode                        (* bad heap node *)
+NodeOK:
+    add  di, [di][nearFreeSize]
+    cmp  di, [__nheaptop]
+    ja   chkBadTop                         (* overflow *)
+    jb   chkLoop
+    or   dx, dx
+    je   chkOK
+chkBadTop:
+    mov  ax, _HEAPOVERFLOW
+    jmp  chkDone
+chkEmpty:
+    mov  ax, _HEAPEMPTY
+    jmp  chkDone
+chkBadStart:
+    mov  ax, _HEAPBADBEGIN
+    jmp  chkDone
+chkBadNode:
+    mov  ax, _HEAPBADNODE
+    jmp  chkDone
+chkOK:
+    sub  ax, ax
+chkDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  bp
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapwalk, _nheapwalk.
+
+   PRECONDITIONS - Near heap must be initialised.
+                   heapinfo structure initialised to NULL, or contains result
+                   of a preevious call to _heapwalk.
+
+   POSTCONDITIONS - heapinfo structure contains details of current heap node.
+
+   IN PARAMETERS - Pointer to heapinfo structure
+
+   OUT PARAMETERS - Returns state of heap.
+                    _HEAPOK       =  0
+                    _HEAPEMPTY    = -1
+                    _HEAPBADBEGIN = -2
+                    _HEAPBADNODE  = -3
+                    _HEAPOVERFLOW = -4
+                    _HEAPBADPTR   = -6
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+nearFreeSize  = 0
+nearNextBlock = 2
+
+pentry  = 0
+size    = 2
+useflag = 4
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+_HEAPEND      = -5
+_HEAPBADPTR   = -6
+
+
+select _DATA
+
+extrn __nheapstart
+extrn __nheaptop
+extrn __nfirstfree
+
+lastfree : dw 0
+
+select _TEXT
+
+public __nheapwalk :
+(*%T NearPtr *)
+public __heapwalk :
+(*%E *)
+
+(*%F RegParam *)
+entry  = frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    push cx
+    push dx
+    push si
+(*%F NearPtr *)
+    les  bx, [bp][entry]
+(*%E *)
+(*%T NearPtr *)
+    mov  ax, _DATA
+    mov  es, ax
+    mov  bx, [bp][entry]
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+    push bx
+    push cx
+    push dx
+    push si
+(*%F NearPtr *)
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, _DATA
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  si, es:[bx][pentry]
+    or   si, si
+    jnz  notFirst
+    mov  si, [__nfirstfree]
+    cmp  si, -1
+    je   heapNotInit
+    mov  [lastfree], si
+    mov  si, [__nheapstart]
+    mov  ax, [si][nearFreeSize]
+    jmp storeNode
+notFirst:
+    cmp  si, [__nheapstart]
+    jb   invalidPtr
+    cmp  si, [__nheaptop]
+    jae   invalidPtr
+    mov  ax, [si][nearFreeSize]
+    add  si, ax
+    cmp  si, [__nheaptop]
+    je   atHeapTop
+    mov  ax, [si][nearFreeSize]
+storeNode:
+    mov  es:[bx][pentry], si
+    sub  ax, 2
+    mov  es:[bx][size], ax
+    mov  ax, 1
+    cmp  si, [lastfree]
+    jne  notFree
+    sub  ax, ax
+    mov  cx, [si][nearNextBlock]
+    mov  [lastfree], cx
+    jmp  goodNode
+notFree:
+    jb   goodNode
+    cmp  word [lastfree], 0
+    jne  badNode
+goodNode:
+    mov  es:[bx][useflag], ax
+
+success:
+    mov  ax, _HEAPOK
+exit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F RegParam *)
+    mov  sp, bp
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+heapNotInit:
+    mov  ax, _HEAPEMPTY
+    jmp  exit
+atHeapTop:
+    cmp  word [lastfree], 0
+    jne  badNode
+    mov  ax, _HEAPEND
+    jmp  exit
+badNode:
+    mov  ax, _HEAPBADNODE
+    jmp  exit
+invalidPtr:
+    mov  ax, _HEAPBADPTR
+    jmp  exit
+
+(*%E *)
+
+section
+(***************************************************************************)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _expand, _nexpand, realloc, _nrealloc.
+
+   PRECONDITIONS - Near heap initialised.
+
+   POSTCONDITIONS - If successful, block allocation changed.
+                    On error errno set to ENOMEM.
+
+   IN PARAMETERS -  near pointer to memory block, block size.
+
+   OUT PARAMETERS - Returns near pointer to memeory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - realloc changes size of block allocated from near heap. If the
+           block cannot be expanded it is freed and another block allocated.
+           The contents of the old block are copied.
+
+           If size is zero the block will be freed.
+           If the pointer is NULL a new block will be allocated.
+
+           _expand will attempt to change the allocationof the block without
+           moving it.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+nearFreeSize    =  0
+nearNextBlock   =  2
+
+
+extrn  __nmalloc
+extrn  __nfree
+extrn __nheapstart
+extrn __nfirstfree
+extrn __nheaptop
+extrn _errno
+
+select _TEXT
+
+public __nexpand :
+(*%T NearPtr *)
+public __expand :
+(*%E *)
+
+
+(*%F RegParam *)
+buffer  = frame
+size    = 2+frame
+locals    =  12
+(*%E *)
+
+currentblock = -2
+expand    = -4
+newsize   = -6
+prevfree  = -8
+nextfree  = -10
+oldsize   = -12
+lowfree   = -14
+
+
+(*%T RegParam *)
+size    = -16
+buffer  = -18
+locals  =  18
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  byte [bp][expand], 1
+    jmp  expandEntry
+
+
+public __nrealloc :
+(*%T NearPtr *)
+public _realloc :
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  byte [bp][expand], 0
+    push bx
+    push cx
+    push dx
+expandEntry:                    (* expand arrives here *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][buffer]
+    mov  ax, [bp][size]
+(*%E *)
+(*%T RegParam *)
+    mov  [bp][size], bx
+    mov  [bp][buffer], ax
+    xchg ax, bx
+(*%E *)
+    or   ax, ax
+    jne  dontFree               (* size = 0 - use free *)
+(*%T RegParam *)
+    mov  ax, bx
+(*%E *)
+(*%F RegParam *)
+    push bx
+(*%E *)
+(*%F NearCall *)
+    call far __nfree
+(*%E *)
+(*%T NearCall *)
+    call __nfree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    sub  ax, ax
+    jmp  near reallocExit
+dontFree:
+    or   bx, bx
+    jne  reallocWanted          (* buffer = NULL, use malloc *)
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __nmalloc
+(*%E *)
+(*%T NearCall *)
+    call __nmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    jmp  near reallocExit
+reallocWanted:                  (* arrive here to change allocation *)
+    cmp  word [__nfirstfree], -1
+    je   near reallocError      (* get out - no heap *)
+    cmp  bx, [__nheapstart]
+    jb   near reallocError
+    cmp  bx, [__nheaptop]
+    jae  near reallocError
+    test ax, 1
+    jz   sizeEven
+    inc  ax
+    or   ax, ax
+    jz   near reallocError
+sizeEven:
+    add  ax, 2
+    sub  bx, 2
+    mov  [bp][currentblock], bx
+    mov  di, bx
+    mov  [bp][newsize], ax
+    mov  bx, [di][nearFreeSize]
+    mov  [bp][oldsize], bx      (* save old block size *)
+    cmp  ax, bx                 (* what needs doing ? *)
+    ja   reallocEnlarge         (* enlarge current allocation *)
+    je   near reallocDone       (* nothing to do *)
+reallocShrink:                  (* shrink current allocation *)
+
+    sub  bx, ax
+    cmp  bx, 6
+    jb   mergeDone
+    mov  [di][nearFreeSize], ax
+    add  di, ax
+    mov  [di][nearFreeSize], bx
+    mov  ax, di
+    add  ax, 2
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __nfree
+(*%E *)
+(*%T NearCall *)
+    call __nfree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+mergeDone:
+    mov  di, [bp][currentblock]
+    jmp  near reallocDone
+
+reallocEnlarge:                (* enlarge allocation *)
+    sub  dx, dx
+    sub  bx, bx
+    mov  ax, [__nfirstfree]     (* find next free block *)
+    or   ax, ax
+    je   near reallocFindNew   (* heap is full *)
+    mov  cx, di
+reallocLoop:
+    cmp  ax, cx
+    ja   reallocFoundNext
+    je   near reallocError     (* Error - block is already free *)
+    mov  bx, dx
+    mov  dx, ax
+    mov  di, ax
+    mov  ax, [di][nearNextBlock]
+    or   ax, ax
+    jne  reallocLoop
+    mov  [bp][lowfree], bx
+    jmp  reallocFindBelow (* there are no free blocks above *)
+reallocFoundNext:
+    mov  [bp][prevfree], dx
+    mov  [bp][nextfree], ax
+    mov  [bp][lowfree], bx
+    mov  bx, [bp][oldsize]     (* old block size *)
+    push cx
+    add  cx, bx                (* is next free block contiginous *)
+    cmp  cx, ax
+    pop  cx
+    jne  reallocFindBelow      (* no - find a block below *)
+    mov  di, ax                (* yes, but is it big enough *)
+    mov  ax, [bp][newsize]
+    sub  ax, bx                (* we need ax more bytes *)
+    cmp  ax, [di][nearFreeSize]    (* are there enough here *)
+    je   reallocExactFit
+    ja   reallocFindBelow      (* no *)
+reallocGotEnough:
+    sub  ax, [di][nearFreeSize]
+    neg  ax
+    cmp  ax, 4
+    jae  reallocAboveSizeOK
+    add  [bp][newsize], ax
+    jmp  reallocExactFit
+reallocAboveSizeOK:
+    mov  di, [bp][nextfree]    (* yes - *)
+    mov  dx, [di][nearFreeSize]
+    mov  cx, [di][nearNextBlock]   (* save next free block *)
+    mov  bx, [bp][currentblock]
+    mov  ax, [bp][newsize]
+    mov  di, bx
+    add  dx, [di][nearFreeSize]    (* dx is size of both blocks *)
+    sub  dx, ax                (* dx is size of new free *)
+    mov  [di][nearFreeSize], ax    (* set size to new *)
+    add  ax, bx                (* ax is now new free block *)
+    mov  di, ax
+    mov  [di][nearNextBlock], cx
+    mov  [di][nearFreeSize], dx
+reallocAdjust:
+    mov  cx, [bp][prevfree]    (* adjust previous free block *)
+    jcxz rFFree
+    mov  di, cx
+    mov  [di][nearNextBlock], ax
+    jmp  near reallocDone      (* block has been increased - success *)
+reallocExactFit:
+    mov  di, [bp][currentblock]
+    mov  ax, [bp][newsize]
+    mov  [di][nearFreeSize], ax     (* merge blocks *)
+    mov  di, [bp][nextfree]
+    mov  ax, [di][nearNextBlock]
+    jmp  reallocAdjust
+rFFree:                        (* there wasn't one - set first free *)
+    mov  [__nfirstfree], ax
+    jmp  near reallocDone
+
+reallocFindBelow:
+    or   dx, dx                (* is there a free block below *)
+    jz   reallocFindNew
+    cmp  dx, cx                (* is free block below *)
+    ja   reallocFindNew
+    mov  [bp][nextfree], ax
+    mov  di, dx
+    mov  ax, [di][nearFreeSize]
+    add  dx, ax
+    cmp  dx, cx                (* are blocks contiginous *)
+    jne  reallocFindNew
+    mov  bx, cx
+    add  ax, [bx][nearFreeSize]
+    cmp  ax, [bp][newsize]
+    jb   reallocFindNew        (* is combined size big enough *)
+    je   reallocBelowExactFit
+    sub  ax, [bp][newsize]
+    cmp  ax, 4
+    jae  reallocBelowSizeOK
+    add  [bp][newsize], ax
+    jmp  reallocBelowExactFit
+reallocBelowSizeOK:
+    mov  bx, ax
+    mov  ax, [bp][newsize]
+    mov  [di][nearFreeSize], ax
+    call reallocMove
+    mov  cx, di
+    add  di, ax
+    mov  [di][nearFreeSize], bx
+    mov  ax, [bp][nextfree]
+    mov  [di][nearNextBlock], ax
+    mov  ax, di
+    jmp  reallocBelowSplice
+
+reallocBelowExactFit:
+    mov  ax, [bp][newsize]
+    mov  [di][nearFreeSize], ax
+    call reallocMove
+    mov  ax, [bp][nextfree]
+    mov  cx, di
+reallocBelowSplice:
+    mov  bx, [bp][lowfree]
+    or   bx, bx
+    jnz  notLowFirst
+    mov  [__nfirstfree], ax
+    jmp  reallocBelowDone
+notLowFirst:
+    mov  [bx][nearNextBlock], ax
+reallocBelowDone:
+    mov  ax, cx
+    add  ax, 2
+    jmp  reallocExit
+reallocFindNew:                (* free this block and try to find new one *)
+    cmp  byte [bp][expand], 0
+    jne  reallocError          (* if expand only give up here *)
+
+
+(*%F RegParam *)
+    push [bp][size]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, [bp][size]
+(*%E *)
+(*%F NearCall *)
+    call far __nmalloc
+(*%E *)
+(*%T NearCall *)
+    call __nmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    or   ax, ax                (* malloc returned NULL -  *)
+    je   reallocError          (* couldn't find a new one *)
+
+    push ax
+
+    mov  di, ax
+    sub  di, 2
+    call reallocMove
+                               (* copy contents of old block *)
+    mov  ax, [bp][currentblock]
+    add  ax, 2
+
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __nfree
+(*%E *)
+(*%T NearCall *)
+    call __nfree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    pop  ax
+    jmp  reallocExit
+reallocDone:                   (* success *)
+    mov  ax, [bp][buffer]
+    jmp  reallocExit
+reallocError:                  (* failure *)
+    mov  word [_errno], ENOMEM
+    sub  ax, ax                (* return NULL *)
+reallocExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+reallocMove:
+    push di
+    mov  cx, [bp][oldsize]     (* number of bytes to move *)
+    shr  cx, 1
+    mov  si, [bp][currentblock]
+    add  si, 2
+    add  di, 2
+    push ds
+    pop  es
+rep ; movsw
+    pop  di
+    ret  0
+(* _realloc ENDP *)
+
+(*%E *)
+
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __initfmem.
+
+   PRECONDITIONS - __far_ss,  __stklen and __psp must be initialised.
+
+   POSTCONDITIONS - Far heap set up. __fheapsetup = TRUE, _fheapstart and
+                    __fheaptop mark bounding segments. __firstfree marks
+                    first free block. __shr_mem contains address of heap
+                    shrinking procedure.
+
+                    Initial block is < 1000 paragraphs. Surplus memory is
+                    returned to MSDOS.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Init code section brought in by reference to __fheapstart.
+
+   VERSION - MSDOS (Not DLLs).
+   ------------------------------------------------------------------------ *)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __shrink_mem
+
+select _DATA
+
+extrn __psp
+extrn __far_ss
+extrn __stklen
+extrn __farstack
+extrn __fmemsetup
+extrn __firstfree
+extrn __fheaptop
+extrn __shr_mem
+extrn __nheaptop
+
+select _TEXT
+
+do_initfmem : (* defined later on ! *)
+
+select _INIT
+
+initfmem : dw MAGIC_NUM
+           db PR1
+(*%F NearCall *)
+           dd do_initfmem
+(*%E *)
+(*%T NearCall *)
+           dw do_initfmem
+(*%E *)
+
+select _DATA
+public __fheapstart :  dw  0, initfmem      (* start of heap *)
+
+select  _TEXT
+
+free   = -2
+newtop = -4
+
+locals =  4
+
+public __initfmem :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+    cmp  byte [__fmemsetup], 0
+    jne  near initmemDone
+    not  byte [__fmemsetup]
+    mov  word [__shr_mem], __shrink_mem
+(*%F NearCall *)
+    mov  word [__shr_mem][2], cs
+(*%E *)
+    mov  es, [__psp]            (* get top of allocation *)
+    mov  ax, es:[2]
+    mov  bx, [__far_ss]
+    cmp  word [__farstack], 0
+    jz   gotStart               (* near stack *)
+    mov  dx, [__stklen]
+    add  dx, 0FH
+    jnc  sizeOK
+    mov  dx, 1000H
+    jmp  gotSize
+sizeOK:
+    mov  cx, 4
+    shr  dx, cx
+gotSize:
+    add  bx, dx                (* calc top of stack *)
+gotStart:
+    mov  [__fheapstart], bx
+    sub  ax, bx
+    cmp  ax, 1001H
+    jbe  noneToFree
+    add  bx, 1001H
+    mov  [bp][newtop], bx      (* free surplus memory *)
+    sub  bx, [__psp]
+    mov  ah, 4AH
+    int  21H
+    mov  ax, [bp][newtop]
+    mov  es:[2], ax
+(*  jc   fatal error *)
+    mov  ax, 1001H
+noneToFree:                    (* set up first free block *)
+    mov  es, [__fheapstart]
+    or   ax, ax
+    je   noHeap
+    mov  word es:[farNextBlock], 0
+    dec  ax
+    mov  es:[farFreeSize], ax
+    mov  [__firstfree], es
+    add  ax, [__firstfree]
+    mov  [__fheaptop], ax
+    jmp  initmemDone
+noHeap:
+    mov  word [__firstfree], -1     (* no heap - firstfree is -1 *)
+initmemDone:
+    pop  ds
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __initnmem.
+
+   PRECONDITIONS - __heap_size initialised. __near_heap_start defined in
+                   main module.
+
+   POSTCONDITIONS - Near heap set up. __nheapsetup = TRUE, _nheapstart and
+                    __nheaptop mark bounding offsets. __nfirstfree marks
+                    first free block.
+
+                    No memory returnd to MSDOS.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Init code section brought in by reference to __nfirstfree.
+
+   VERSION - MSDOS (Not DLLs).
+   ------------------------------------------------------------------------ *)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+segment NEAR_HEAP(BSS, 28H)
+
+select _DATA
+
+extrn __nheapstart
+extrn __nheaptop
+extrn __bss_end
+extrn __farstack
+extrn __nmemsetup
+extrn __near_heap_start
+extrn __heap_size
+
+extrn __psp
+extrn __stklen
+
+select _TEXT
+
+do_initnmem : (* defined later on ! *)
+
+select _INIT
+initnmem : dw MAGIC_NUM
+           db PR1
+(*%F NearCall *)
+           dd do_initnmem
+(*%E *)
+(*%T NearCall *)
+           dw do_initnmem
+(*%E *)
+
+select _DATA
+public __nfirstfree :  dw  0, initnmem
+
+select  _TEXT
+
+public __initnmem :
+
+    push bp
+    mov  bp, sp
+    push di
+    cmp  byte [__nmemsetup], 0
+    jne  ninitDone
+    not  byte [__nmemsetup]
+    mov  di, __near_heap_start
+    add  di, 3
+    and  di, ~1
+
+    mov  dx, di
+    add  dx, [__heap_size]
+    jnc  sizeSet
+    mov  dx, -1
+sizeSet:
+    sub  dx, 2
+    mov  cx, dx
+    sub  cx, 10H
+    cmp  cx, di
+    jbe  noHeap
+    mov  [__nheaptop], dx
+    sub  dx, di
+    mov  [__nheapstart], di
+    mov  [__nfirstfree], di
+    mov  [di][nearFreeSize], dx
+    mov  word [di][nearNextBlock], 0
+ninitDone:
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+noHeap:
+    mov  word [__nfirstfree], -1
+    jmp  ninitDone
+(*%E _DLL *)
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __shrink_mem.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - Last block of far heap shrunk to <= 2 paragraphs and
+                    rest of memory returned to MSDOS.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - Returns 0 if succesful.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - MSDOS (Not DLLS).
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __fheapstart
+extrn __firstfree
+extrn __fheaptop
+extrn __psp
+
+select _TEXT
+
+public __shrink_mem :
+
+    push ds
+    mov  ax, _DATA
+(*%F SameDS *)
+    mov  ds, ax
+(*%E *)
+    mov  es, ax
+    mov  cx, es:[__firstfree]
+    jcxz shrinkDone
+    mov  ds, cx
+shrinkLoop:                        (* find end of heap *)
+    mov  ax, [farNextBlock]
+    or   ax, ax
+    je   lastBlock
+    mov  ds, ax
+    jmp  shrinkLoop
+lastBlock:
+    mov  ax, [farFreeSize]
+    mov  bx, ds
+    add  bx, ax
+    cmp  bx, es:[__fheaptop]
+    jne  noneToFree                (* return if the block is not the last one *)
+    cmp  ax, 2                     (* return if last block allocated or NearPtr *)
+    jb   noneToFree
+    mov  ax, 2                     (* adjust last block in heap *)
+    mov  [farFreeSize], ax
+    mov  bx, ds                    (* adjust top of memory *)
+    add  bx, ax
+    mov  es:[__fheaptop], bx
+    mov  ax, es:[__psp]
+    mov  es, ax
+    inc  bx
+    mov  es:[2], bx
+    sub  bx, ax
+    mov  ah, 4AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   shrinkError
+noneToFree:
+    sub  ax, ax
+    jmp  shrinkDone
+shrinkError:
+    mov  ax, -1                    (* error - either PSP corrupted or  *)
+shrinkDone:                        (* memory blocks damaged *)
+    pop  ds
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%F _OS2 *)
+(*%T _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __shrink_mem.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - Last block of far heap shrunk to <= 2 paragraphs and
+                    rest of memory returned to MSDOS.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - Returns 0 if succesful.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES - Code in Loader accessed by interrupt.
+
+   VERSION - MSDOS DLLs.
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+
+extrn Loader$ShrinkHeap
+
+public __shrink_mem :
+    push bp
+    mov  bp, sp
+    call far Loader$ShrinkHeap
+    xor  ax, ax
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL*)
+(*%E OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - calloc, _fcalloc.
+
+   PRECONDITIONS - far heap initialised.
+
+   POSTCONDITIONS - If successful, block of size*num bytes allocated and
+                    cleared to zero.
+                    If size = 0 or heap full, errno set to ENOMEM.
+
+   IN PARAMETERS -  Number of blocks requested(size_t),
+                    Size of block requested(size_t)
+
+   OUT PARAMETERS - If successful Near pointer to allocated block.
+                    On error NULL pointer.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Jumps to shared code in malloc.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __fcallocEntry
+extrn __fmallocError
+extrn __core_lock
+extrn __core_unlock
+
+select _TEXT
+
+public __fcalloc :
+(*%F NearPtr *)
+public _calloc :
+(*%E *)
+
+num   = frame
+size  = 2+frame
+
+currentblock = -2
+newsize      = -4
+prevblock    = -6
+flag         = -8
+request      = -10
+locals       =  10
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]
+(*%E *)
+    or   ax, ax                            (* Error if size = 0 *)
+    je   near __fmallocError
+(*%F RegParam *)
+    mov  dx, [bp][num]
+(*%E *)
+(*%T RegParam *)
+    mov  dx, bx
+(*%E *)
+    or   dx, dx
+    je   near __fmallocError
+    mul  dx
+    or   dx, dx
+    jne  near __fmallocError                  (* over flow *)
+    mov  byte [bp][flag], 1
+    jmp  __fcallocEntry
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - halloc.
+
+   PRECONDITIONS - far heap initialised.
+
+   POSTCONDITIONS - If successful, huge block of size bytes allocated.
+                    If size = 0 or heap full, errno set to ENOMEM.
+
+   IN PARAMETERS -  Size of block requested(long)
+
+   OUT PARAMETERS - If successful Far pointer to allocated block.
+                    On error NULL pointer.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Jumps to shared code in malloc.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __hallocEntry
+extrn __fmallocError
+extrn __heap_align
+extrn __core_lock
+extrn __core_unlock
+
+select _TEXT
+
+
+currentblock = -2
+newsize      = -4
+prevblock    = -6
+flag         = -8
+request      = -10
+locals       =  10
+
+
+public _halloc :
+
+size = frame
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]
+    call __heap_align
+    mov  dx, [bp][size][2]
+(*%E *)
+(*%T RegParam *)
+    push bx
+    call __heap_align
+    pop  dx
+(*%E *)
+    mov  cx, 12
+    shl  dx, cx
+    add  ax, dx                            (* number of paragraphs requested *)
+    or   ax, ax
+    je   near __fmallocError                (* return NULL if size = 0 *)
+    mov  byte [bp][flag], 0
+    mov  [bp][request], ax
+    mov  [bp][newsize], ax
+    jmp  __hallocEntry
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - malloc, _nmalloc.
+
+   PRECONDITIONS - far heap initialised.
+
+   POSTCONDITIONS - If successful, block of size bytes allocated.
+                    If size = 0 or heap full, errno set to ENOMEM.
+
+   IN PARAMETERS -  Size of block requested(long)
+
+   OUT PARAMETERS - If successful Far pointer to allocated block.
+                    On error NULL pointer.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - .
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+farFreeSize    =  14
+farNextBlock   =  16
+
+extrn _memset
+extrn __core_lock
+extrn __core_unlock
+extrn __firstfree
+extrn __fheapstart
+extrn __fheaptop
+extrn __psp
+extrn __seterrno
+extrn __heap_align
+extrn __heap_alloc
+
+select  _TEXT
+
+public __fmalloc :
+(*%F NearPtr *)
+public _malloc :
+(*%E *)
+
+size  = frame
+
+currentblock = -2
+newsize      = -4
+prevblock    = -6
+flag         = -8
+request      = -10
+locals       =  10
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]
+(*%E *)
+    or   ax, ax
+    je   near __fmallocError                (* return NULL if size = 0 *)
+    mov  byte [bp][flag], 0
+public  __fcallocEntry :
+    mov  [bp][request], ax
+    call __heap_align                 (* adjust size to para and header *)
+    mov  [bp][newsize], ax
+public __hallocEntry :
+    mov  bx, [__firstfree]                 (* get first free block *)
+    cmp  bx, -1
+    je   near __fmallocError                  (* no  heap exists *)
+    or   bx, bx
+    je   mallocFull                        (* there are no free blocks *)
+    mov  es, bx
+    mov  word [bp][prevblock], 0
+heapLoop:                                  (* search for big enough block *)
+    cmp  ax, es:[farFreeSize]
+    jbe  near blockFound                   (* found a free block big enough *)
+    mov  bx, es:[farNextBlock]
+    or   bx, bx
+    je   atHeapTop                         (* last free block *)
+    mov  [bp][prevblock], es
+    mov  es, bx
+    jmp  heapLoop                          (* try next block *)
+
+
+(* These paragraphs are concerned with getting morre memory from DOS *)
+
+mallocFull:                                (* special case - full heap *)
+    mov  [bp][prevblock], bx
+    call __heap_alloc                      (* extend heap *)
+    jcxz near __fmallocError                (* failure - no more from DOS *)
+    mov  es, [__fheaptop]
+    mov  es:[farFreeSize], cx
+    mov  word es:[farNextBlock], 0
+    mov  [__firstfree], es
+    jmp  newBlockDone
+atHeapTop:
+    mov  [bp][currentblock], es
+    call __heap_alloc                      (* get more from DOS *)
+    jcxz near __fmallocError                (* failure - none left *)
+    mov  es, [bp][currentblock]
+    mov  ax, es:[farFreeSize]
+    add  ax, [bp][currentblock]            (* is this the old last block *)
+    cmp  ax, [__fheaptop]
+    jne  addNewBlock
+extendBlock:
+    add  es:[farFreeSize], cx                 (* yes - increase size of block *)
+    jmp  newBlockDone
+addNewBlock:                               (* no - add a new block *)
+    mov  ax, [__fheaptop]
+    mov  es:[farNextBlock], ax
+    mov  es, ax                            (* new block in list *)
+    mov  es:[farFreeSize], cx
+    mov  word es:[farNextBlock], 0
+newBlockDone:
+    add  [__fheaptop], cx                   (* adjust heap top *)
+    mov  ax, [bp][newsize]
+    cmp  ax, es:[farFreeSize]
+    ja   __fmallocError
+
+(* once a suitable block is found it is spliced in here *)
+
+blockFound:                                (* es is current block header *)
+    mov  ax, [bp][newsize]                 (* Here the new block is *)
+    mov  cx, es:[farNextBlock]                (* spliced into the list *)
+    cmp  ax, es:[farFreeSize]                 (* is block an exact fit ? *)
+    mov  bx, es
+    je   exactFit
+    mov  dx, es:[farFreeSize]
+    mov  es:[farFreeSize], ax                 (* size of allocated block *)
+    sub  dx, ax                            (* size of new block *)
+    add  ax, bx                            (* segment of new free block *)
+    mov  es, ax
+    mov  es:[farFreeSize], dx
+    mov  es:[farNextBlock], cx
+hsSetPrevious:
+    mov  cx, [bp][prevblock]
+    jcxz hsFirst
+    mov  es, cx
+    mov  es:[farNextBlock], ax               (* adjust previous block *)
+    jmp  hsDone
+hsFirst:
+    mov  [__firstfree], ax
+hsDone:
+    mov  es, bx
+    jmp  mallocDone
+exactFit:                                 (* special case - an exact fit *)
+    mov  ax, cx
+    jmp  hsSetPrevious
+
+public __fmallocError :                    (* arrive here to return NULL *)
+    mov  ax, ENOMEM
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  mallocExit
+
+mallocDone:
+    mov  cx, ax
+    mov  dx, es
+    inc  dx
+    sub  ax, ax
+    cmp  byte [bp][flag], 0
+    jz   mallocExit
+    push di
+    sub  di, di
+    mov  es, dx
+    mov  cx, [bp][request]
+rep ; stosb
+    pop  di
+mallocExit:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+dw __fheapstart
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _ffree, free, hfree.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - block merged into free list.
+
+   IN PARAMETERS - Far pointer to block allocated from far heap.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Always merges neighbouring free blocks.
+
+   VERSION - MSDOS.
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+farFreeSize    =  14
+farNextBlock   =  16
+
+extrn __core_lock
+extrn __core_unlock
+extrn __fheapstart
+extrn __fheaptop
+extrn __firstfree
+extrn __psp
+extrn __heap_norm
+extrn __heap_merge
+extrn __heap_free
+
+select _TEXT
+
+buffer = frame
+
+currentblock = -2
+
+locals =2
+
+public __ffree :
+public _hfree :
+(*%F NearPtr *)
+public _free :
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push ax
+    push bx
+(*%E *)
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%F RegParam *)
+    les  bx, [bp][buffer]                (* normalise and validate pointer *)
+(*%E *)
+(*%T RegParam *)
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+    call __heap_norm
+    jc   near freeError
+freeValid:                               (* dx points to header *)
+    sub  ax, ax
+    mov  cx, [__firstfree]
+    cmp  cx, -1
+    je   near freeError                  (* there is no heap *)
+    jcxz freeFull                        (* heap is full *)
+freeLoop:
+    cmp  cx, dx                          (* are we past block ? *)
+    ja   freeFound
+    je   freeError                       (* block is already free *)
+    mov  ax, cx                          (* save lower block *)
+    mov  es, cx
+    mov  cx, es:[farNextBlock]
+    jcxz freeFound
+    jmp  freeLoop
+freeFull:                                (* special case *)
+    mov  [__firstfree], dx               (* a new first free *)
+    mov  word es:[farNextBlock], 0
+    jmp  freeNoMerge
+freeFound:                               (* ax is lower block *)
+    or   ax, ax
+    jne  notFirst
+    mov  cx, [__firstfree]
+    mov  [__firstfree], dx               (* set a new first free block *)
+    mov  es, dx
+    mov  es:[farNextBlock], cx
+    jmp  freeNoLower
+notFirst:
+    mov  es, ax
+    mov  cx, es:[farNextBlock]              (* splice free block into list *)
+    mov  es:[farNextBlock], dx
+    mov  es, dx
+    mov  es:[farNextBlock], cx              (* ax still lower block *)
+    mov  es, ax
+    add  ax, es:[farFreeSize]
+    cmp  ax, dx                          (* is prev free contiginous *)
+    jne  freeNoLower
+    call __heap_merge                    (* yes - merge *)
+    jmp  freeLowDone
+freeNoLower:
+    mov  es, dx
+freeLowDone:
+    cmp  word es:[farNextBlock], 0          (* is there a lower block *)
+    je   freeNoMerge
+    mov  ax, es
+    add  ax, es:[farFreeSize]
+    cmp  ax, es:[farNextBlock]              (* is next free contiginous *)
+    jne  freeNoMerge
+    call __heap_merge                    (* yes - merge *)
+freeNoMerge:                             (* are we in the last block ? *)
+    mov  ax, es
+    add  ax, es:[farFreeSize]
+    cmp  ax, [__fheaptop]
+    jne  freeDone
+(*%F NearCall *)
+    call far __heap_free
+(*%E *)
+(*%T NearCall *)
+    call __heap_free
+(*%E *)
+freeDone:
+freeError:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+(*%F RegParam *)
+    pop  bx
+    pop  ax
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+segment _TEXT(CODE, 28H)
+
+extrn __fheapstart
+extrn __fheaptop
+extrn __psp
+
+(* This function validates the pointer. It only checks that it is aligned and
+within the bounds of the heap. If the pointer refers to a block that has
+already been freed, then this will be detected in the free function *)
+
+public __heap_norm :
+
+    mov  cx, 4                           (* es:bx is pointer *)
+    shr  bx, cx                          (* normalises pointer and sets to *)
+    jc   validError                      (* error *)
+    mov  dx, es                          (* block header *)
+    add  dx, bx                          (* ax is now address of header *)
+    dec  dx
+    cmp  dx, [__fheapstart]               (* is pointer within heap *)
+    jb   validError
+    cmp  dx, [__fheaptop]
+    jae  validError
+    clc                                  (* yes it is *)
+validDone:
+    mov  es, dx
+    ret  0
+validError:
+    stc
+    jmp  validDone
+
+public __heap_alloc :
+
+    mov  bx, [__fheaptop]                  (* try to get more from DOS *)
+    inc  bx
+    sub  bx, [__psp]
+    mov  cx, 1000H
+    cmp  ax, cx                            (* try for max(size, 1000H) *)
+    jb   axNotBig
+    mov  cx, ax
+axNotBig:
+    mov  es, [__psp]
+    add  bx, cx
+    mov  ah, 4AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  allocDone                         (* success *)
+    mov  cx, bx
+    add  cx, [__psp]
+    sub  cx, [__fheaptop]                  (* get what there is from DOS *)
+    dec  cx
+    jcxz allocFail
+    mov  ah, 4AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   allocFail
+allocDone:
+    mov  es, [__psp]
+    add  es:[2], cx                        (* adjust ceiling *)
+allocFail:
+    ret  0
+
+public __heap_align :
+
+    add  ax, 2
+    jc   oflow
+    cmp  ax, 0FFF0H
+    ja   sizeBig
+    add  ax, 0FH                          (* converts byte size to para size  *)
+    mov  cl, 4
+    shr  ax, cx                           (* paragraph align *)
+    ret  0
+oflow:
+    or   ax, ax
+    jne  sizeBigger
+sizeBig:
+    mov  ax, 1000H
+    ret  0
+sizeBigger:
+    mov  ax, 1001H
+    ret  0
+
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%F _OS2 *)
+segment _TEXT(CODE, 28H)
+
+extrn __psp
+extrn __fheaptop
+
+public __heap_free :
+
+    mov  ax, es:[farFreeSize]
+    mov  dx, 1000H                       (* free if large amount of free stack *)
+    cmp  ax, dx                          (* is it worth it ? *)
+    jb   noFree
+    mov  es:[farFreeSize], dx
+    inc  dx
+    mov  bx, es
+    add  bx, dx
+    mov  es, [__psp]
+    mov  es:[2], bx                      (* new ceiling *)
+    mov  [__fheaptop], bx
+    dec  word [__fheaptop]
+
+    sub  bx, [__psp]
+    mov  ah, 4AH                         (* give surplus back to DOS *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+noFree:
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __heap_merge :
+
+    push ds                             (* merges two blocks *)
+    mov  ds, es:[farNextBlock]
+    mov  cx, [farNextBlock]
+    mov  ax, [farFreeSize]
+    add  es:[farFreeSize], ax
+    mov  es:[farNextBlock], cx
+    pop  ds
+    ret  0
+
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - coreleft, farcoreleft, _memavl.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - Returns number of unallocated bytes in far heap(long).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Causes Far heap to be initialised.
+
+   VERSION - MSDOS except Modula-2 Overlay Loader.
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+farFreeSize    =  14
+farNextBlock   =  16
+
+extrn __core_lock
+extrn __core_unlock
+
+select _DATA
+
+extrn __firstfree
+extrn __psp
+extrn __fheapstart
+
+select _TEXT
+
+(*%F NearPtr *)
+public _coreleft :
+public __memavl :
+(*%E *)
+public _farcoreleft :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+(*%F SameDS *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+    sub  ax, ax
+    mov  cx, [__firstfree]
+    cmp  cx, -1
+    je   chkEmpty                          (* no heap *)
+chkLoop:
+    jcxz chkEnd
+    mov  es, cx
+    add  ax, es:[farFreeSize]
+    mov  cx, es:[farNextBlock]
+    jmp  chkLoop
+chkEnd:
+    push ax
+    mov  es, [__psp]
+    mov  ah, 4AH                           (* what has DOS got *)
+    mov  bx, 0FFFFH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    mov  cx, es:[2]
+    mov  ax, es
+    sub  cx, ax
+    sub  bx, cx
+    pop  ax
+    add  ax, bx
+    mov  dx, 10H
+    mul  dx
+    sub  ax, 10H
+    sbb  dx, 0
+    jnc  chkDone
+    sub  ax, ax
+    cwd
+chkDone:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  cx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+chkEmpty:
+    mov  ax, cx
+    cwd
+    jmp  chkDone
+
+    dw __fheapstart                    (* Ensure Heap initialization *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _fblockavail.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - Returns size of largest unallocated block in bytes
+                    in far heap(long).
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Causes Far heap to be initialised.
+
+   VERSION - MSDOS except Modula-2 Overlay Loader.
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+farFreeSize    =  14
+farNextBlock   =  16
+
+extrn __core_lock
+extrn __core_unlock
+extrn __firstfree
+extrn __psp
+
+select _TEXT
+
+public __fblockavail :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+(*%F SameDS *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+    sub  ax, ax
+    mov  cx, [__firstfree]
+    cmp  cx, -1
+    je   chkDone                          (* no heap *)
+chkLoop:
+    jcxz chkEnd
+    mov  es, cx
+    cmp  ax, es:[farFreeSize]
+    ja   blockSmall
+    mov  ax, es:[farFreeSize]
+blockSmall:
+    mov  cx, es:[farNextBlock]
+    jmp  chkLoop
+chkEnd:
+    push ax
+    mov  es, [__psp]
+    mov  ah, 4AH                           (* what has DOS got *)
+    mov  bx, 0FFFFH
+    extrn @DosInterrupt
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    mov  cx, es:[2]
+    mov  ax, es
+    sub  cx, ax
+    sub  bx, cx
+    pop  ax
+    cmp  ax, bx
+    ja   gotLargest
+    mov  ax, bx
+gotLargest:
+    mov  dx, 10H
+    mul  dx
+chkDone:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  cx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _expand, _fexpand, realloc, _frealloc, hrealloc.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - If successful, block allocation changed.
+                    On error errno set to ENOMEM.
+
+   IN PARAMETERS -  Far pointer to memory block, block size(long).
+
+   OUT PARAMETERS - Returns far pointer to memory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - realloc changes size of block allocated from far heap. If the
+           block cannot be expanded it is freed and another block allocated.
+           The contents of the old block are copied.
+
+           If size is zero the block will be freed.
+           If the pointer is NULL a new block will be allocated.
+
+           _expand will attempt to change the allocation of the block without
+           moving it.
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+farFreeSize    =  14
+farNextBlock   =  16
+
+extrn  _halloc
+extrn  __fmalloc
+extrn  __ffree
+extrn  _hfree
+extrn __heap_norm
+extrn __heap_align
+extrn __heap_alloc
+extrn __fheapstart
+extrn __psp
+extrn __firstfree
+extrn __fheaptop
+extrn __seterrno
+extrn __core_lock
+extrn __core_unlock
+
+buffer  = frame
+size    = 4+frame
+
+currentblock = -2
+expand    = -4
+newsize   = -6
+prevfree  = -8
+nextfree  = -10
+oldsize   = -12
+
+locals    =  12
+
+public __fexpand :
+(*%F NearPtr *)
+public __expand :
+(*%E *)
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+    mov  byte [bp][expand], 1
+    jmp  near expandEntry
+
+public _hexpand :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  byte [bp][expand], 1
+    jmp  hrEnt
+
+public _hrealloc :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  byte [bp][expand], 0
+hrEnt:
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+(*%F RegParam *)
+    les  bx, [bp][buffer]
+    mov  ax, [bp][size]
+    mov  dx, [bp][size][2]
+(*%E *)
+(*%T RegParam *)
+    mov  es, bx
+    mov  bx, ax
+    mov  ax, cx
+(*%E *)
+    mov  si, ax
+    or   dx, dx
+    jne  dontFree               (* size = 0 - use free *)
+    or   ax, ax
+    jne  dontFree               (* size = 0 - use free *)
+(*%F RegParam *)
+    push es
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, bx
+    mov  bx, es
+(*%E *)
+(*%T NearCall *)
+    call _hfree
+(*%E *)
+(*%F NearCall *)
+    call far _hfree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  near reallocExit
+dontFree:
+    mov  cx, es
+    or   cx, cx
+    jne  hreallocWanted          (* buffer = NULL, use malloc *)
+(*%F RegParam *)
+    push dx
+    push ax
+(*%E *)
+(*%F RegParam *)
+    mov  bx, dx
+(*%E *)
+(*%T NearCall *)
+    call _halloc
+(*%E *)
+(*%F NearCall *)
+    call far _halloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    jmp  near reallocExit
+hreallocWanted:                  (* arrive here to change allocation *)
+    cmp  word [__firstfree], -1
+    je   near reallocError      (* get out - no heap *)
+    push dx
+    call __heap_norm            (* normalise pointer *)
+    pop  dx
+    jc   near reallocError
+    call __heap_align           (* paragraph align size *)
+    mov  cx, 12
+    shl  dx, cx
+    add  ax, dx                            (* number of paragraphs requested *)
+    jmp  hreallocEntry
+
+public __frealloc :
+(*%F NearPtr *)
+public _realloc :
+(*%E *)
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+    mov  byte [bp][expand], 0
+expandEntry:                    (* expand arrives here *)
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+(*%F RegParam *)
+    les  bx, [bp][buffer]
+    mov  ax, [bp][size]
+(*%E *)
+(*%T RegParam *)
+    mov  es, bx
+    mov  bx, ax
+    mov  ax, cx
+(*%E *)
+    or   ax, ax
+    mov  si, ax
+    jne  hdontFree               (* size = 0 - use free *)
+(*%F RegParam *)
+    push es
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, bx
+    mov  bx, es
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  near reallocExit
+hdontFree:
+    mov  cx, es
+    or   cx, cx
+    jne  reallocWanted          (* buffer = NULL, use malloc *)
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%T NearCall *)
+    call __fmalloc
+(*%E *)
+(*%F NearCall *)
+    call far __fmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    jmp  near reallocExit
+reallocWanted:                  (* arrive here to change allocation *)
+    mov  cx, _DATA
+    mov  ds, cx
+    cmp  word [__firstfree], -1
+    je   near reallocError      (* get out - no heap *)
+    call __heap_norm            (* normalise pointer *)
+    jc   near reallocError
+    call __heap_align           (* paragraph align size *)
+hreallocEntry:
+    mov  cx, es
+    mov  [bp][currentblock], es
+    mov  [bp][newsize], ax
+    mov  bx, es:[farFreeSize]
+    mov  [bp][oldsize], bx      (* save old block size *)
+    cmp  ax, bx                 (* what needs doing ? *)
+    ja   reallocEnlarge         (* enlarge current allocation *)
+    je   near reallocDone       (* nothing to do *)
+reallocShrink:                  (* shrink current allocation *)
+    mov  es:[farFreeSize], ax
+    add  cx, ax
+    mov  es, cx
+    sub  bx, ax
+    mov  es:[farFreeSize], bx
+(*%T _DLLOVL *)
+    extrn __set_heapstate
+    call far  __set_heapstate
+(*%E *)
+(*%F RegParam *)
+    mov  ax, es
+    inc  ax
+    push ax
+    sub  ax, ax
+    push ax
+(*%E *)
+(*%T RegParam *)
+    mov  bx, es
+    inc  bx
+    sub  ax, ax
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+                               (* use _free to deallocate surplus block *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+(*%T _DLLOVL *)
+    mov  es, [bp][currentblock]
+    jmp  near reallocDone2
+(*%E *)
+mergeDone:
+    mov  es, [bp][currentblock]
+    jmp  near reallocDone
+
+reallocEnlarge:                (* enlarge allocation *)
+    sub  dx, dx
+    mov  ax, [__firstfree]     (* find next free block *)
+    or   ax, ax
+    je   near reallocFindNew   (* heap is full *)
+    mov  cx, es
+reallocLoop:
+    cmp  ax, cx
+    ja   reallocFoundNext
+    je   near reallocError     (* Error - block is already free *)
+    mov  dx, ax
+    mov  es, ax
+    mov  ax, es:[farNextBlock]
+    or   ax, ax
+    jne  reallocLoop
+    jmp  near reallocFindNew   (* there are no free blocks above *)
+reallocFoundNext:
+    mov  [bp][prevfree], dx
+    mov  [bp][nextfree], ax
+    add  cx, bx                (* is next free block contiginous *)
+    cmp  cx, ax
+    jne  near reallocFindNew   (* no - find a new block *)
+    mov  es, ax                (* yes, but is it big enough *)
+    mov  ax, [bp][newsize]
+    sub  ax, bx                (* we need ax more bytes *)
+    cmp  ax, es:[farFreeSize]  (* are there enough here *)
+    je   reallocExactFit
+    ja   reallocTooSmall       (* no *)
+reallocGotEnough:
+    mov  es, [bp][nextfree]       (* yes - *)
+    mov  dx, es:[farFreeSize]
+    mov  cx, es:[farNextBlock]    (* save next free block *)
+    mov  bx, [bp][currentblock]
+    mov  ax, [bp][newsize]
+    mov  es, bx
+    add  dx, es:[farFreeSize]     (* dx is size of both blocks *)
+    sub  dx, ax                   (* dx is size of new free *)
+    mov  es:[farFreeSize], ax     (* set size to new *)
+    add  ax, bx                   (* ax is now new free block *)
+    mov  es, ax
+    mov  es:[farNextBlock], cx
+    mov  es:[farFreeSize], dx
+reallocAdjust:
+    mov  cx, [bp][prevfree]    (* adjust previous free block *)
+    jcxz rFFree
+    mov  es, cx
+    mov  es:[farNextBlock], ax
+    jmp  near reallocDone      (* block has been increased - success *)
+reallocExactFit:
+    mov  es, [bp][currentblock]
+    mov  ax, [bp][newsize]
+    mov  es:[farFreeSize], ax     (* merge blocks *)
+    mov  es, [bp][nextfree]
+    mov  ax, es:[farNextBlock]
+    jmp  reallocAdjust
+rFFree:                        (* there wasn't one - set first free *)
+    mov  [__firstfree], ax
+    jmp  near reallocDone
+
+reallocTooSmall:               (* arrive here if higher block is too small *)
+    mov  bx, es
+    add  bx, es:[farFreeSize]
+    cmp  bx, [__fheaptop]       (* is it the last block *)
+    jne  reallocFindNew         (* no - find a new block *)
+reallocExtendHeap:
+    mov  bx, es:[farFreeSize]   (* yes - extend the heap *)
+    sub  ax, bx
+    push ax
+    call __heap_alloc           (* ax is extra required *)
+    pop  ax
+
+    jcxz reallocFindNew         (* couldn't get any - find a new block *)
+    add  [__fheaptop], cx
+    mov  es, [bp][nextfree]
+    add  es:[farFreeSize], cx
+    cmp  cx, ax
+    jb   reallocFindNew         (* couldn't get enough  - find a new block *)
+    jmp  reallocGotEnough
+
+reallocFindNew:                 (* free this block and try to find new one *)
+(*%T _DLLOVL *)
+    extrn __set_heapstate
+    call far  __set_heapstate
+(*%E *)
+    cmp  byte [bp][expand], 0
+    jne  reallocError           (* if expand only give up here *)
+
+(*%F RegParam *)
+    push si
+(*%E *)
+(*%T RegParam *)
+    mov  ax, si
+(*%E *)
+(*%T NearCall *)
+    call __fmalloc
+(*%E *)
+(*%F NearCall *)
+    call far __fmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    or   dx, dx                (* malloc returned NULL -  *)
+    je   reallocError          (* couldn't find a new one *)
+
+    push di
+    mov  bx, [bp][oldsize]     (* number of bytes to move *)
+    mov  cl, 4
+    shl  bx, cl
+    mov  cx, bx
+    mov  es, dx                    (* destination *)
+    mov  di, ax
+    push ds
+    inc  word [bp][currentblock]
+    mov  ds, [bp][currentblock]
+    mov  si, ax
+rep ; movsb
+    pop  ds
+    pop  di
+
+    push dx
+(*%F RegParam *)
+    push [bp][currentblock]
+    sub  ax, ax
+    push ax
+(*%E *)
+(*%T RegParam *)
+    mov  bx, [bp][currentblock]
+    sub  ax, ax
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    pop  dx                       (* free old block *)
+    jmp  reallocMal
+reallocDone:                   (* success *)
+(*%T _DLLOVL *)
+    extrn __set_heapstate
+    call far  __set_heapstate
+reallocDone2:                   (* heap state reset by free *)
+(*%E *)
+    mov  dx, [bp][currentblock]
+    inc  dx
+reallocMal:
+    sub  ax, ax
+    jmp  reallocExit           (* return address of block *)
+reallocError:                  (* failure *)
+    mov  ax, ENOMEM
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax                (* return NULL *)
+    sub  dx, dx
+reallocExit:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+(*%F RegParam *)
+    pop  cx
+    pop  bx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _msize, _fmsize.
+
+   PRECONDITIONS - Block must be allocated from far heap.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS - Far pointer to memory block.
+
+   OUT PARAMETERS - Returns size in bytes of memory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+farFreeSize = 14
+
+select _TEXT
+
+(*%F NearPtr *)
+public __msize :
+(*%E *)
+public __fmsize :
+
+(*%F RegParam *)
+buffer = frame
+
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][buffer][2]
+    dec  ax
+    mov  es, ax
+    mov  bx, [bp][buffer]
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push cx
+    dec  bx
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+    mov  ax, es:[bx][farFreeSize]
+    mov  cl, 4
+    shl  ax, cl
+(*%T RegParam *)
+    pop  cx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapchk, _fheapchk, _heapset, _fheapset.
+
+   PRECONDITIONS - Far heap must be initialised.
+
+   POSTCONDITIONS - _heapset fills each free block with the parameter value.
+
+   IN PARAMETERS - _heapset takes fill value(int).
+
+   OUT PARAMETERS - Returns state of heap.
+                     0 _HEAPOK if OK
+                    -1 _HEAPEMPTY if heap not initialised
+                    -2 _HEAPBADBEGIN if initial header bad
+                    -3 _HEAPBADNODE  if heap is damaged
+                    -4 _HEAPOVERFLOW if heap past ceiling
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _memset
+extrn __heap_val
+extrn __heap_norm
+extrn __core_lock
+extrn __core_unlock
+extrn __fheapstart
+extrn __psp
+extrn __fmemsetup
+extrn __firstfree
+extrn __fheaptop
+
+select _TEXT
+
+public __fheapchk :
+(*%F NearPtr *)
+public __heapchk :
+(*%E *)
+
+    push bx
+    push cx
+    push dx
+    sub  bx, bx                        (* dont fill *)
+    jmp  hpShared
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+
+mem_reg_saved = 6
+
+fill = frame+mem_reg_saved
+
+public __fheapset :
+(*%F NearPtr *)
+public __heapset :
+(*%E *)
+
+    push bx
+    push cx
+    push dx
+    mov  bh, 1
+hpShared:
+    push bp
+    mov  bp, sp
+    push di
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+(*%F RegParam *)
+    mov  al, [bp][fill]
+(*%E *)
+    mov  ah, bh
+    mov  dx, [__firstfree]
+    cmp  dx, -1
+    je   chkEmpty                          (* no heap *)
+    mov  bx, [__fheapstart]
+    or   bx, bx                            (* heap unitialised *)
+    je   chkBadStart
+chkLoop:
+    mov  es, bx                            (* check each block *)
+    cmp  bx, dx                            (* is it free list *)
+    jne  chkNotFree                        (* no - continue *)
+    mov  cx, es:[farFreeSize]
+    mov  dx, es:[farNextBlock]                (* get next free *)
+    or   ah, ah
+    je   NodeOK                            (* fill if ah *)
+    shl  cx, 1
+    shl  cx, 1
+    shl  cx, 1
+    sub  cx, 2
+    push ax
+    mov  ah, al
+    mov  di, 12H
+rep ; stosw
+    pop  ax                                (* fill free block *)
+    jmp  NodeOK
+chkNotFree:
+    jb   NodeOK
+    or   dx, dx
+    jne  chkBadNode                        (* bad heap node *)
+NodeOK:
+    add  bx, es:[farFreeSize]
+    cmp  bx, [__fheaptop]
+    ja   chkBadTop                         (* overflow *)
+    jb   chkLoop
+    or   dx, dx
+    je   chkOK
+chkBadTop:
+    mov  ax, _HEAPOVERFLOW
+    jmp  chkDone
+chkEmpty:
+    mov  ax, _HEAPEMPTY
+    jmp  chkDone
+chkBadStart:
+    mov  ax, _HEAPBADBEGIN
+    jmp  chkDone
+chkBadNode:
+    mov  ax, _HEAPBADNODE
+    jmp  chkDone
+chkOK:
+    sub  ax, ax
+chkDone:
+(*%T MThread *)
+    call far [__core_unlock]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  bp
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%F _OS2 *)
+(*%F _DLLOVL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapwalk, _fheapwalk.
+
+   PRECONDITIONS - Far heap must be initialised.
+                   heapinfo structure initialised to NULL, or contains result
+                   of a preevious call to _heapwalk.
+
+   POSTCONDITIONS - heapinfo structure contains details of current heap node.
+
+   IN PARAMETERS - Pointer to heapinfo structure
+
+   OUT PARAMETERS - Returns state of heap.
+                    _HEAPOK       =  0
+                    _HEAPEMPTY    = -1
+                    _HEAPBADBEGIN = -2
+                    _HEAPBADNODE  = -3
+                    _HEAPOVERFLOW = -4
+                    _HEAPBADPTR   = -6
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+pentry  = 0
+size    = 4
+useflag = 6
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+_HEAPEND      = -5
+_HEAPBADPTR   = -6
+
+select _DATA
+
+extrn __fheapstart
+extrn __fheaptop
+extrn __firstfree
+
+lastfree : dw 0, 0
+
+select _TEXT
+
+public __fheapwalk :
+(*%F NearPtr *)
+public __heapwalk :
+(*%E *)
+
+(*%F RegParam *)
+entry  = frame
+dgroup = -2
+locals =  2
+(*%E *)
+(*%T RegParam *)
+entry  = -4
+dgroup = -6
+locals =  6
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+(*%F NearPtr *)
+    mov  [bp][entry][2], bx
+(*%E *)
+    mov  [bp][entry], ax
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    mov  [bp][dgroup], ds
+(*%T _DLLOVL *)
+    extrn __get_heapstate
+    call far  __get_heapstate
+(*%E *)
+(*%F NearPtr *)
+    les  bx, [bp][entry]
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [bp][entry]
+    push ds
+    pop  es
+(*%E *)
+    mov  cx, es:[bx][pentry][2]
+    mov  es, [bp][dgroup]
+    or   cx, cx
+    jnz  notFirst
+    mov  cx, es:[__firstfree]
+    cmp  cx, -1
+    je   near heapNotInit
+    mov  es:[lastfree], cx
+    mov  cx, es:[__fheapstart]
+    mov  ds, cx
+    mov  ax, [farFreeSize]
+    jmp storeNode
+notFirst:
+    cmp  cx, es:[__fheapstart]
+    jb   near invalidPtr
+    cmp  cx, es:[__fheaptop]
+    jae  invalidPtr
+    mov  ds, cx
+    add  cx, [farFreeSize]
+    cmp  cx, es:[__fheaptop]
+    je   atHeapTop
+    mov  ds, cx
+    mov  ax, [farFreeSize]
+storeNode:
+(*%F NearPtr *)
+    mov  es, [bp][entry][2]
+(*%E *)
+(*%T NearPtr *)
+    mov  es, [bp][dgroup]
+(*%E *)
+    mov  word es:[bx][pentry], 0
+    mov  word es:[bx][pentry][2], cx
+    mov  dx, cx
+    mov  cl, 4
+    shl  ax, cl
+    jnc  sizeOK
+    mov  ax, -1        (* can only return MAX(CARDINAL) for a huge block *)
+    jmp  gotSize
+sizeOK:
+    sub  ax, 2
+gotSize:
+    mov  es:[bx][size], ax
+    mov  ax, 1
+    mov  es, [bp][dgroup]
+    cmp  dx, es:[lastfree]
+    jne  notFree
+    sub  ax, ax
+    mov  cx, [farNextBlock]
+    mov  es:[lastfree], cx
+notFree:
+    ja   badNode
+(*%F NearPtr *)
+    mov  es, [bp][entry][2]
+(*%E *)
+(*%T NearPtr *)
+    mov  es, [bp][dgroup]
+(*%E *)
+    mov  es:[bx][useflag], ax
+
+success:
+    mov  ax, _HEAPOK
+exit:
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+heapNotInit:
+    mov  ax, _HEAPEMPTY
+    jmp  exit
+atHeapTop:
+    mov  ds, [bp][dgroup]
+    cmp  word [lastfree], 0
+    jne  badNode
+    mov  ax, _HEAPEND
+    jmp  exit
+badNode:
+    mov  ax, _HEAPBADNODE
+    jmp  exit
+invalidPtr:
+    mov  ax, _HEAPBADPTR
+    jmp  exit
+
+(*%E _DLLOVL *)
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __initfmem.
+
+   PRECONDITIONS - None.
+
+   POSTCONDITIONS - __fmemsetup = TRUE.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - .
+
+   VERSION - _OS2.
+   ------------------------------------------------------------------------ *)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __nheaptop
+extrn __fmemsetup
+select _TEXT
+
+
+do_initfmem : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initfmem : dw MAGIC_NUM
+           db PR1
+           dd do_initfmem
+(*%E *)
+(*%T NearCall *)
+initfmem : dw MAGIC_NUM
+           db PR1
+           dw do_initfmem
+(*%E *)
+
+select _DATA
+public __firstheap :  dw  0, initfmem      (* start of heap *)
+
+select  _TEXT
+
+public __initfmem :
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    not  byte [__fmemsetup]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __newheap, internal.
+
+   PRECONDITIONS - called from far heap function.
+
+   POSTCONDITIONS - A new heap segement is initialised.
+                    Carry flag set if error.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - es:di points to first free block in heap segment.
+
+   CALLING CONVENTION - Near Call, es:di return.
+
+   NOTES - Not called directly in XLarge model.
+
+   VERSION - _OS2.
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE, 28H)
+
+extrn DOSALLOCSEG
+extrn _memset
+extrn __seterrno
+extrn __osalloc
+
+select _TEXT
+
+SEG_GIVEABLE        = 1
+SEG_GETTABLE        = 2
+SEG_DISCARDABLE     = 4
+
+oldheap  = sframe
+
+public __newheap :
+
+    push bp
+    mov  bp, sp
+    sub  ax, ax                            (* get a new heap from OS *)
+    push ax
+    call __osalloc
+    add  sp, 2
+    or   dx, dx
+    jz   nhError
+    mov  es, dx
+    mov  word es:[nextHeap], 0
+    mov  word es:[statHeap], HEAP_ALLOCATED
+    mov  di, [bp][oldheap]
+    mov  es:[prevHeap], di
+    or   di, di
+    jz   noPrevHeap
+    mov  bx, es
+    mov  es, di
+    mov  es:[nextHeap], bx
+    mov  es, bx
+noPrevHeap:
+    mov  di, heapStart
+    mov  es:[firstFree], di
+    mov  word es:[di][OS2FreeSize], OS2MAXSIZE
+    mov  word es:[di][OS2NextBlock], 0
+    clc
+nhDone:
+    pop  bp
+    ret  0                                 (* es:di is first free block *)
+
+nhError:
+    stc
+    jmp  nhDone
+
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __newheapr, internal.
+
+   PRECONDITIONS - called from far heap function.
+
+   POSTCONDITIONS - A new heap segement is initialised.
+                    Carry flag set if error.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - es:di points to first free block in heap segment.
+
+   CALLING CONVENTION - Near Call, es:di return.
+
+   NOTES - XLarge model only. Attenpts to expand any inactive segments
+           before calling __newheap.
+
+   VERSION - _OS2.
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE, 28H)
+
+extrn __newheap
+extrn DOSREALLOCSEG
+extrn __firstheap
+
+select _TEXT
+
+public __newheapr :
+
+    mov  cx, [__firstheap]
+heaprLoop:
+    jcxz allocateNewHeap
+    mov  es, cx
+    cmp  byte es:[statHeap], HEAP_FREE
+    je   expandHeap
+    mov  cx, es:[nextHeap]
+    jmp  heaprLoop
+expandHeap:
+    sub  ax, ax
+    push ax
+    push es
+    call far DOSREALLOCSEG
+    or  ax, ax
+    jnz nhError
+    mov  word es:[statHeap], HEAP_ALLOCATED
+    mov  di, heapStart
+    mov  es:[firstFree], di
+    mov  word es:[di][OS2FreeSize], OS2MAXSIZE
+    mov  word es:[di][OS2NextBlock], 0
+    clc
+    jmp  nhDone
+
+allocateNewHeap:
+    push es
+    call __newheap
+    pop  ax
+nhDone:
+    ret  0                                 (* es:di is first free block *)
+
+nhError:
+    stc
+    jmp  nhDone
+
+(*%E _OS2 *)
+
+section
+(****************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __osalloc, internal.
+
+   PRECONDITIONS - called from far heap function.
+
+   POSTCONDITIONS - Segment allocated from _OS2.
+
+   IN PARAMETERS - Size(int).
+
+   OUT PARAMETERS - Returns pointer to new segment.
+
+   CALLING CONVENTION - Near Call.
+
+   NOTES -
+
+   VERSION - _OS2 .
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE, 28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSALLOCSEG
+extrn _memset
+extrn __seterrno
+
+select _DATA
+
+extrn __memtype
+
+select _TEXT
+
+size   = sframe
+sel    = -2
+locals = 2
+
+SEG_GIVEABLE        = 1
+SEG_GETTABLE        = 2
+SEG_DISCARDABLE     = 4
+
+public __osalloc :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push [bp][size]
+    lea  ax, [bp][sel]
+    push ss
+    push ax
+    mov  ax, [__memtype]
+    push ax
+    call far DOSALLOCSEG
+    or   ax, ax
+    jne  osallocError
+    sub  ax, ax
+    mov  dx, [bp][sel]
+osallocDone:
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+osallocError:
+    mov  ax, ENOMEM
+    push ax
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp   osallocDone
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __osfree, internal.
+
+   PRECONDITIONS - called from far heap function.
+
+   POSTCONDITIONS - Segment returned to _OS2.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard Call.
+
+   NOTES - Not used in Xlarge model.
+
+   VERSION - _OS2 .
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE, 28H)
+
+extrn DOSFREESEG
+
+select _TEXT
+
+public __osfree :
+
+    push ax
+    call far DOSFREESEG
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __osfreer, internal.
+
+   PRECONDITIONS - called from far heap function.
+
+   POSTCONDITIONS - Segment shrunk but not returned to _OS2.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard Call.
+
+   NOTES - Used in Xlarge model.
+
+   VERSION - _OS2 .
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE, 28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSREALLOCSEG
+
+select _TEXT
+
+public __osfreer :
+
+    mov  byte es:[statHeap], HEAP_FREE
+    mov  word es:[firstFree], 0
+    mov  bx, heapStart
+    push bx
+    push es
+    call far DOSREALLOCSEG
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(*%F _DLL *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - __initnmem.
+
+   PRECONDITIONS - __heap_size initialised. __near_heap_start defined in
+                   main module.
+
+   POSTCONDITIONS - Near heap set up. __nheapsetup = TRUE, _nheapstart and
+                    __nheaptop mark bounding offsets. __nfirstfree marks
+                    first free block.
+
+                    No memory returned to _OS2.
+
+   IN PARAMETERS - None.
+
+   OUT PARAMETERS - None.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - Init code section brought in by reference to __nfirstfree.
+
+   VERSION - _OS2 (Not DLLs).
+   ------------------------------------------------------------------------ *)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+freeSize    =  0
+nextBlock   =  2
+
+extrn DOSREALLOCSEG
+
+select _DATA
+
+extrn __nheaptop
+extrn __near_heap_start
+extrn __nheapstart
+extrn _x_bss_end
+extrn __farstack
+
+extrn __nmemsetup
+extrn __psp
+extrn __stklen
+extrn __heap_base
+extrn __heap_size
+extrn __SSisDS
+
+select _TEXT
+
+do_initnmem : (* defined later on ! *)
+
+select _INIT
+initnmem : dw MAGIC_NUM
+           db PR1
+(*%F NearCall *)
+           dd do_initnmem
+(*%E *)
+(*%T NearCall *)
+           dw do_initnmem
+(*%E *)
+
+select _DATA
+public __nfirstfree :  dw  0, initnmem
+
+select  _TEXT
+
+public __initnmem :
+
+    push bp
+    mov  bp, sp
+    push di
+    cmp  byte [__nmemsetup], 0
+    jne  ninitDone
+    not  byte [__nmemsetup]
+    mov  di, __near_heap_start
+    add  di, 3
+    and  di, ~1
+
+    mov  dx, di
+    add  dx, [__heap_size]
+    jnc  sizeSet
+    mov  dx, -1
+sizeSet:
+    sub  dx, 2
+    mov  cx, dx
+    sub  cx, 10H
+    cmp  cx, di
+    jbe  noHeap
+    mov  [__nheaptop], dx
+    sub  dx, di
+    mov  [__nheapstart], di
+    mov  [__nfirstfree], di
+    mov  [di][nearFreeSize], dx
+    mov  word [di][nearNextBlock], 0
+ninitDone:
+    pop  di
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+noHeap:
+    mov  word [__nfirstfree], -1
+    jmp  ninitDone
+
+(*%E _DLL *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _expand, _fexpand, realloc, _frealloc, hrealloc.
+
+   PRECONDITIONS - Far heap initialised.
+
+   POSTCONDITIONS - If successful, block allocation changed.
+                    On error errno set to ENOMEM.
+
+   IN PARAMETERS -  Far pointer to memory block, block size(long).
+
+   OUT PARAMETERS - Returns far pointer to memory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - realloc changes size of block allocated from far heap. If the
+           block cannot be expanded it is freed and another block allocated.
+           The contents of the old block are copied.
+
+           If size is zero the block will be freed.
+           If the pointer is NULL a new block will be allocated.
+
+           _expand will attempt to change the allocation of the block without
+           moving it.
+
+   VERSION - _OS2.
+   ------------------------------------------------------------------------*)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn  __fmalloc
+extrn  __ffree
+extrn  DOSEXITCRITSEC
+extrn  DOSENTERCRITSEC
+extrn  DOSREALLOCSEG
+extrn __seterrno
+
+select _DATA
+
+extrn __fheapsem
+extrn __firstheap
+
+select _TEXT
+
+(*%F RegParam *)
+buffer  = frame
+size    = 4+frame
+oldsize   = -2
+locals    =  2
+(*%E *)
+
+(*%T RegParam *)
+size      = -4
+oldsize   = -2
+buffer    = -8
+locals    =  8
+(*%E *)
+
+public __frealloc :
+
+(*%F NearPtr *)
+public _realloc :
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+
+(*%F RegParam *)
+    mov  ax, [bp][size]
+    les  di, [bp][buffer]
+(*%E *)
+(*%T RegParam *)
+    mov  di, ax
+    mov  es, bx
+    mov  ax, cx
+    mov  [bp][size], cx
+    mov  [bp][buffer], di
+    mov  [bp][buffer][2], es
+(*%E *)
+    mov  cx, es
+    jcxz near reallocMalloc
+    or   ax, ax
+    jz   near reallocFree
+    or   di, di
+    jz   near reallocSys                   (* OS allocated block *)
+
+    sub  di, 2
+    mov  cx, es:[di]
+    mov  [bp][oldsize], cx
+    test ax, 1
+    jz   sizeEven
+    inc  ax
+    jz   near largeBlock
+sizeEven:
+    add  ax, 2
+    jc   near largeBlock
+    cmp  ax, OS2MAXSIZE
+    jae  near largeBlock
+    cmp  ax, cx
+    je   near reallocExit
+    ja   reallocExpand
+reallocShrink:
+    sub  cx, ax
+    cmp  cx, 6
+    jb   near reallocExit
+    mov  es:[di], ax
+    add  di, ax
+    mov  es:[di], cx
+    add  di, 2
+(*%T RegParam *)
+    mov  ax, di
+    mov  bx, es
+(*%E *)
+(*%F RegParam *)
+    push es
+    push di
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    jmp  near reallocExit
+
+reallocExpand:
+    mov  si, es:[firstFree]
+    sub  dx, dx
+freeWalkLoop:
+    or   si, si
+    jz   largeBlock
+    cmp  si, di
+    ja   foundBlock
+    mov  dx, si
+    mov  si, es:[si][OS2NextBlock]
+    jmp  freeWalkLoop
+foundBlock:
+    mov  bx, di
+    add  bx, cx
+    cmp  bx, si
+    jnz  largeBlock
+    mov  bx, es:[si][OS2FreeSize]
+    add  bx, cx
+    cmp  ax, bx
+    ja   largeBlock
+    jb   blockFits
+exactFit:
+    mov  es:[di][OS2FreeSize], ax
+    mov  bx, es:[si][OS2NextBlock]
+    or   dx, dx
+    jnz  notFirst
+    mov  es:[firstFree], bx
+    jmp  reallocExit
+notFirst:
+    mov  si, dx
+    mov  es:[si][OS2NextBlock], bx
+    jmp  reallocExit
+blockFits:
+    push bx
+    sub  bx, ax
+    cmp  bx, 6
+    pop  bx
+    jae  sizeOK
+    mov  ax, bx
+    jmp  exactFit
+sizeOK:
+    mov  es:[di][OS2FreeSize], ax
+    add  di, ax
+    sub  bx, ax
+    mov  cx, es:[si][OS2NextBlock]
+    mov  es:[di][OS2FreeSize], bx
+    mov  es:[di][OS2NextBlock], cx
+    or   dx, dx
+    jnz  notFirst2
+    mov  es:[firstFree], di
+    jmp  reallocExit
+notFirst2:
+    mov  si, dx
+    mov  es:[si][OS2NextBlock], di
+    jmp  reallocExit
+
+largeBlock:
+    mov  ax, [bp][size]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __fmalloc
+(*%E *)
+(*%T NearCall *)
+    call __fmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E RegParam *)
+    or  dx, dx
+    jz  reallocError
+reallocMove:
+    push dx
+    push ax
+    push ds
+    push si
+    mov  es, dx
+    mov  di, ax
+    lds  si, [bp][buffer]
+    mov  cx, [bp][oldsize]
+rep ; movsb
+    pop  si
+    pop  ds
+    mov  bx, [bp][buffer][2]
+    mov  ax, [bp][buffer]
+(*%F RegParam *)
+    push bx
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    pop  ax
+    pop  dx
+    jmp  reallocExit2
+
+reallocExit:
+    mov  dx, [bp][buffer][2]
+    mov  ax, [bp][buffer]
+reallocExit2:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+reallocError:
+    mov  ax, ENOMEM
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  reallocExit2
+
+reallocSys:
+
+    push [bp][size]
+    push [bp][buffer][2]
+    call far DOSREALLOCSEG
+    or   ax, ax
+    jne  reallocError
+    sub  ax, ax
+    mov  dx, [bp][buffer][2]
+    jmp  reallocExit2
+
+reallocFree:
+(*%F RegParam *)
+    push es
+    push di
+(*%E *)
+(*%T RegParam *)
+    mov  bx, es
+    mov ax, di
+(*%E *)
+(*%F NearCall *)
+    call far __ffree
+(*%E *)
+(*%T NearCall *)
+    call __ffree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  reallocExit2
+
+reallocMalloc:
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __fmalloc
+(*%E *)
+(*%T NearCall *)
+    call __fmalloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E RegParam *)
+    jmp  reallocExit2
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(*@@@ Should be moved to StdMem *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapchk, _fheapchk, _heapset, _fheapset.
+
+   PRECONDITIONS - Far heap must be initialised.
+
+   POSTCONDITIONS - _heapset fills each free block with the parameter value.
+
+   IN PARAMETERS - _heapset takes fill value(int).
+
+   OUT PARAMETERS - Returns state of heap.
+                     0 _HEAPOK if OK
+                    -1 _HEAPEMPTY if heap not initialised
+                    -2 _HEAPBADBEGIN if initial header bad
+                    -3 _HEAPBADNODE  if heap is damaged
+                    -4 _HEAPOVERFLOW if heap past ceiling
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - _OS2.
+
+   ------------------------------------------------------------------------ *)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSSEMREQUEST
+extrn DOSSEMCLEAR
+
+select _DATA
+
+extrn __firstheap
+extrn __fheapsem
+
+select _TEXT
+
+public __fheapchk :
+(*%F NearPtr *)
+public __heapchk :
+(*%E *)
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+
+    push bx
+    push cx
+    push dx
+    sub  bx, bx                        (* dont fill *)
+    jmp  hpShared
+
+mem_reg_saved = 6
+
+fill = frame+mem_reg_saved
+
+public __fheapset :
+(*%F NearPtr *)
+public __heapset :
+(*%E *)
+
+    push bx
+    push cx
+    push dx
+    mov  bh, 1
+hpShared:
+    push bp
+    mov  bp, sp
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%T MThread *)
+    push ax
+    push ds
+    mov  ax, __fheapsem
+    push ax
+    mov  ax, -1
+    push ax
+    push ax
+    call far DOSSEMREQUEST
+    pop  ax
+(*%E *)
+    push di
+(*%F RegParam *)
+    mov  al, [bp][fill]
+(*%E *)
+    mov  ah, bh
+    mov  dx, [__firstheap]
+    or   dx, dx
+    je   chkEmpty                          (* no heap *)
+chkNext:
+    mov  es, dx
+    mov  cx, es:[statHeap]
+    jcxz chkOK
+    mov  di, heapStart                     (* check each block *)
+    mov  dx, es:[firstFree]
+chkLoop:
+    cmp  di, dx                            (* is it in free list *)
+    jne  chkNotFree                        (* no - continue *)
+    mov  cx, es:[di][OS2FreeSize]
+    mov  dx, es:[di][OS2NextBlock]            (* get next free *)
+    or   ah, ah
+    je   NodeOK                            (* fill if ah *)
+    push ax
+    mov  ah, al
+    push di
+    add  di, 4
+    sub  cx, 4
+rep ; stosb
+    pop  di
+    pop  ax                                 (* fill free block *)
+    jmp  NodeOK
+chkNotFree:
+    jb   NodeOK
+    or   dx, dx
+    jne  chkBadNode                        (* bad heap node *)
+NodeOK:
+    add  di, es:[di][OS2FreeSize]
+    cmp  di, OS2HEAPTOP
+    ja   chkBadTop                         (* overflow *)
+    jb   chkLoop
+    or   dx, dx
+    je   chkOK
+chkBadTop:
+    mov  ax, _HEAPOVERFLOW
+    jmp  chkDone
+chkEmpty:
+    mov  ax, _HEAPEMPTY
+    jmp  chkDone
+chkBadStart:
+    mov  ax, _HEAPBADBEGIN
+    jmp  chkDone
+chkBadNode:
+    mov  ax, _HEAPBADNODE
+    jmp  chkDone
+chkOK:
+    mov  dx, es:[nextHeap]
+    or   dx, dx
+    jnz  chkNext
+    sub  ax, ax
+chkDone:
+(*%T MThread *)
+    push ax
+    push ds
+    mov  ax, __fheapsem
+    push ax
+    call far DOSSEMCLEAR
+    pop  ax
+(*%E *)
+    pop  di
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  bp
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(*@@@ Should be in StdMem *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - _heapwalk, _fheapwalk.
+
+   PRECONDITIONS - Far heap must be initialised.
+                   heapinfo structure initialised to NULL, or contains result
+                   of a preevious call to _heapwalk.
+
+   POSTCONDITIONS - heapinfo structure contains details of current heap node.
+
+   IN PARAMETERS - Pointer to heapinfo structure
+
+   OUT PARAMETERS - Returns state of heap.
+                    _HEAPOK       =  0
+                    _HEAPEMPTY    = -1
+                    _HEAPBADBEGIN = -2
+                    _HEAPBADNODE  = -3
+                    _HEAPOVERFLOW = -4
+                    _HEAPBADPTR   = -6
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -
+
+   VERSION - _OS2.
+
+   ------------------------------------------------------------------------ *)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __firstheap
+extrn __fheapsem
+
+lastfree : dw 0, 0
+
+select _TEXT
+
+public __fheapwalk :
+(*%F NearPtr *)
+public __heapwalk :
+(*%E *)
+
+_HEAPOK       =  0
+_HEAPEMPTY    = -1
+_HEAPBADBEGIN = -2
+_HEAPBADNODE  = -3
+_HEAPOVERFLOW = -4
+_HEAPEND      = -5
+_HEAPBADPTR   = -6
+
+pentry  = 0
+size    = 4
+useflag = 6
+
+
+(*%F RegParam *)
+entry  = frame
+dgroup = -2
+locals =  2
+(*%E *)
+(*%T RegParam *)
+entry  = -4
+dgroup = -6
+locals =  6
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+(*%E *)
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  [bp][entry][2], bx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][entry][2], ds
+(*%E *)
+    mov  [bp][entry], ax
+(*%E *)
+    push si
+    push ds
+(*%F SameDS *)
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    mov  [bp][dgroup], ds
+(*%F NearPtr *)
+    les  bx, [bp][entry]
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [bp][entry]
+    mov  es, [bp][dgroup]
+(*%E *)
+    mov  ax, es:[bx][pentry][2]
+    or   ax, ax
+    jnz  notFirst
+    mov  es, [bp][dgroup]
+    mov  dx, es:[__firstheap]
+    or   dx, dx
+    je   near heapEmpty                     (* no heap *)
+    mov  si, heapStart
+    mov  ds, dx
+    cmp  byte [statHeap], HEAP_FREE
+    je   getNextHeap
+    mov  ax, [firstFree]
+    mov  es:[lastfree], ax
+    mov  ax, [si][OS2FreeSize]
+    jmp  store
+notFirst:
+    mov  ds, ax
+    mov  si, es:[bx][pentry]
+    mov  ax, [si][OS2FreeSize]
+    add  si, ax
+    mov  ax, [si][OS2FreeSize]
+    cmp  si, OS2HEAPTOP
+    ja   badTop                         (* overflow *)
+    jb   store
+getNextHeap:
+    mov  cx, [nextHeap]
+    jcxz atHeapTop
+    mov  ds, cx
+    cmp  byte [statHeap], HEAP_FREE
+    je   getNextHeap
+    mov  es, [bp][dgroup]
+    mov  ax, [firstFree]
+    mov  es:[lastfree], ax
+    mov  si, heapStart
+    mov  ax, [si][OS2FreeSize]
+store:
+(*%F NearPtr *)
+    mov  es, [bp][entry][2]
+(*%E *)
+(*%T NearPtr *)
+    mov  es, [bp][dgroup]
+(*%E *)
+    mov  es:[bx][pentry], si
+    mov  es:[bx][pentry][2], ds
+    sub  ax, 2
+    mov  es:[bx][size], ax
+    mov  ax, 1
+    mov  cx, ds
+    mov  es, [bp][dgroup]
+    cmp  si, es:[lastfree]
+    jne  notFree
+    sub  ax, ax
+    mov  es, [bp][dgroup]
+    mov  cx, [si][OS2NextBlock]
+    mov  es:[lastfree], cx
+notFree:
+    ja   badNode
+(*%F NearPtr *)
+    mov  es, [bp][entry][2]
+(*%E *)
+(*%T NearPtr *)
+    mov  es, [bp][dgroup]
+(*%E *)
+    mov  es:[bx][useflag], ax
+
+success:
+    mov  ax, _HEAPOK
+exit:
+    pop  ds
+    pop  si
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+badTop:
+    mov  ax, _HEAPOVERFLOW
+    jmp  exit
+heapEmpty:
+    mov  ax, _HEAPEMPTY
+    jmp  exit
+badStart:
+    mov  ax, _HEAPBADBEGIN
+    jmp  exit
+badNode:
+    mov  ax, _HEAPBADNODE
+    jmp  exit
+atHeapTop:
+    mov  ax, _HEAPEND
+    jmp  exit
+(*%E _OS2 *)
+
+section
+(***************************************************************************)
+(*%T _OS2 *)
+(* ------------------------------------------------------------------------
+   PROCEDURE - hrealloc.
+
+   PRECONDITIONS - Block allocated by halloc.
+
+   POSTCONDITIONS - If successful, block allocation changed.
+                    On error errno set to ENOMEM.
+
+   IN PARAMETERS -  Far pointer to memory block, block size(long).
+
+   OUT PARAMETERS - Returns far pointer to memory block.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES - If size is zero the block will be freed.
+           If the pointer is NULL a new block will be allocated.
+
+   VERSION - _OS2.
+   ------------------------------------------------------------------------*)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSREALLOCHUGE
+extrn __seterrno
+extrn _halloc
+extrn _hfree
+
+select _DATA
+
+extrn __memtype
+
+select _TEXT
+
+public _hrealloc :
+
+buffer = frame
+size   = 4+frame
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+(*%T RegParam *)
+    push cx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][size]            (* dx = sel, ax = seg size, bx = segs *)
+    mov  bx, [bp][size][2]
+    mov  dx, [bp][buffer][2]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, cx
+    xchg bx, dx
+(*%E *)
+    or   dx, dx
+    jz   hreallocAlloc
+    or   ax, ax
+    jnz  hreallocSOK
+    or   bx, bx
+    jz   hreallocFree
+hreallocSOK:
+    push dx
+    push bx
+    push ax
+    push dx
+    call far DOSREALLOCHUGE
+    pop  dx
+    or   ax, ax
+    jnz  hreallocError
+hreallocDone:
+(*%F RegParam *)
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  cx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+hreallocError:
+    mov  ax, ENOMEM
+    push ax
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax
+    cwd
+    jmp  hreallocDone
+
+hreallocAlloc:
+(*%F RegParam *)
+    push bx
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _halloc
+(*%E *)
+(*%T NearCall *)
+    call _halloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    jmp  hreallocDone
+
+hreallocFree:
+(*%F RegParam *)
+    push dx
+    sub  cx, cx
+    push cx
+(*%E *)
+(*%T RegParam *)
+    mov  bx, dx
+    sub  ax, ax
+(*%E *)
+(*%F NearCall *)
+    call far _hfree
+(*%E *)
+(*%T NearCall *)
+    call _hfree
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    jmp  hreallocDone
+
+(*%E _OS2 *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fmalloc - C Far Heap Allocation                                   *)
+  (*                                                                     *)
+  (* void far *_fmalloc(size_t size)                                     *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Request Size                                          *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Huge Allocation                            *)
+  (*     Aliases:                                                        *)
+  (*       _malloc - in Far Pointer Models                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$AllocMem
+
+Size                    = Frame
+
+public __fmalloc :
+public _malloc :
+    push bp
+    mov  bp, sp
+    push bx
+(*%F _jpicall *)
+    mov  ax, [bp][Size]
+(*%E *)
+    or   ax, ax
+    jz   $$Invalid
+    add  ax, 2
+    jc   $$Invalid
+    push ax
+    call far Loader$AllocMem
+    mov  es, dx
+    mov  bx, ax
+    or   ax, dx
+    jz   $$Failed
+    pop  es:[bx]
+    mov  ax, bx
+    inc  ax
+    inc  ax
+$$Return:
+    pop  bx
+    pop  bp
+    ret  far 0
+
+$$Invalid:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+$$Failed:
+    pop  bx
+    jmp  $$Return
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fcalloc - C Far Heap Initialized Allocation                       *)
+  (*                                                                     *)
+  (* void far *_fcalloc(size_t number,size_t size)                       *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Number of units requested                             *)
+  (*       bx    - Unit Size                                             *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Allocation                                 *)
+  (*     Aliases:                                                        *)
+  (*       _calloc                                                       *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$ClearAllocMem
+
+Size                    = Frame
+Num                     = Frame + 2
+
+public __fcalloc :
+public _calloc :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    mov  ax, [bp][Num]
+    mov  bx, [bp][Size]
+(*%E *)
+    mul  bx
+    jo   $$Invalid
+    or   ax, ax
+    jz   $$Invalid
+    add  ax, 2
+    jc   $$Invalid
+    push ax
+    mov bx,1
+    call far Loader$ClearAllocMem
+    mov  es, dx
+    mov  bx, ax
+    or   ax, dx
+    jz   $$Failed
+    pop  es:[bx]
+    mov  ax, bx
+    inc  ax
+    inc  ax
+$$Return:
+    pop  bp
+    ret  far 0
+
+$$Invalid:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+$$Failed:
+    pop  bx
+    jmp  $$Return
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __frealloc - C Far Heap Change Allocation                           *)
+  (*                                                                     *)
+  (* void far *_frealloc(void far *buffer,size_t size)                   *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       cx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       _realloc                                                      *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn _errno
+extrn Loader$ExpandMem
+extrn __ffree
+extrn __fmalloc
+
+Size                    = Frame
+Buff                    = Frame + 2
+
+public __frealloc :
+public _realloc :
+    push bp
+    mov  bp, sp
+    push ds
+    push di
+    push si
+(*%F _jpicall *)
+    les  ax, [bp][Buff]
+    mov  bx, es
+    mov  cx, [bp][Size]
+(*%E *)
+    or   cx, cx
+    jnz  $$GoodSize
+    call far __ffree
+$$RetNull:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+$$GoodSize:
+(*%T _jpicall *)
+    mov  es, bx
+(*%E *)
+    mov  si, ax
+    or   ax, bx
+    jnz  $$GoodPtr
+    mov  ax, cx
+    call far __fmalloc
+    jmp  $$Return
+$$GoodPtr:
+    add  cx, 2
+    jc   $$RetNull
+    push cx
+    dec  si
+    dec  si
+    mov  di, es
+    mov  ax, si
+    call far Loader$ExpandMem
+    pop  cx
+    mov  bx, di
+    mov  di, ax
+    or   ax, dx
+    jnz  $$Exit
+    mov  ax, cx
+    call far __fmalloc
+    mov  di, ax
+    or   ax, dx
+    jnz  $$MallocGood
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  word [_errno], ERROR_NOMEMORY
+    jmp  $$Return
+$$Exit:
+    mov  ds, dx
+    mov  [di], cx
+    inc  di
+    inc  di
+    mov  ax, di
+    jmp  $$Return
+$$MallocGood:
+    push dx
+    push di
+    inc  si
+    inc  si
+    push bx
+    push si
+    push ds
+    mov  ds, bx
+    mov  ax, [si][-2]
+    cmp  ax, cx
+    jae  $$Copy
+    mov  cx, ax
+$$Copy:
+    mov  es, dx
+    test di, 1
+    je   $$CopyEven
+    movsb
+    dec  cx
+$$CopyEven:
+    shr  cx, 1
+    rep; movsw
+    adc  cx, cx
+    rep; movsb
+    pop  ds
+    pop  ax
+    pop  bx
+    call far __ffree
+    pop  ax
+    pop  dx
+$$Return:
+    pop  si
+    pop  di
+    pop  ds
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fexpand - C Far Heap Change Allocation                            *)
+  (*                                                                     *)
+  (* void far *_fexpand(void far *buffer,size_t size)                    *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       cx    - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*     Aliases:                                                        *)
+  (*       __expand                                                      *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$ExpandMem
+
+Size                    = Frame
+Buff                    = Frame + 2
+
+public __fexpand :
+public __expand :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    les  ax, [bp][Buff]
+    mov  bx, es
+    mov  cx, [bp][Size]
+(*%E *)
+    push si
+    add  cx, 2
+    jc   $$Failure
+    push cx
+    dec  ax
+    dec  ax
+    mov  si, ax
+    call far Loader$ExpandMem
+    pop  cx
+    mov  si, ax
+    or   ax, dx
+    jz   $$Return
+    mov  es, dx
+    mov  es:[si], cx
+    mov  ax, si
+    inc  ax
+    inc  ax
+$$Return:
+    pop  si
+    pop  bp
+    ret  far 0
+
+$$Failure:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __ffree - C Far Heap Deallocation                                   *)
+  (*                                                                     *)
+  (* void _ffree(void far *buffer)                                       *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*     Aliases:                                                        *)
+  (*       _free                                                         *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$FreeMem
+
+Buffer                  = Frame
+
+public _free :
+public __ffree :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    les  ax, [bp][Buffer]
+    mov  bx, es
+(*%E *)
+    dec  ax
+    dec  ax
+    call far Loader$FreeMem
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fmsize - C Query Size of Far Heap Allocation                      *)
+  (*                                                                     *)
+  (* int _fmsize(void far *buffer)                                       *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       ax    - Size of Original Allocation                           *)
+  (*     Aliases:                                                        *)
+  (*       __msize - in Far Pointer Models                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+Buff                    = Frame
+
+public __fmsize :
+public __msize :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    les  bx, [Buff]
+(*%E *)
+(*%T _jpicall *)
+    mov  es, bx
+    mov  bx, ax
+(*%E *)
+    mov  ax, es:[bx][-2]
+    dec  ax
+    dec  ax
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* _farcoreleft - C Query Far Heap Available                           *)
+  (*                                                                     *)
+  (* unsigned long farcoreleft(void)                                     *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Bytes left on Far Heap                                *)
+  (*     Aliases:                                                        *)
+  (*       _coreleft                                                     *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn __core_lock
+extrn __core_unlock
+extrn Loader$TotalAvail
+extrn F$LngShl
+
+public _farcoreleft :
+public _coreleft :
+    push bp
+    mov  bp, sp
+    push cx
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    call far [__core_lock]
+    call far Loader$TotalAvail
+    call far [__core_unlock]
+    xor  dx, dx
+    mov  cl, 4
+    call far F$LngShl
+    pop  ds
+    pop  cx
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fblockavail - C Query Far Heap Largest Block Available            *)
+  (*                                                                     *)
+  (* unsigned long _fblockavail(void)                                    *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Largest Block Available                               *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn __core_lock
+extrn __core_unlock
+extrn Loader$Avail
+extrn F$LngShl
+
+public __fblockavail :
+    push bp
+    mov  bp, sp
+    push cx
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    call far [__core_lock]
+    call far Loader$Avail
+    call far [__core_unlock]
+    xor  dx, dx
+    mov  cl, 4
+    call far F$LngShl
+    pop  ds
+    pop  cx
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* _halloc - C Huge Far Heap Allocation                                *)
+  (*                                                                     *)
+  (* void huge *halloc(unsigned long size)                               *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Request Size                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       dx:ax - Address of Huge Allocation                            *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$HugeAllocMem
+
+Size                    = Frame
+
+public _halloc :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    les  ax, [bp][Size]
+    mov  bx, es
+(*%E *)
+    call far Loader$HugeAllocMem
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* _hfree - C Huge Far Heap Deallocation                               *)
+  (*                                                                     *)
+  (* void hfree(void far *buffer)                                        *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Address of buffer                                     *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$FreeMem
+
+Buffer                  = Frame
+
+public _hfree :
+    push bp
+    mov  bp, sp
+(*%F _jpicall *)
+    les  ax, [bp][Buffer]
+    mov  bx, es
+(*%E *)
+    call far Loader$FreeMem
+    pop  bp
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* _hrealloc - C Far Heap Huge Change Allocation                       *)
+  (*                                                                     *)
+  (* void huge *hrealloc(void huge *buffer,unsigned long size)           *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax - Buffer address                                        *)
+  (*       dx:cx - New Buffer Size                                       *)
+  (*     Trashes:                                                        *)
+  (*       es                                                            *)
+  (*     Return:                                                         *)
+  (*       dx:ax - New Buffer address                                    *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _DATA(DATA,48H)
+segment _TEXT(CODE,48H)
+
+extrn _errno
+extrn Loader$HugeExpandMem
+extrn _hfree
+extrn _halloc
+
+(*%F _jpicall *)
+Size                    = Frame
+Buff                    = Frame + 4
+(*%E *)
+(*%T _jpicall *)
+Size                    = -4
+Buff                    = -8
+Locals                  = 8
+(*%E *)
+
+public _hexpand :
+public _hrealloc :
+    push bp
+    mov  bp, sp
+(*%T _jpicall *)
+    sub  sp, Locals
+(*%E *)
+    push ds
+    push di
+    push si
+(*%F _jpicall *)
+    les  ax, [bp][Buff]
+    mov  bx, es
+    les  cx, [bp][Size]
+    mov  dx, es
+(*%E *)
+(*%T _jpicall *)
+    mov  [bp][Buff], ax
+    mov  [bp][Buff][2], bx
+    mov  [bp][Size], cx
+    mov  [bp][Size][2], dx
+(*%E *)
+    mov  di, dx
+    or   di, cx
+    jnz  $$GoodSize
+    call far _hfree
+$$RetNull:
+    xor  ax, ax
+    cwd
+    jmp  $$Return
+$$GoodSize:
+    mov  di, ax
+    or   di, bx
+    jnz  $$GoodPtr
+    mov  ax, cx
+    mov  bx, dx
+    call far _halloc
+    jmp  $$Return
+$$GoodPtr:
+    call far Loader$HugeExpandMem
+    mov  di, ax
+    or   di, dx
+    jz   $$hExpandFailed
+$$Return:
+    pop  si
+    pop  di
+    pop  ds
+(*%T _jpicall *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+    ret  far 0
+
+$$hExpandFailed:
+    les  ax, [bp][Size]
+    mov  bx, es
+    call far _halloc
+    mov  di, ax                        (* dx:di = New Address *)
+    or   ax, dx
+    jnz  $$HallocGood
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  word [_errno], ERROR_NOMEMORY
+    jmp  $$Return
+$$HallocGood:
+    push dx                            (* Save new Address for later *)
+    push di
+    push ds
+    lds  si, [bp][Buff]                (* ds:si = Old Address *)
+    mov  es, dx                        (* es:di = New Address *)
+    mov  cx, [bp][Size]                (* dx:cx = Copy Count  *)
+    mov  dx, [bp][Size][2]
+    inc  dx
+$$Copy:
+    test di, 1
+    je   $$CopyEven
+    movsb
+    dec  cx
+$$CopyEven:
+    shr  cx, 1
+    rep; movsw
+    adc  cx, cx
+    rep; movsb
+$$CopySegs:
+    dec  dx
+    jz   $$CopyDone
+    mov  cx, 08000H
+    rep; movsw
+    jmp  $$CopySegs
+$$CopyDone:
+    lds  ax, [bp][Buff]
+    mov  bx, ds
+    pop  ds
+    call far _hfree
+    pop  ax
+    pop  dx
+    jmp  $$Return
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fheapchk - C Far Heap Check                                       *)
+  (*                                                                     *)
+  (* int _fheapchk(void)                                                 *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Status Code                                           *)
+  (*     Aliases:                                                        *)
+  (*       __heapchk                                                     *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$HeapCheck
+
+public __heapchk :
+public __fheapchk :
+    push bx
+    xor  bx, bx
+    call far Loader$HeapCheck
+    pop  bx
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fheapset - C Far Heap Check & Fill                                *)
+  (*                                                                     *)
+  (* int _fheapset(int fill)                                             *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       ax    - Fill Value                                            *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Status Code                                           *)
+  (*     Aliases:                                                        *)
+  (*       __heapset                                                     *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$HeapCheck
+
+public __heapset :
+public __fheapset :
+    push bx
+    mov  bx, TRUE
+    call far Loader$HeapCheck
+    pop  bx
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%T _DLLOVL *)
+  (***********************************************************************)
+  (* __fheapwalk - C Far Heap Check                                      *)
+  (*                                                                     *)
+  (* int _fheapwalk(struct _heapinfo *entry)                             *)
+  (*                                                                     *)
+  (* DLL Memory Models + C Stack Convention                              *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       bx:ax    - pointer to heapinfo structure                      *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       ax    - Status Code                                           *)
+  (*     Aliases:                                                        *)
+  (*       __heapwalk                                                    *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn Loader$HeapWalk
+
+public __heapwalk :
+public __fheapwalk :
+    call far Loader$HeapWalk
+    ret  far 0
+
+(*%E _DLLOVL *)
+
+section
+(*%F _OS2 *)
+(*%T _DLL *)
+  (***********************************************************************)
+  (* Dummy procedures to satisfy DynaLink Export File.                   *)
+  (*   __get_heapstate                                                   *)
+  (*   __memavl - shouldn't even be in Export File (near heap only)      *)
+  (*                                                                     *)
+  (* Dummy data to satisfy DynaLink Export File.                         *)
+  (*   __fheapstart                                                      *)
+  (*                                                                     *)
+  (* void _get_heapstate                                                 *)
+  (*                                                                     *)
+  (* DOS DynaLink Memory Model Only                                      *)
+  (*                                                                     *)
+  (*   Internal Procedure                                                *)
+  (*     Parameters:                                                     *)
+  (*       none                                                          *)
+  (*     Trashes:                                                        *)
+  (*       none                                                          *)
+  (*     Return:                                                         *)
+  (*       none                                                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,28H)
+
+public __get_heapstate :
+public __memavl :
+  ret  far 0
+
+segment _DATA(DATA,28H)
+
+public __fheapstart     : org 0
+
+(*%E _DLL *)
+(*%E _OS2 *)
+
+end
+

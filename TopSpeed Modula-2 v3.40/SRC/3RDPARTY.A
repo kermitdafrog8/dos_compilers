@@ -1,0 +1,3370 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  3RDPARTY.A - Support for other compiler's runtime libraries             *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module ThirdParty
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+extrn __FatalError
+extrn __stk_base
+
+CSVar = 2
+IPVar = 0
+
+public __chkstk:
+
+(*%F NearCall *)
+    pop  cx
+(*%E *)
+    pop  dx
+    mov  bx,sp
+    sub  bx,ax
+    jb   stackError
+    cmp  bx, [__stk_base]
+    jb   stackError
+    mov  sp,bx
+    push dx
+(*%F NearCall *)
+    push cx
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+stackError:
+    mov  bx, sp
+    mov  ax, 1
+    push ax
+    push ss:[bx][IPVar]
+(*%T NearCall*) push cs (*%E*)
+(*%F NearCall*) push ss:[bx][CSVar] (*%E*)
+    call far __FatalError
+
+(**************************************************************************)
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public _setjmp :
+
+  extrn __setjmp
+  jmp far __setjmp
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aNldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+divPtr  = sframe
+divisor = 2+sframe
+
+(*%T NearCall *)
+(*%T NearPtr *)
+public __aldiv :
+(*%E *)
+(*%E *)
+
+public __aNNaldiv:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][divPtr]
+    push ds
+    pop  es
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aNldiv
+extrn __aFldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+divPtr  = lframe
+divisor = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __aldiv :
+(*%E *)
+(*%E *)
+public __aFNaldiv:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][divPtr]
+    push ds
+    pop  es
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aNldiv
+extrn __aFldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+divPtr  = sframe
+divisor = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __aldiv :
+(*%E *)
+(*%E *)
+
+public __aNFaldiv:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][divPtr]
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aNldiv
+extrn __aFldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+divPtr  = lframe
+divisor = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __aldiv :
+(*%E *)
+(*%E *)
+
+public __aFFaldiv:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][divPtr]
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+dsW1 = sframe
+dsW2 = 2+sframe
+dvW1 = 4+sframe
+dvW2 = 6+sframe
+
+(*%T NearCall *)
+public __ldiv :
+(*%E *)
+
+public __aNldiv :
+
+    push bp
+    mov  bp, sp
+    push bx
+    push di
+    push si
+    sub  di, di
+    mov  ax, [bp][dsW2]
+    or   ax, ax
+    jge  local1
+    inc  di
+    mov  dx, [bp][dsW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][dsW2], ax
+    mov  [bp][dsW1], dx
+local1:
+    mov  ax, [bp][dvW2]
+    or   ax, ax
+    jge  local2
+    inc  di
+    mov  dx, [bp][dvW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][dvW2], ax
+    mov  [bp][dvW1], dx
+local2:
+    or   ax, ax
+    jne  local3
+    mov  cx, [bp][dvW1]
+    mov  ax, [bp][dsW2]
+    sub  dx, dx
+    div  cx
+    mov  bx, ax
+    mov  ax, [bp][dsW1]
+    div  cx
+    mov  dx, bx
+    jmp  local7
+local3:
+    mov  bx, ax
+    mov  cx, [bp][dvW1]
+    mov  dx, [bp][dsW2]
+    mov  ax, [bp][dsW1]
+local4:
+    shr  bx, 1
+    rcr  cx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   bx, bx
+    jne  local4
+    div  cx
+    mov  si, ax
+    mul  word [bp][dvW2]
+    xchg ax, cx
+    mov  ax, [bp][dvW1]
+    mul  si
+    add  dx, cx
+    jb   local5
+    cmp  dx, [bp][dsW2]
+    ja   local5
+    jb   local6
+    cmp  ax, [bp][dsW1]
+    jbe  local6
+local5:
+    dec  si
+local6:
+    sub  dx, dx
+    xchg ax, si
+local7:
+    dec  di
+    jne  local8
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local8:
+    pop  si
+    pop  di
+    pop  bx
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+dsW1 = lframe
+dsW2 = 2+lframe
+dvW1 = 4+lframe
+dvW2 = 6+lframe
+
+(*%F NearCall *)
+public __ldiv :
+(*%E *)
+
+public __aFldiv :
+
+    push bp
+    mov  bp, sp
+    push bx
+    push di
+    push si
+    sub  di, di
+    mov  ax, [bp][dsW2]
+    or   ax, ax
+    jge  local1
+    inc  di
+    mov  dx, [bp][dsW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][dsW2], ax
+    mov  [bp][dsW1], dx
+local1:
+    mov  ax, [bp][dvW2]
+    or   ax, ax
+    jge  local2
+    inc  di
+    mov  dx, [bp][dvW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][dvW2], ax
+    mov  [bp][dvW1], dx
+local2:
+    or   ax, ax
+    jne  local3
+    mov  cx, [bp][dvW1]
+    mov  ax, [bp][dsW2]
+    sub  dx, dx
+    div  cx
+    mov  bx, ax
+    mov  ax, [bp][dsW1]
+    div  cx
+    mov  dx, bx
+    jmp  local7
+local3:
+    mov  bx, ax
+    mov  cx, [bp][dvW1]
+    mov  dx, [bp][dsW2]
+    mov  ax, [bp][dsW1]
+local4:
+    shr  bx, 1
+    rcr  cx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   bx, bx
+    jne  local4
+    div  cx
+    mov  si, ax
+    mul  word [bp][dvW2]
+    xchg ax, cx
+    mov  ax, [bp][dvW1]
+    mul  si
+    add  dx, cx
+    jb   local5
+    cmp  dx, [bp][dsW2]
+    ja   local5
+    jb   local6
+    cmp  ax, [bp][dsW1]
+    jbe  local6
+local5:
+    dec  si
+local6:
+    sub  dx, dx
+    xchg ax, si
+local7:
+    dec  di
+    jne  local8
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local8:
+    pop  si
+    pop  di
+    pop  bx
+    pop  bp
+    ret  far 8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlmul
+extrn __aNlmul
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+mulPtr  = sframe
+mulp    = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __almul :
+public __ulmul :
+(*%E *)
+(*%E *)
+
+public __aNNaulmul:
+public __aNNalmul:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][mulPtr]
+    push ds
+    pop  es
+    push [bp][mulp][2]
+    push [bp][mulp]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNlmul
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlmul
+extrn __aNlmul
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+mulPtr  = lframe
+mulp    = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __almul :
+public __ulmul :
+(*%E *)
+(*%E *)
+
+public __aFNaulmul:
+public __aFNalmul:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][mulPtr]
+    push ds
+    pop  es
+    push [bp][mulp][2]
+    push [bp][mulp]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFlmul
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlmul
+extrn __aNlmul
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+mulPtr  = sframe
+mulp    = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __almul :
+public __ulmul :
+(*%E *)
+(*%E *)
+
+public __aNFaulmul:
+public __aNFalmul:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][mulPtr]
+    push [bp][mulp][2]
+    push [bp][mulp]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNlmul
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlmul
+extrn __aNlmul
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+mulPtr  = lframe
+mulp    = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __almul :
+public __ulmul :
+(*%E *)
+(*%E *)
+
+public __aFFaulmul:
+public __aFFalmul:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][mulPtr]
+    push [bp][mulp][2]
+    push [bp][mulp]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFlmul
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+msW1 = lframe
+msW2 = 2+lframe
+mvW1 = 4+lframe
+mvW2 = 6+lframe
+
+(*%F NearCall *)
+public __lmul :
+(*%E *)
+
+public __aFulmul :
+public __aFlmul :
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  ax, [bp][msW2]
+    mov  bx, [bp][mvW2]
+    or   bx, ax
+    mov  bx, [bp][mvW1]
+    jne  local1
+    mov  ax, [bp][msW1]
+    mul  bx
+    jmp  mulExit
+local1:
+    mul  bx
+    mov  cx, ax
+    mov  ax, [bp][msW1]
+    mul  word [bp][mvW2]
+    add  cx, ax
+    mov  ax, [bp][msW1]
+    mul  bx
+    add  dx, cx
+mulExit:
+    pop  bx
+    pop  bp
+    ret  far 8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+msW1 = sframe
+msW2 = 2+sframe
+mvW1 = 4+sframe
+mvW2 = 6+sframe
+
+(*%T NearCall *)
+public __lmul :
+(*%E *)
+
+public __aNulmul :
+public __aNlmul :
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  ax, [bp][msW2]
+    mov  bx, [bp][mvW2]
+    or   bx, ax
+    mov  bx, [bp][mvW1]
+    jne  local1
+    mov  ax, [bp][msW1]
+    mul  bx
+    jmp  mulExit
+local1:
+    mul  bx
+    mov  cx, ax
+    mov  ax, [bp][msW1]
+    mul  word [bp][mvW2]
+    add  cx, ax
+    mov  ax, [bp][msW1]
+    mul  bx
+    add  dx, cx
+mulExit:
+    pop  bx
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlrem
+extrn __aNlrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+remPtr  = sframe
+remp    = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __alrem :
+(*%E *)
+(*%E *)
+
+public __aNNalrem:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][remPtr]
+    push ds
+    pop  es
+    push [bp][remp][2]
+    push [bp][remp]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNlrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlrem
+extrn __aNlrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+remPtr  = lframe
+remp    = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __alrem :
+(*%E *)
+(*%E *)
+
+public __aFNalrem:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][remPtr]
+    push ds
+    pop  es
+    push [bp][remp][2]
+    push [bp][remp]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFlrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlrem
+extrn __aNlrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+remPtr  = sframe
+remp    = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __alrem :
+(*%E *)
+(*%E *)
+
+public __aNFalrem:
+
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][remPtr]
+    push [bp][remp][2]
+    push [bp][remp]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNlrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlrem
+extrn __aNlrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+remPtr  = lframe
+remp    = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __alrem :
+(*%E *)
+(*%E *)
+
+public __aFFalrem:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][remPtr]
+    push [bp][remp][2]
+    push [bp][remp]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFlrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+rsW1 = sframe
+rsW2 = 2+sframe
+rvW1 = 4+sframe
+rvW2 = 6+sframe
+
+(*%T NearCall *)
+public __lrem:
+(*%E *)
+
+public __aNlrem:
+
+    push bp
+    mov  bp, sp
+    push bx
+    push di
+    sub  di, di
+    mov  ax, [bp][rsW2]
+    or   ax, ax
+    jge  local1
+    inc  di
+    mov  dx, [bp][rsW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][rsW2], ax
+    mov  [bp][rsW1], dx
+local1:
+    mov  ax, [bp][rvW2]
+    or   ax, ax
+    jge  local2
+    mov  dx, [bp][rvW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][rvW2], ax
+    mov  [bp][rvW1], dx
+local2:
+    or   ax, ax
+    jne  local3
+    mov  cx, [bp][rvW1]
+    mov  ax, [bp][rsW2]
+    sub  dx, dx
+    div  cx
+    mov  ax, [bp][rsW1]
+    div  cx
+    mov  ax, dx
+    sub  dx, dx
+    dec  di
+    jns  local7
+    jmp  local8
+local3:
+    mov  bx, ax
+    mov  cx, [bp][rvW1]
+    mov  dx, [bp][rsW2]
+    mov  ax, [bp][rsW1]
+local4:
+    shr  bx, 1
+    rcr  cx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   bx, bx
+    jne  local4
+    div  cx
+    mov  cx, ax
+    mul  word [bp][rvW2]
+    xchg ax, cx
+    mul  word [bp][rvW1]
+    add  dx, cx
+    jb   local5
+    cmp  dx, [bp][rsW2]
+    ja   local5
+    jb   local6
+    cmp  ax, [bp][rsW1]
+    jbe  local6
+local5:
+    sub  ax, [bp][rvW1]
+    sbb  dx, [bp][rvW2]
+local6:
+    sub  ax, [bp][rsW1]
+    sbb  dx, [bp][rsW2]
+    dec  di
+    jns  local8
+local7:
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local8:
+    pop  di
+    pop  bx
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+rsW1 = lframe
+rsW2 = 2+lframe
+rvW1 = 4+lframe
+rvW2 = 6+lframe
+
+(*%F NearCall *)
+public __lrem:
+(*%E *)
+
+public __aFlrem:
+
+    push bp
+    mov  bp, sp
+    push bx
+    push di
+    sub  di, di
+    mov  ax, [bp][rsW2]
+    or   ax, ax
+    jge  local1
+    inc  di
+    mov  dx, [bp][rsW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][rsW2], ax
+    mov  [bp][rsW1], dx
+local1:
+    mov  ax, [bp][rvW2]
+    or   ax, ax
+    jge  local2
+    mov  dx, [bp][rvW1]
+    neg  ax
+    neg  dx
+    sbb  ax, 0
+    mov  [bp][rvW2], ax
+    mov  [bp][rvW1], dx
+local2:
+    or   ax, ax
+    jne  local3
+    mov  cx, [bp][rvW1]
+    mov  ax, [bp][rsW2]
+    sub  dx, dx
+    div  cx
+    mov  ax, [bp][rsW1]
+    div  cx
+    mov  ax, dx
+    sub  dx, dx
+    dec  di
+    jns  local7
+    jmp  local8
+local3:
+    mov  bx, ax
+    mov  cx, [bp][rvW1]
+    mov  dx, [bp][rsW2]
+    mov  ax, [bp][rsW1]
+local4:
+    shr  bx, 1
+    rcr  cx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   bx, bx
+    jne  local4
+    div  cx
+    mov  cx, ax
+    mul  word [bp][rvW2]
+    xchg ax, cx
+    mul  word [bp][rvW1]
+    add  dx, cx
+    jb   local5
+    cmp  dx, [bp][rsW2]
+    ja   local5
+    jb   local6
+    cmp  ax, [bp][rsW1]
+    jbe  local6
+local5:
+    sub  ax, [bp][rvW1]
+    sbb  dx, [bp][rvW2]
+local6:
+    sub  ax, [bp][rsW1]
+    sbb  dx, [bp][rsW2]
+    dec  di
+    jns  local8
+local7:
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local8:
+    pop  di
+    pop  bx
+    pop  bp
+    ret  far 8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshl
+extrn __aNlshl
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shlPtr  = sframe
+shlp    = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __alshl :
+(*%E *)
+(*%E *)
+
+public __aNNalshl:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shlPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shlp]
+    call __aNlshl
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshl
+extrn __aNlshl
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shlPtr  = lframe
+shlp    = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __alshl :
+(*%E *)
+(*%E *)
+
+public __aFNalshl:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shlPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shlp]
+    call far __aFlshl
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshl
+extrn __aNlshl
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shlPtr  = sframe
+shlp    = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __alshl :
+(*%E *)
+(*%E *)
+
+public __aNFalshl:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shlPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shlp]
+    call __aNlshl
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshl
+extrn __aNlshl
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shlPtr  = lframe
+shlp    = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __alshl :
+(*%E *)
+(*%E *)
+
+public __aFFalshl:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shlPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shlp]
+    call far __aFlshl
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%T NearCall *)
+public __lshl:
+(*%E *)
+
+public __aNlshl:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shl     ax,1
+   rcl     dx,1
+   loop    local1
+local2:
+   ret  0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%F NearCall *)
+public __lshl:
+(*%E *)
+
+public __aFlshl:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shl     ax,1
+   rcl     dx,1
+   loop    local1
+local2:
+   ret  far 0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshr
+extrn __aNlshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shrPtr  = sframe
+shrp    = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __alshr :
+(*%E *)
+(*%E *)
+
+public __aNNalshr:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shrPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrp]
+    call __aNlshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshr
+extrn __aNlshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shrPtr  = lframe
+shrp    = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __alshr :
+(*%E *)
+(*%E *)
+
+public __aFNalshr:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shrPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrp]
+    call far __aFlshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshr
+extrn __aNlshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shrPtr  = sframe
+shrp    = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __alshr :
+(*%E *)
+(*%E *)
+
+public __aNFalshr:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shrPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrp]
+    call __aNlshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFlshr
+extrn __aNlshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shrPtr  = lframe
+shrp    = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __alshr :
+(*%E *)
+(*%E *)
+
+public __aFFalshr:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shrPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrp]
+    call far __aFlshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%T NearCall *)
+public __lshr:
+(*%E *)
+
+public __aNlshr:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shr     dx,1
+   rcr     ax,1
+   loop    local1
+local2:
+   ret  0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%F NearCall *)
+public __lshr:
+(*%E *)
+
+public __aFlshr:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shr     dx,1
+   rcr     ax,1
+   loop    local1
+local2:
+   ret  far 0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFuldiv
+extrn __aNuldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+divPtr  = sframe
+divisor = 2+sframe
+
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __auldiv :
+(*%E *)
+(*%E *)
+
+public __aNNauldiv:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][divPtr]
+    push ds
+    pop  es
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNuldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFuldiv
+extrn __aNuldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+divPtr  = lframe
+divisor = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __auldiv :
+(*%E *)
+(*%E *)
+
+public __aFNauldiv:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][divPtr]
+    push ds
+    pop  es
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFuldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFuldiv
+extrn __aNuldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+divPtr  = sframe
+divisor = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __auldiv :
+(*%E *)
+(*%E *)
+
+public __aNFauldiv:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][divPtr]
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNuldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFuldiv
+extrn __aNuldiv
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+divPtr  = lframe
+divisor = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __auldiv :
+(*%E *)
+(*%E *)
+
+public __aFFauldiv:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][divPtr]
+    push [bp][divisor][2]
+    push [bp][divisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFuldiv
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+usW1 = sframe
+usW2 = 2+sframe
+uvW1 = 4+sframe
+uvW2 = 6+sframe
+
+(*%T NearCall *)
+public __uldiv:
+(*%E *)
+
+public __aNuldiv:
+
+    push bp
+    mov  bp,sp
+    push bx
+    push di
+    mov  ax, [bp][uvW2]
+    or   ax, ax
+    jne  local1
+    mov  cx, [bp][uvW1]
+    mov  ax, [bp][usW2]
+    sub  dx, dx
+    div  cx
+    mov  bx, ax
+    mov  ax, [bp][usW1]
+    div  cx
+    mov  dx, bx
+    jmp  local5
+local1:
+    mov  cx, ax
+    mov  bx, [bp][uvW1]
+    mov  dx, [bp][usW2]
+    mov  ax, [bp][usW1]
+local2:
+    shr  cx, 1
+    rcr  bx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   cx, cx
+    jne  local2
+    div  bx
+    mov  di, ax
+    mul  word [bp][uvW2]
+    xchg ax, cx
+    mov  ax, [bp][uvW1]
+    mul  di
+    add  dx, cx
+    jb   local3
+    cmp  dx, [bp][usW2]
+    ja   local3
+    jb   local4
+    cmp  ax, [bp][usW1]
+    jbe  local4
+local3:
+    dec  di
+local4:
+    sub  dx, dx
+    xchg ax, di
+local5:
+    pop  di
+    pop  bx
+    mov  sp,bp
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+usW1 = lframe
+usW2 = 2+lframe
+uvW1 = 4+lframe
+uvW2 = 6+lframe
+
+(*%F NearCall *)
+public __uldiv:
+(*%E *)
+
+public __aFuldiv:
+
+    push bp
+    mov  bp,sp
+    push bx
+    push di
+    mov  ax, [bp][uvW2]
+    or   ax, ax
+    jne  local1
+    mov  cx, [bp][uvW1]
+    mov  ax, [bp][usW2]
+    sub  dx, dx
+    div  cx
+    mov  bx, ax
+    mov  ax, [bp][usW1]
+    div  cx
+    mov  dx, bx
+    jmp  local5
+local1:
+    mov  cx, ax
+    mov  bx, [bp][uvW1]
+    mov  dx, [bp][usW2]
+    mov  ax, [bp][usW1]
+local2:
+    shr  cx, 1
+    rcr  bx, 1
+    shr  dx, 1
+    rcr  ax, 1
+    or   cx, cx
+    jne  local2
+    div  bx
+    mov  di, ax
+    mul  word [bp][uvW2]
+    xchg ax, cx
+    mov  ax, [bp][uvW1]
+    mul  di
+    add  dx, cx
+    jb   local3
+    cmp  dx, [bp][usW2]
+    ja   local3
+    jb   local4
+    cmp  ax, [bp][usW1]
+    jbe  local4
+local3:
+    dec  di
+local4:
+    sub  dx, dx
+    xchg ax, di
+local5:
+    pop  di
+    pop  bx
+    mov  sp,bp
+    pop  bp
+    ret  far 8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulrem
+extrn __aNulrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+remPtr  = sframe
+remisor = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __aulrem :
+(*%E *)
+(*%E *)
+
+public __aNNaulrem:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][remPtr]
+    push ds
+    pop  es
+    push [bp][remisor][2]
+    push [bp][remisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNulrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulrem
+extrn __aNulrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+remPtr  = lframe
+remisor = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __aulrem :
+(*%E *)
+(*%E *)
+
+public __aFNaulrem:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][remPtr]
+    push ds
+    pop  es
+    push [bp][remisor][2]
+    push [bp][remisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFulrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulrem
+extrn __aNulrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+remPtr  = sframe
+remisor = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __aulrem :
+(*%E *)
+(*%E *)
+
+public __aNFaulrem:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][remPtr]
+    push [bp][remisor][2]
+    push [bp][remisor]
+    push es:[bx][2]
+    push es:[bx]
+    call __aNulrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulrem
+extrn __aNulrem
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 8
+
+remPtr  = lframe
+remisor = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __aulrem :
+(*%E *)
+(*%E *)
+
+public __aFFaulrem:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][remPtr]
+    push [bp][remisor][2]
+    push [bp][remisor]
+    push es:[bx][2]
+    push es:[bx]
+    call far __aFulrem
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+usW1 = sframe
+usW2 = 2+sframe
+uvW1 = 4+sframe
+uvW2 = 6+sframe
+
+(*%T NearCall *)
+public __ulrem :
+(*%E *)
+public __aNulrem :
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  ax, [bp][uvW2]
+    or   ax, ax
+    jne  local1
+    mov  cx, [bp][uvW1]
+    mov  ax, [bp][usW2]
+    sub  dx, dx
+    div  cx
+    mov  ax, [bp][usW1]
+    div  cx
+    mov  ax, dx
+    sub  dx, dx
+    jmp  local5
+local1:
+    mov  cx, ax
+    mov  bx, [bp][uvW1]
+    mov  dx, [bp][usW2]
+    mov  ax, [bp][usW1]
+local2:
+    shr  cx,1
+    rcr  bx,1
+    shr  dx,1
+    rcr  ax, 1
+    or   cx, cx
+    jne  local2
+    div  bx
+    mov  cx, ax
+    mul  word [bp][uvW2]
+    xchg ax, cx
+    mul  word [bp][uvW1]
+    add  dx, cx
+    jb   local3
+    cmp  dx, [bp][usW2]
+    ja   local3
+    jb   local4
+    cmp  ax, [bp][usW1]
+    jbe  local4
+local3:
+    sub  ax, [bp][uvW1]
+    sbb  dx, [bp][uvW2]
+local4:
+    sub  ax, [bp][usW1]
+    sbb  dx, [bp][usW2]
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local5:
+    pop  bx
+    mov  sp,bp
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+usW1 = lframe
+usW2 = 2+lframe
+uvW1 = 4+lframe
+uvW2 = 6+lframe
+
+(*%F NearCall *)
+public __ulrem :
+(*%E *)
+
+public __aFulrem :
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  ax, [bp][uvW2]
+    or   ax, ax
+    jne  local1
+    mov  cx, [bp][uvW1]
+    mov  ax, [bp][usW2]
+    sub  dx, dx
+    div  cx
+    mov  ax, [bp][usW1]
+    div  cx
+    mov  ax, dx
+    sub  dx, dx
+    jmp  local5
+local1:
+    mov  cx, ax
+    mov  bx, [bp][uvW1]
+    mov  dx, [bp][usW2]
+    mov  ax, [bp][usW1]
+local2:
+    shr  cx,1
+    rcr  bx,1
+    shr  dx,1
+    rcr  ax, 1
+    or   cx, cx
+    jne  local2
+    div  bx
+    mov  cx, ax
+    mul  word [bp][uvW2]
+    xchg ax, cx
+    mul  word [bp][uvW1]
+    add  dx, cx
+    jb   local3
+    cmp  dx, [bp][usW2]
+    ja   local3
+    jb   local4
+    cmp  ax, [bp][usW1]
+    jbe  local4
+local3:
+    sub  ax, [bp][uvW1]
+    sbb  dx, [bp][uvW2]
+local4:
+    sub  ax, [bp][usW1]
+    sbb  dx, [bp][usW2]
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+local5:
+    pop  bx
+    mov  sp,bp
+    pop  bp
+    ret  far 8
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulshr
+extrn __aNulshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shrPtr  = sframe
+shrisor = 2+sframe
+
+(*%T NearPtr *)
+(*%T NearCall *)
+public __aulshr :
+(*%E *)
+(*%E *)
+
+public __aNNaulshr:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shrPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrisor]
+    call __aNulshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulshr
+extrn __aNulshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 4
+
+shrPtr  = lframe
+shrisor = 2+lframe
+
+(*%T NearPtr *)
+(*%F NearCall *)
+public __aulshr :
+(*%E *)
+(*%E *)
+
+public __aFNaulshr:
+
+    push bp
+    mov  bp, sp
+    mov  bx, ss:[bp][shrPtr]
+    push ds
+    pop  es
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrisor]
+    call far __aFulshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulshr
+extrn __aNulshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shrPtr  = sframe
+shrisor = 4+sframe
+
+(*%F NearPtr *)
+(*%T NearCall *)
+public __aulshr :
+(*%E *)
+(*%E *)
+
+public __aNFaulshr:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shrPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrisor]
+    call __aNulshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __aFulshr
+extrn __aNulshr
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+RetSize = 6
+
+shrPtr  = lframe
+shrisor = 4+lframe
+
+(*%F NearPtr *)
+(*%F NearCall *)
+public __aulshr :
+(*%E *)
+(*%E *)
+
+public __aFFaulshr:
+
+    push bp
+    mov  bp, sp
+    les  bx, ss:[bp][shrPtr]
+    mov  ax, es:[bx]
+    mov  dx, es:[bx][2]
+    mov  cx, [bp][shrisor]
+    call far __aFulshr
+    mov  es:[bx][2], dx
+    mov  es:[bx], ax
+    pop  bp
+    ret  far RetSize
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%T NearCall *)
+public __ulshr:
+(*%E *)
+
+public __aNulshr:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shr     dx,1
+   rcr     ax,1
+   loop    local1
+local2:
+   ret  0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%F NearCall *)
+public __ulshr:
+(*%E *)
+
+public __aFulshr:
+
+   sub     ch,ch
+   jcxz    local2
+local1:
+   shr     dx,1
+   rcr     ax,1
+   loop    local1
+local2:
+   ret  far 0
+
+(**************************************************************************)
+section
+segment _DATA(DATA,28H)
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+(*%F _WINDOWS *)
+select _DATA
+
+public __AHSHIFT : dw 12
+public __AHINCR  : dw 1000H
+(*%E *)
+(*%T _WINDOWS *)
+select _DATA
+
+extrn __AHSHIFT
+extrn __AHINCR
+(*%E *)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+ptr1 = sframe
+ptr2 = 4+sframe
+
+
+(*%T NearCall *)
+public __hdiff:
+(*%E *)
+
+public __aNahdiff:
+
+    push bp
+    mov  bp, sp
+    push ds
+(*%T _WINDOWS *)
+    mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  ax, _DATA
+(*%E *)
+    mov  ds, ax
+    mov  ax, [bp][ptr1]
+    mov  dx, [bp][ptr1][2]
+    mov  bx, [bp][ptr2][2]
+    mov  cx, [__AHSHIFT]
+    shr  dx, cl
+    shr  bx, cl
+    sub  ax, [bp][ptr2]
+    sbb  dx, bx
+    pop  ds
+    pop  bp
+    ret  8
+
+(**************************************************************************)
+section
+segment _DATA(DATA,28H)
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn __AHSHIFT
+extrn __AHINCR
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+ptr1 = lframe
+ptr2 = 4+lframe
+
+
+(*%F NearCall *)
+public __hdiff:
+(*%E *)
+
+public __aFahdiff:
+
+    push bp
+    mov  bp, sp
+    push ds
+(*%T _WINDOWS *)
+    mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  ax, _DATA
+(*%E *)
+    mov  ds, ax
+    mov  ax, [bp][ptr1]
+    mov  dx, [bp][ptr1][2]
+    mov  bx, [bp][ptr2][2]
+    mov  cx, [__AHSHIFT]
+    shr  dx, cl
+    shr  bx, cl
+    sub  ax, [bp][ptr2]
+    sbb  dx, bx
+    pop  ds
+    pop  bp
+    ret  far 8
+
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __aNlrrot:
+
+    and  cx, 01FH
+    jcxz local2
+    push bx
+local1:
+    mov  bx, dx
+    shr  bx, 1
+    rcr  ax, 1
+    rcr  dx, 1
+    loop local1
+    pop  bx
+local2:
+    ret  0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __aFlrrot:
+
+    and  cx, 01FH
+    jcxz local2
+    push bx
+local1:
+    mov  bx, dx
+    shr  bx, 1
+    rcr  ax, 1
+    rcr  dx, 1
+    loop local1
+    pop  bx
+local2:
+    ret  far 0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __aNllrot:
+
+    and  cx, 1FH
+    jcxz local2
+local1:
+    shl  ax, 1
+    rcl  dx, 1
+    adc  ax, 0
+    loop    local1
+local2:
+    ret  0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __aFllrot:
+
+    and  cx, 1FH
+    jcxz local2
+local1:
+    shl  ax, 1
+    rcl  dx, 1
+    adc  ax, 0
+    loop    local1
+local2:
+    ret  far 0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+old_cw     = -2
+new_cw     = -4
+long_value = -12
+locals     =  12
+
+public __ftol :
+
+    push bp
+    mov  bp, sp
+    sub   sp, locals
+    push  bx
+    push  cx
+    push  si
+    push  di
+    fstcw [bp][old_cw]
+    fwait
+    mov   ax, [bp][old_cw]
+    or    ah, 0CH
+    mov   [bp][new_cw], ax
+    fldcw [bp][new_cw]
+    fistp qword [bp][long_value], st(0)
+    fldcw [bp][old_cw]
+    mov   ax, [bp][long_value]
+    mov   dx, [bp][long_value][2]
+    pop   di
+    pop   si
+    pop   cx
+    pop   bx
+    mov   sp, bp
+    pop   bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fadd :
+    faddp   st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fmul:
+    fmulp   st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fsub :
+    fsubp   st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fsubr :
+    fsubrp  st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fdiv :
+    fdivp   st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fdivr :
+    fdivrp  st(1), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fdup :
+    fld     st(0), st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fchs :
+    fchs st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fldd:
+    fld  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fstdp :
+    fstp  qword [bx], st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fstd :
+    fst  qword [bx], st(0)
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __faddd :
+    fadd   qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fmuld :
+    fmul  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fsubd :
+    fsub  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fsubdr :
+    fsubr  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public __fdivd :
+    fdiv  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fdivdr :
+    fdivr  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fldw :
+    fild  word st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fldl :
+    fild  dword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+public __fldq :
+    fild  qword st(0), [bx]
+    fwait
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __slds :
+  push ss
+  pop  es
+
+public __elds :
+  fld  dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sstsp :
+  push ss
+  pop  es
+public __estsp :
+  fstp dword es:[bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __ssts :
+  push ss
+  pop  es
+public __ests :
+  fst  dword es:[bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+
+public __sadds :
+  push ss
+  pop  es
+public __eadds :
+  fadd dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __smuls :
+  push ss
+  pop  es
+public __emuls :
+  fmul dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __ssubs :
+  push ss
+  pop  es
+public __esubs :
+  fsub  dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __ssubsr :
+  push ss
+  pop  es
+public __esubsr :
+  fsubr dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sdivs :
+  push ss
+  pop  es
+public __edivs :
+  fdiv dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sdivsr :
+  push ss
+  pop  es
+public __edivsr :
+  fdivr dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sldd :
+  push ss
+  pop  es
+public __eldd :
+  fld  qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sstdp :
+  push ss
+  pop  es
+public __estdp :
+  fstp qword es:[bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sstd :
+  push ss
+  pop  es
+public __estd :
+  fst  qword es:[bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __saddd :
+  push ss
+  pop  es
+public __eaddd :
+  fadd qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __smuld :
+  push ss
+  pop  es
+public __emuld :
+  fmul qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __ssubd :
+  push ss
+  pop  es
+public __esubd :
+  fsub qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __ssubdr :
+  push ss
+  pop  es
+public __esubdr :
+  fsubr qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sdivd :
+  push ss
+  pop  es
+public __edivd :
+  fdiv qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sdivdr :
+  push ss
+  pop  es
+public __edivdr :
+  fdivr qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sldw :
+  push ss
+  pop  es
+public __eldw :
+  fild  word st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sldl :
+  push ss
+  pop  es
+public __eldl :
+  fild  dword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __sldq :
+  push ss
+  pop  es
+public __eldq :
+  fild qword st(0), es:[bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __flds :
+  fld     dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fstsp :
+  fstp    dword [bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fsts :
+  fst    dword [bx], st(0)
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fadds :
+  fadd    dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fmuls :
+  fmul    dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fsubs :
+  fsub    dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fsubsr :
+  fsubr   dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fdivs :
+  fdiv    dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __fdivsr :
+  fdivr   dword st(0), [bx]
+  fwait
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+public __dcvt :
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public DGROUP@ : dw _DATA
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn _malloc
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public __graphgetmem :
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+    push [bp][6]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, [bp][6]
+(*%E *)
+
+(*%F NearCall *)
+    call far _malloc
+(*%E *)
+(*%T NearCall *)
+    call _malloc
+(*%E *)
+(*%F RegParam *)
+    pop  cx
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, ds
+(*%E *)
+    pop  bp
+    ret  far 0
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn _free
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public __graphfreemem :
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+(*%F NearPtr *)
+    push [bp][8]
+    push [bp][6]
+(*%E *)
+(*%T NearPtr *)
+    push [bp][6]
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  bx, [bp][8]
+    mov  ax, [bp][6]
+(*%E *)
+(*%T NearPtr *)
+    mov  ax, [bp][6]
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far _free
+(*%E *)
+(*%T NearCall *)
+    call _free
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+    add  sp, 4
+(*%E *)
+(*%T NearPtr *)
+    add  sp, 2
+(*%E *)
+(*%E *)
+    pop  bp
+    ret  far 0
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+extrn _exit
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public __graphexit :
+
+    push bp
+    mov  bp, sp
+(*%F RegParam *)
+    push [bp][6]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, [bp][6]
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public N_SCOPY@ :
+    pop  es
+    push cs
+    push es
+public F_SCOPY@ :
+public SCOPY@ :
+    push bp
+    mov  bp,sp
+    push si
+    push di
+    push ds
+    lds  si, [bp][6]
+    les  di, [bp][0AH]
+    cld
+    shr  cx,1
+    repe; movsw
+    adc  cx,cx
+    repe; movsb
+    pop  ds
+    pop  di
+    pop  si
+    pop  bp
+    ret  far 8
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public N_LXLSH@ :
+
+  pop   bx
+  push  cs
+  push  bx
+
+public F_LXLSH@ :
+public LXLSH@ :
+
+  cmp  cl, 10H
+  jae  bigWord
+  mov  bx, ax
+  shl  ax, cl
+  shl  dx, cl
+  neg  cl
+  add  cl, 10H
+  shr  bx, cl
+  or   dx, bx
+  ret  far 0
+bigWord:
+  sub  cl, 10H
+  xchg ax, dx
+  xor  ax, ax
+  shl  dx, cl
+  ret  far 0
+
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public N_LXRSH@ :
+  pop   bx
+  push  cs
+  push  bx
+
+public F_LXRSH@ :
+public LXRSH@ :
+
+  cmp  cl, 10H
+  jae  bigWord
+  mov  bx, dx
+  shr  ax, cl
+  sar  dx, cl
+  neg  cl
+  add  cl, 10H
+  shl  bx, cl
+  or   ax, bx
+  ret  far 0
+bigWord:
+  sub  cl, 10H
+  xchg ax, dx
+  cwd
+  sar  ax, cl
+  ret  far 0
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public F_LXMUL@ :
+public LXMUL@ :
+    push si
+    xchg ax, si
+    xchg ax, dx
+    test ax, ax
+    je   L1
+    mul  bx
+L1:
+    jcxz L2
+    xchg ax, cx
+    mul  si
+    add  ax, cx
+L2:
+    xchg ax, si
+    mul  bx
+    add  dx, si
+    pop  si
+    ret  far 0
+
+(****************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE,28H)
+
+select (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)
+
+public N_LDIV@ :
+    pop  cx
+    push cs
+    push cx
+public F_LDIV@ :
+public LDIV@ :
+    sub  cx, cx
+    jmp  L1
+public N_LUDIV@ :
+    pop  cx
+    push cs
+    push cx
+public F_LUDIV@ :
+public LUDIV@ :
+    mov  cx, 1
+    jmp  L1
+public N_LMOD@ :
+    pop  cx
+    push cs
+    push cx
+public F_LMOD@ :
+public LMOD@ :
+    mov  cx, 2
+    jmp  L1
+public N_LUMOD@ :
+    pop  cx
+    push cs
+    push cx
+public F_LUMOD@ :
+public LUMOD@ :
+    mov  cx, 3
+L1:
+    push bp
+    push si
+    push di
+    mov  bp, sp
+    mov  di, cx
+    mov  ax, [bp][0AH]
+    mov  dx, [bp][0CH]
+    mov  bx, [bp][0EH]
+    mov  cx, [bp][10H]
+    or   cx, cx
+    jne  L2
+    or   dx, dx
+    je   L10
+    or   bx, bx
+    je   L10
+L2:
+    test di, 1
+    jne  L4
+    or   dx, dx
+    jns  L3
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+    or   di, 0CH
+L3:
+    or   cx, cx
+    jns  L4
+    neg  cx
+    neg  bx
+    sbb  cx, 0
+    xor  di, 4
+L4:
+    mov  bp, cx
+    mov  cx, 20H
+    push di
+    xor  di, di
+    xor  si, si
+L5:
+    shl  ax, 1
+    rcl  dx, 1
+    rcl  si, 1
+    rcl  di, 1
+    cmp  di, bp
+    jb   L7
+    ja   L6
+    cmp  si, bx
+    jb   L7
+L6:
+    sub  si, bx
+    sbb  di, bp
+    inc  ax
+L7:
+    loop L5
+    pop  bx
+    test bx, 2
+    je   L8
+    mov  ax, si
+    mov  dx, di
+    shr  bx, 1
+L8:
+    test bx, 4
+    je   L9
+    neg  dx
+    neg  ax
+    sbb  dx, 0
+L9:
+    pop  di
+    pop  si
+    pop  bp
+    ret  far 8
+L10:
+    div  bx
+    test di, 2
+    je   L11
+    xchg ax, dx
+L11:
+    xor  dx, dx
+    jmp  L9
+
+(**************************************************************************)
+segment _BSS(BSS, 48H)
+
+public FLAGS8087@ :
+
+  org 2
+
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public FTOL@ :
+public F_FTOL@ :
+
+CW     =  -2
+lnum   =  -6
+locals =   6
+
+  push  bp
+  mov   bp, sp
+  sub   sp, locals
+  fstcw [bp][CW]
+  fwait
+  mov   ax, [bp][CW]
+  or    word [bp][CW], 0C00H
+  fwait
+  fldcw [bp][CW]
+  fistp dword [bp][lnum], st(0)
+  mov   [bp][CW], ax
+  fldcw [bp][CW]
+  mov   ax, [bp][lnum]
+  mov   dx, [bp][lnum][2]
+  mov   sp, bp
+  pop   bp
+  ret   far 0
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public __fcmp:
+
+  push  bp
+  mov   bp,sp
+  sub   sp,2
+  fxch    st(0),st(1)
+  fcompp  st(0),st(1)
+  fstsw   [bp][-2]
+  fwait
+  mov   ah,[bp][-1]
+  and   ax,4100H
+  shr   ax,1
+  shl   ah,1
+  or    ah,al
+  sahf
+  mov   sp,bp
+  pop   bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(**************************************************************************)
+section
+segment (*%F SameDS*)PARTY3_TEXT (*%E*)(*%T SameDS*) _TEXT (*%E*)(CODE, 28H)
+
+public __fcompp :
+
+  push  bp
+  mov   bp,sp
+  sub   sp,2
+  push  ax
+  fcompp  st(0),st(1)
+  fstsw   [bp][-2]
+  fwait
+  mov   ah,[bp][-1]
+  sahf
+  pop   ax
+  mov   sp,bp
+  pop   bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+end
+

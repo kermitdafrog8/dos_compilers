@@ -1,0 +1,240 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  P_EMUL.A - protected-mode emulator support                              *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module p_emul
+
+auto_select = 1  (* use 8087 if one is present at run time *)
+
+public  FIDRQQ   =  0
+public  FIWRQQ   =  0
+
+public  FIERQQ   =  0
+public  FIARQQ   =  0
+public  FISRQQ   =  0
+public  FICRQQ   =  0
+
+public  FJERQQ  =  0
+public  FJARQQ  =  0
+public  FJSRQQ  =  0
+public  FJCRQQ  =  0
+
+public  FIXRQQ  =  0
+
+segment EMU_TEXT  (EMU_CODE,28H)
+  foption 2
+
+extrn emulate8087
+
+oldFlags        = 22
+oldCS           = 20
+oldIP           = 18
+oldAX           = 16
+oldBX           = 14
+oldBX           = 12
+oldDX           = 10
+oldSI           = 8
+oldDI           = 6
+oldDS           = 4
+oldES           = 2
+oldBP           = 0
+
+e286_entry :
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  push  si
+  push  di
+  push  ds
+  push  es
+  push  bp
+  mov   bp,sp
+  cld   (* forward string direction *)
+  lds  si, [bp][oldIP]
+  sub  dl, dl     (* records whether there was a segment override *)
+  lodsw
+  sub  al, 0D8H
+  cmp  al, 8
+  jae  override
+decoded:
+  jmp emulate8087
+resume:
+(* ggfb: check for another float instruction *)
+  lds  si, [bp][oldIP]
+  cld  (* !! it may not be clear! *)
+search:
+  lodsw
+  cmp  al, 90H
+  je   skip
+  cmp  al, 9BH
+  je   skip
+  sub  al, 0D8H
+  cmp  al, 8
+  jae notanother (* seg-overrides cause not checked *)
+  sub dl, dl
+  jmp emulate8087 (* ax,bx,cx,dl,bp,ds,si,di must all be all valid ! *)
+notanother:
+  mov  sp, bp
+  pop  bp
+  pop  es
+  pop  ds
+  pop  di
+  pop  si
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+  iret
+
+override:
+  cmp  al, 3EH-0D8H    (* ds: ? *)
+  je   DSfix
+  cmp  al, 26H-0D8H    (* es: ? *)
+  je   ESfix
+  cmp  al, 2EH-0D8H    (* cs: ? *)
+  je   CSfix
+  (*jmp  SSfix*)
+SSfix: mov  di, ss; jmp segfix
+CSfix: mov  di, ds; jmp segfix
+ESfix: mov  di, [bp][oldES]; jmp segfix
+DSfix: mov  di, [bp][oldDS]; (*jmp segfix*)
+segfix:
+  mov es, di
+  lodsb      (* advance to pick up mod/r/m byte *)
+  xchg  ah, al
+  and  al, 7
+  inc dl
+  jmp emulate8087
+
+skip:
+  dec si
+  jmp search
+
+public __FloatInit:
+ push bp
+ mov bp,sp
+ sub sp, 4
+
+ extrn __fp_1
+ call far __fp_1
+
+ db 0FH, 01H, 66H, 0FEH;      (* smsw ds:[bp][-2] *)
+ test word [bp][-2],2
+
+(*%T auto_select*)
+ jnz emulation_not_required         (* disable jump for debugging *)
+(*%E*)
+
+ mov ax, 7 ; push ax             (* push 7 *)
+ mov ax, EMU_TEXT ; push ax
+ mov ax, e286_entry ; push ax    (* push e286_entry *)
+ push ss
+ lea ax, [bp][-4]; push ax       (* push address for result *)
+ extrn DOSSETVEC
+ call far DOSSETVEC
+
+emulation_not_required:
+
+ mov sp, bp
+ pop bp
+ mov  bx, ss
+ (*call __FloatInitInstance*)
+ (*ret far 0*)
+
+public __FloatInitInstance:
+
+ mov ax, resume
+ extrn __EmulInitInstance
+ call __EmulInitInstance
+
+ push bp
+ mov bp,sp
+ sub sp,2
+ finit
+ fstcw [bp][-2]
+ fwait
+ or  word [bp][-2], 0C00H
+ and word [bp][-2],~001DH (* enable invalid op/underflow/overflow/divide by zero exception *)
+ fldcw [bp][-2]
+ extrn __FloatInitStack
+ call far __FloatInitStack
+ mov sp,bp
+ pop bp
+ ret far 0
+
+public __FloatFinish:
+  ret far 0
+
+public __FloatMathExcepOs2 :
+    (* always far called from coresig *)
+    (*
+       stack contains far return address to signal handler, then status word,
+       then far return address to error location, the iret flags.
+       This is how __math_excep likes it, so just jump there.
+    *)
+    extrn __math_excep
+    fclex
+    jmp far __math_excep
+
+public __FloatEmulNMI:
+emws_status          = 414    (* org 2, aligned. Result of comparisons *)
+  push ss:[emws_status]       (* as per OS/2, status word onto stack *)
+  extrn sigHandlerFPE1
+  jmp far sigHandlerFPE1
+
+public __FloatJmpSave :
+
+st1_reg = 20
+st2_reg = 30
+
+    fld st(0), st(1)
+    fstp  tbyte es:[di][st1_reg], st(0)
+    fld st(0), st(2)
+    fstp  tbyte es:[di][st2_reg], st(0)
+    fwait
+    ret  far 0
+
+public __FloatJmpRestore :
+
+    fld  tbyte st(0), ds:[si][st1_reg]
+    fstp st(2), st(0)
+    fld  tbyte st(0), ds:[si][st2_reg]
+    fstp st(3), st(0)
+    ret  far 0
+
+
+ProcessFloat    = 14
+
+public __FloatSave :
+
+    fsave es:[ProcessFloat]
+    ret  far 0
+
+public __FloatRestore :
+
+    frstor ds:[ProcessFloat]
+    ret  far 0
+
+public __FloatExecSave :
+public __FloatExecRestore :
+    ret  far 0
+
+segment EMU_STATE(DATA,68H)
+
+emuRecSize = 490
+
+select EMU_STATE
+
+public emuBuffer:
+
+db  0
+org emuRecSize-1
+
+end (*P_EMUL.A*)

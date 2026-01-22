@@ -1,0 +1,152 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INITEXE.A - standard program startup code                               *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module initexe
+
+section
+segment ENTERCODE(CODE,28H)
+segment INITCODE(CODE,28H)
+segment CODE(none,28H);
+segment SIG_TEXT(CODE,68H)
+segment EMU_TEXT(EMU_CODE,28H)
+segment PROC_TEXT(CODE,68H)
+segment MP_CODE(MP_CODE,68H)
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment FAR_BSS(FAR_BSS,28H)
+segment CONST(CONST,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+
+section
+
+segment ENTERCODE(CODE,28H)
+segment INITCODE(CODE,28H)
+segment _TEXT(CODE,28H)
+segment CODE(none,28H);
+segment _INIT(INIT_CODE,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment EMU_STATE(DATA,28H)
+reserved:
+  dw 0,0,0,0,0,0,0,0
+segment EMU_TEXT(EMU_CODE,28H)
+segment CONST(CONST,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+segment NEAR_STACK(BSS, 28H)
+segment NEAR_HEAP(BSS, 28H)
+
+group DGROUP(EMU_STATE,CONST,_CONST,_DATA,BSS_START,_BSS,BSS_END,NEAR_STACK,NEAR_HEAP)
+
+select _DATA
+
+SSisDS    = 8
+HeapSize  = 6
+StackSize = 4
+
+InitRec: dw 0, 0, 0, _INIT
+
+select BSS_START
+public __bss_start:
+public _edata: db 0
+
+select BSS_END
+public __bss_end:
+public _end:
+
+select _TEXT
+text_dummy : org 6
+
+select ENTERCODE
+extrn __startup
+extrn _x_main
+extrn _x_initx
+extrn __initx
+extrn __heap_size
+extrn _x_bss_end
+extrn _x_bss_start
+extrn __near_stack_start
+extrn __x_near_stack_start
+extrn __InitLink
+
+  push ds                              (* Save PSP Segment (DOS) *)
+  mov dx, seg __initx
+  mov ds, dx
+  mov cx, [__initx]
+  mov si, [__initx][2]                 (* si:cx = __initx *)
+  push [__initx][StackSize]
+  push ax
+  push bx
+  mov ax, [__initx][HeapSize]
+  dec ax
+  mov dx, seg _x_main
+  mov ds, dx
+  mov [_x_initx], cx                   (* _x_initx = __initx *)
+  mov [_x_initx][2], si
+  mov [__heap_size], ax
+  mov word [__x_near_stack_start], __near_stack_start
+  mov ax, cs:[main_ptr]
+  mov word [_x_main][0], ax            (* _x_main = main_ptr *)
+  mov ax, cs:[main_ptr][2]
+  mov word [_x_main][2], ax
+  mov bx, InitRec
+  mov ax, _DATA
+  call far __InitLink                  (* Initialize @InitChain *)
+  pop bx
+  pop ax
+  mov word [_x_bss_end], __bss_end     (* _x_bss_end   = __bss_end *)
+  mov word [_x_bss_start], __bss_start (* _x_bss_start = __bss_start *)
+
+  mov dx, seg __initx
+  mov ds, dx
+  mov cl, [__initx][SSisDS]
+  sub ch, ch
+  pop si                               (* si = [__initx][StackSize] *)
+  pop ds                               (* Restore PSP Segment (DOS) *)
+  jmp far __startup
+
+(*
+  ax = initial ax value
+  bx = initial bx value
+  cx = SSisDS (in cl)
+  dx = seg __initx
+  si = StackSize
+  ds = initial ds value
+  es = _DATA (set in __InitLink)
+*)
+
+dw EMU_STATE
+dw CONST
+dw _CONST
+dw _DATA
+dw BSS_START
+dw _BSS
+dw BSS_END (* establishs order ! *)
+dw NEAR_STACK
+dw NEAR_HEAP
+dw text_dummy
+dw reserved
+dw 0
+
+extrn _main
+main_ptr: dd _main
+
+end *
+
+

@@ -1,0 +1,3245 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  CORESIG.A - common signal handling                                      *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreSig
+
+(***************************************************************************)
+segment _DATA(DATA, 28H)
+
+public __sigTrans :    db  0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 6
+                       db  0, 0, 7, 4
+public __raiseTrans :  db  0, 2, 0, 60, 84, 64, 68, 80
+
+
+segment _BSS(BSS, 28H)
+
+public CoreSig@CnsHandler :  org FarCodePtrSize
+public CoreSig@FatalErrorHandler :  org FarCodePtrSize
+
+segment _BSS(BSS, 28H)
+
+public __sigTable :  org 92
+public __vec0 :      org 4
+public __vec2 :      org 4
+public __vec4 :      org 4
+public __vec16 :     org 4
+public __vec23 :     org 4
+public __vec24 :     org 4
+
+segment _BSS(BSS, 28H)
+
+public @RecursiveExit : org 2
+
+segment _BSS(BSS, 28H)
+
+public _errno :      org 2
+
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE, 28H)
+(*%E *)
+
+public @InProgramFlag   :   db 1
+public @StopProgramFlag :   db 0
+
+segment PROC_TEXT(CODE,28H)
+
+public @MachineId : db 0
+
+segment _BSS(BSS, 28H)
+
+public  __pmd_stub : org FarCodePtrSize
+
+(***************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getTID
+
+select _DATA
+
+extrn __threadTable
+extrn _errno
+
+select _TEXT
+
+public __seterrno :
+
+(*%T MThread *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    mov  di, ax
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+    call far __getTID
+    mov  cx, di
+    dec  ax
+    mov  dx, THREADTABLESIZE
+    mul  dx
+    mov  bx, ax
+    mov  di, __threadTable
+    mov  [di][bx][_ERRNO], cx
+    mov  ax, cx
+    pop ds
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far  0
+(*%E *)
+
+(*%F MThread *)
+(*%F SameDS *)
+    push bx
+    push ds
+(*%T _WINDOWS *)
+    mov  bx, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  bx, _DATA
+(*%E *)
+    mov  ds, bx
+(*%E *)
+    mov  [_errno], ax
+(*%F SameDS *)
+    pop  ds
+    pop  bx
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getTID
+
+select _DATA
+
+extrn __threadTable
+extrn _errno
+
+select _TEXT
+
+public __errno__ :
+
+(*%T MThread *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+    call far __getTID
+    dec  ax
+    mov  dx, THREADTABLESIZE
+    mul  dx
+    mov  bx, ax
+    lea  ax, [__threadTable][bx][_ERRNO]
+    mov  dx, ds
+    pop  ds
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far  0
+(*%E *)
+
+(*%F MThread *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, _errno
+(*%F NearPtr *)
+    mov  dx, ds
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getTID
+
+select _DATA
+
+extrn __threadTable
+extrn _errno
+extrn __doserrno
+
+
+select _TEXT
+
+public __ioerr :
+
+(*%T MThread *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+    push ax
+    call far __getTID
+    pop  cx
+    dec  ax
+    mov  dx, THREADTABLESIZE
+    mul  dx
+    mov  bx, ax
+    mov  di, __threadTable
+    mov  [di][bx][_ERRNO], cx
+    pop ds
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far  0
+(*%E *)
+
+(*%F MThread *)
+    push bx
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%T _WINDOWS *)
+    mov  bx, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  bx, _DATA
+(*%E *)
+    mov  ds, bx
+(*%E *)
+    mov  [_errno], ax
+    mov  [__doserrno], ax
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+    dw __doserrno
+
+
+section
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __FloatJmpSave
+extrn __FloatJmpRestore
+(*%T _DLLOVL *)
+extrn Loader$RetGate
+(*%E *)
+
+(* int setjmp(jmp_buf task_state)
+     Saves current task state and returns 0. *)
+
+task_state = frame
+
+public __setjmp :
+    push bp
+    mov  bp, sp
+
+public __setjmp2 :
+(*%T _DLLOVL *)
+    xchg ax, [bp][2]
+    xchg bx, [bp][4]
+    call far Loader$RetGate
+    xchg ax, [bp][2]
+    xchg bx, [bp][4]
+(*%E *)
+    push bx
+    push cx
+    push dx
+    push di
+    push es
+    mov  cx, di
+    mov  dx, es
+(*%F RegParam *)
+(*%F NearPtr *)
+    les  di, [bp][task_state]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, ds
+    mov  es, di
+    mov  di, [bp][task_state]
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  es, bx
+    mov  di, ax
+(*%E *)
+(*%T NearPtr *)
+    mov  di, ds
+    mov  es, di
+    mov  di, ax
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+    call far __FloatJmpSave
+(*%E *)
+    lea  ax, [bp][frame]
+    stosw                       (* save registers *)			
+    mov  ax, ss
+    stosw			
+    pushf
+    pop  ax
+    stosw			
+(*%F NearCall *)
+    mov  ax, [bp][4]
+(*%E *)
+(*%T NearCall *)
+    mov  ax, cs
+(*%E *)
+    stosw
+    mov  ax, [bp][2]
+    stosw
+    mov  ax, [bp]
+    stosw
+    mov  ax, cx
+    stosw
+    mov  ax, dx
+    stosw
+    mov  ax, si
+    stosw
+    mov	 ax, ds
+    stosw
+
+    sub  ax, ax                 (*  return 0 *)
+    pop  es
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far   0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(* _setjmp ENDP *)
+
+(****************************************************************************)
+
+(* void longjmp ( task_state, val);
+     Restores task state and jumps to landing_zone.
+     Returns val. (If val == 0, val++) *)
+
+(*%F RegParam *)
+task_state = frame
+(*%F NearPtr *)
+val        = 4+frame
+(*%E *)
+(*%T NearPtr *)
+val        = 2+frame
+(*%E *)
+(*%E *)
+public _longjmp :
+    push bp
+    mov  bp, sp
+public _longjmp2 :
+(*%F RegParam *)
+    mov  bx, [bp][val]
+    cmp  bx, 1	                (* generates carry if BX = 0 *)
+    adc  bx, 0                  (* (val) BX = (BX) ? BX : 1; *)
+(*%F NearPtr *)
+    lds  si, [bp][task_state]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][task_state]
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  ds, bx
+    mov  si, ax
+    mov  bx, cx
+(*%E *)
+(*%T NearPtr *)
+    mov  si, ax
+(*%E *)
+    cmp  bx, 1	                (* generates carry if BX = 0 *)
+    adc  bx, 0                  (* (val) BX = (BX) ? BX : 1; *)
+(*%E *)
+(*%T RegParam *)
+    call far __FloatJmpRestore
+(*%E *)
+                                (* Change context begins with changing stack. *)
+
+    lodsw
+    mov  ss, [si]
+    xchg sp, ax
+    add  si, 2
+
+                                (* Build the return-link to the caller
+                                   of setjmp on the restored stack. *)
+    lodsw	
+    push ax
+    lodsw	
+    push ax
+    lodsw
+    push ax
+
+                                (* Restore other working registers. *)
+
+    lodsw
+    xchg bp, ax
+    lodsw
+    xchg di, ax
+    lodsw
+    mov	 es, ax
+    lodsw
+    mov  ds, [si]
+    xchg si, ax
+
+    xchg ax, bx                 (* return val in AX *)
+    iret                        (* return to caller of setjmp *)
+
+(* _longjmp ENDP  *)
+
+(*****************************************************************************)
+(*%F _WINDOWS *)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+select _TEXT
+
+jmpAdr : dw 0, 0
+
+public __chain_intr :
+
+
+(*%F RegParam *)
+varCS  = 2+frame
+varIP  = frame
+
+    push bp
+    mov  bp, sp
+    mov  bx, [bp][varCS]
+    mov  ax, [bp][varIP]
+    pop  bp
+(*%E *)
+    mov  sp, bp
+    add  sp, 2
+    mov  cs:[jmpAdr][2], bx
+    mov  cs:[jmpAdr], ax
+    pop  es
+    pop  ds
+    pop  di
+    pop  si
+    pop  bp
+    pop  bx
+    pop  bx
+    pop  dx
+    pop  cx
+    pop  ax
+    jmp  far cs:[jmpAdr]
+(*%E *)
+(*%F _OS2 *)
+(****************************************************************************)
+section
+segment SIG_TEXT(CODE, 28H)
+
+public @ReloadCache :
+
+  ret far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+select _TEXT
+
+public __sysmsg :
+
+    push di
+    push ds
+    mov  es, bx
+    mov  di, ax
+    mov  dx, ax
+    mov  cx, -1
+    sub  al ,al
+repne; scasb
+    not  cx
+    dec  cx
+    mov  ds, bx
+    mov  bx, 2
+    mov  ah, 40H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    pop  ds
+    pop  di
+    ret  far 0
+
+section
+(****************************************************************************)
+(*                                                                          *)
+(*   Fatal Error Handling Routines                                          *)
+(*       Normal Use:                                                        *)
+(*         call far __FatalErrorPos                                         *)
+(*         mov  cx, "Error Code"                                            *)
+(*         push cx                                                          *)
+(*         push dx                                                          *)
+(*         push ax                                                          *)
+(*         call far __FatalError                                            *)
+(*                                                                          *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __exit
+extrn _exit
+extrn __osmajor
+extrn __psp
+extrn @ExitCode
+extrn @RecursiveExit
+extrn __core_lock
+extrn @DosInterrupt
+
+select _DATA
+
+filename : db 'ERRORINF.$$$', 0
+err_msg  : db 'Runtime Error - ERRORINF.$$$ Created', 0DH, 0AH, 0
+cr_str   : db 0DH, 0AH, 0
+
+extrn  __pmd_stub
+
+stderr = 2
+
+select _TEXT
+
+public __FatalErrorPos :
+
+CSVar = 2
+IPVar = 0
+
+    mov  bx, sp
+    mov  ax, ss:[bx][CSVar]
+    mov  dx, ss:[bx][IPVar]
+    ret  far 0
+
+public __FatalError :
+
+
+Seg    = lframe+6
+Off    = 2+lframe+6
+Code   = 4+lframe+6
+
+file   = -2
+cbuf   = -92
+locals =  92
+
+    push bp
+    push di
+    push si
+    push ds
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    extrn  CoreSig@FatalErrorHandler
+    cmp  word [CoreSig@FatalErrorHandler][2], 0
+    je   noHandler
+    call far [CoreSig@FatalErrorHandler]
+    or   al, al
+    jz   noHandler
+    mov  sp,bp
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+noHandler:
+(*%T MThread *)
+    call far [__core_lock]
+(*%E *)
+    cmp  byte [@RecursiveExit], 0
+    je   firstCall
+    mov  ax, [bp][Code]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __exit
+(*%E *)
+(*%T NearCall *)
+    call __exit
+(*%E *)
+firstCall:
+(*%F _WINDOWS *)
+    cmp  word [__pmd_stub][2], 0
+    jz   notInstalled2
+    sub  cx, cx
+    sub  dx, dx
+    mov  ax, [bp][Off]
+    mov  bx, [bp][Seg]
+    mov  di, [bp][Code]
+    call far [__pmd_stub]
+notInstalled2:
+    mov  dx, ss
+    mov  es, dx
+    mov  ah, 3CH
+    mov  dx, filename
+    sub  cx, cx
+(*%T MThread *)
+    cli
+(*%E *)
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   noOutput
+    mov  [bp][file], ax
+    mov  bx, [bp][Seg]
+    lea  di, [bp][cbuf]
+    call hexConv
+    mov  al, '/'
+    stosb
+(*%F _DLLOVL *)
+    sub  bx,[__psp]
+    sub  bx,10H
+(*%E *)
+(*%T _DLLOVL *)
+    push es
+    mov  ax, bx
+    extrn Loader$Getseg
+    call far Loader$Getseg
+    mov  bx, ax
+    pop  es
+(*%E *)
+    call hexConv
+    mov  al, ':'
+    stosb
+    mov  bx, [bp][Off]
+    call hexConv
+    mov  ax, 20H
+    stosb
+    mov  bx, [bp][Code]
+    call hexConv
+    mov ax,0A0DH
+    stosw
+    push ds
+    cmp  word [__osmajor], 2             (* process command line *)
+    je   exeNameExit
+    mov  ds, [__psp]
+    mov  ds, ds:[2CH]
+    xor  cx, cx
+    mov  si, cx
+ exeLoop:                                (* get address of exe name *)
+    lodsw
+    dec si
+    or ax,ax
+    loopne exeLoop
+    add si,3
+exeNameLoop:
+    lodsb
+    or al,al
+    jz exeNameExit
+    stosb
+    jmp exeNameLoop
+exeNameExit:
+    pop ds
+    mov ax,0A0DH
+    stosw
+    mov ax,1AH
+    stosw
+    lea  di, [bp][cbuf]
+    call wrString
+    mov  ah, 3EH
+    mov  bx, [bp][file]
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+noOutput:
+    mov  word [bp][file], stderr
+    mov  di, ds
+    mov  es, di
+    mov  di, err_msg
+    call wrString
+(*%E _WINDOWS *)
+    mov  ax, [bp][Code]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+
+hexConv:
+
+    mov  ax, bx
+    and  ax, 0F000H
+    mov  cl, 12
+    call toAscii
+    mov  ax, bx
+    and  ax, 0F00H
+    mov  cl, 8
+    call toAscii
+    mov  ax, bx
+    and  ax, 0F0H
+    mov  cl, 4
+    call toAscii
+    mov  ax, bx
+    and  ax, 0FH
+    sub  cl, cl
+toAscii:
+    shr  ax, cl
+    cmp  al, 0AH
+    jge  hexDig
+    add  al, 30H
+    jmp  store
+hexDig:
+    add  al, 55
+store:
+    stosb
+    ret  0
+
+wrString:
+    mov  dx, di
+    mov  cx, -1
+    sub  al, al
+    repne; scasb
+    not  cx
+    dec  cx
+    push ds
+    mov  bx, es
+    mov  ds, bx
+    mov  bx, [bp][file]
+    mov  ah, 40H
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    pop  ds
+    ret  0
+
+section
+(*************************************************************************)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA,28H)
+
+extrn __sysmsg
+
+select _DATA
+
+ErrMsg : db 'Dos Re-entered', 0
+
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+
+extrn @InProgramFlag
+extrn __FatalErrorPos
+extrn __FatalError
+
+public @DosInterrupt :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F _WINDOWS *)
+    cmp byte cs:[@InProgramFlag], 1
+    jne reEntering
+    mov byte cs:[@InProgramFlag], 0
+(*%E *)
+    int 21H
+(*%F _WINDOWS *)
+    mov byte cs:[@InProgramFlag], 1
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+reEntering:
+(*%F _WINDOWS *)
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  si, ErrMsg
+eLoop:
+    lodsb
+    or   al, al
+    jz   Exit
+    mov  ah, 0EH
+    mov  bx, 0FFH
+    int  10H
+    jmp  eLoop
+Exit:
+    mov  ax, 4C17H
+    int  21H
+(*%E *)
+
+
+(*****************************************************************************)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE, 28H)
+(*%E *)
+
+extrn @InProgramFlag
+
+(*%F RegParam *)
+on = frame
+
+RetSize = 2
+(*%E *)
+(*%T RegParam *)
+RetSize = 0
+(*%E *)
+public _SetInProgramFlag :
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+  mov al, [bp][on]
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+  mov cs:[@InProgramFlag], al
+(*%F RegParam *)
+  pop bp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+public _GetInProgramFlag :
+
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  sub ah,ah
+  mov al,cs:[@InProgramFlag]
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(****************************************************************************)
+(*%F _WINDOWS *)
+section
+
+segment _DATA(DATA,28H)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+
+extrn __exitbreak
+extrn __FatalError
+extrn __SSisDS
+extrn __far_ss
+extrn @InProgramFlag
+extrn @StopProgramFlag
+
+IrptNo        = 0
+IrptLoaded    = 1
+IrptMsg       = 2
+IrptHandlerIP = 4
+IrptChainIP   = 6
+IrptChainCS   = 8
+
+(*@@@ Removed 9/4/91
+ID8 : db 08H,0; dw 0, Trap8,  0,0
+ID1B: db 1BH,0; dw 0, Trap1B, 0,0
+@@@*)
+ID23: db 23H,0; dw 0, Trap23, 0,0
+
+SetIrpt :
+(* IN  CS:SI = Irpt Def *)
+  cmp  byte cs:[si][IrptLoaded], 1
+  je   $AlreadySet
+  push ax
+  push bx
+  push dx
+  push ds
+  push es
+  mov  ax, cs                          (* ds = cs *)
+  mov  ds, ax
+  mov  byte [si][IrptLoaded], 1
+  mov  ah,35H                          (* get vector *)
+  mov  al,[si][IrptNo]
+  int  21H
+  mov  [si][IrptChainIP],bx
+  mov  [si][IrptChainCS],es
+  mov  ah,25H                          (* set vector *)
+  mov  dx,[si][IrptHandlerIP]
+  int  21H
+  pop  es
+  pop  ds
+  pop  dx
+  pop  bx
+  pop  ax
+$AlreadySet:
+  ret  near 0
+
+ResetIrpt :
+(* IN  CS:SI = Irpt Def *)
+  cmp  byte cs:[si][IrptLoaded], 1
+  jne  $AlreadyReset
+  mov  byte cs:[si][IrptLoaded], 1
+  push ax
+  push dx
+  push ds
+  mov  ah, 25H                         (* set vector *)
+  mov  al, cs:[si][IrptNo]
+  mov  dx, cs:[si][IrptChainIP]
+  mov  ds, cs:[si][IrptChainCS]
+  int  21H
+  pop  ds
+  pop  dx
+  pop  ax
+$AlreadyReset:
+  ret  near 0
+
+public @ResetBreakInterrupt :
+  push si
+  push es
+(*@@@ Removed 9/4/91
+  mov  si,ID8
+  call ResetIrpt
+  mov  si,ID1B
+  call ResetIrpt
+@@@*)
+  mov  si,ID23
+  call ResetIrpt
+  mov  si, _DATA
+  mov  es, si
+  mov  word es:[__exitbreak], 0
+  mov  word es:[__exitbreak][2], 0
+  pop  es
+  pop  si
+  ret  far 0
+
+public @SetBreakInterrupt :
+  push si
+  push es
+(*@@@ Removed 9/4/91
+  mov  si,ID1B
+  call SetIrpt
+@@@*)
+  mov  si,ID23
+  call SetIrpt
+  mov  si, _DATA
+  mov  es, si
+  mov  word es:[__exitbreak], @ResetBreakInterrupt
+  mov  word es:[__exitbreak][2], cs
+  pop  es
+  pop  si
+  ret  far 0
+
+(*@@@ Removed 9/4/91
+Trap1B :                (* DOS Ctrl-Break Handler *)
+  cmp  byte cs:[@StopProgramFlag], 1
+  je   $noInstall
+  mov  byte cs:[@StopProgramFlag], 1  (* Signal Break *)
+  push ax
+  push ds
+  sub  ax, ax
+  mov  ds, ax
+  mov  byte cs:[ID8][IrptLoaded], 1
+  mov  ax, Trap8
+  xchg ax, ds:[8*4]
+  mov  cs:[ID8][IrptChainIP], ax
+  mov  ax, cs
+  xchg ax, ds:[8*4+2]
+  mov  cs:[ID8][IrptChainCS], ax
+  pop  ds
+  pop  ax
+$noInstall:
+  iret
+@@@*)
+
+Trap23 :                (* DOS Ctrl-C Handler *)
+  mov  ax, _DATA
+  mov  ds, ax
+  cmp  byte [__SSisDS], 0
+  je   $FarStack
+  mov  ss, ax                          (* OS/2 DOS Box Can Corrupt SS *)
+  jmp  $StackSet
+$FarStack:
+  mov  ss, [__far_ss]
+$StackSet:
+  push bp
+  mov  bp,sp
+  mov  byte cs:[@InProgramFlag], 1
+  jmp  $Trap23Continue
+
+(*@@@ Removed 9/4/91
+Trap8 :                 (* DOS Timer-Tick Handler *)
+  cmp  byte cs:[@InProgramFlag], 1
+  je   OkToBreak
+  jmp  far cs:[ID8][IrptChainIP]       (* Chain *)
+OkToBreak:
+  mov  al,20H
+  out  20H,al                          (* Send eoi *)
+@@@*)
+
+public @UserBreak:
+  mov  ax, _DATA
+  mov  ds, ax
+$Trap23Continue:
+  call far @ResetBreakInterrupt
+  mov  byte cs:[@StopProgramFlag], 0   (* Allow DOS access *)
+  mov  bx, sp
+  mov  cx, 0FFH                        (* General Failure Return Code *)
+  push cx
+  push ss:[bx][30H]
+  push ss:[bx][32H]
+  call far __FatalError
+
+public _EnableBreakCheck :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    call far @SetBreakInterrupt
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public _DisableBreakCheck :
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  push ax
+  push ds
+  call far @ResetBreakInterrupt
+  sub  ax,ax
+  mov  ds,ax
+  pushf
+  cli
+  mov  word ds:[23H*4], DummyBreak
+  mov  word ds:[23H*4][2],cs
+  popf
+  pop  ds
+  pop  ax
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+DummyBreak :
+  iret
+(*%E _WINDOWS*)
+
+(****************************************************************************)
+section
+(*%F SameDS *)
+segment SIG_TEXT(CODE, 28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+segment _DATA(DATA,28H)
+
+extrn __exit
+extrn __sigsetup
+
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+
+_23handler :
+    sti
+    mov  ax, _DATA (*ss*)
+    mov  ds, ax
+    stc
+    mov  al, 01FH
+(*%F NearCall *)
+    call far __exit
+(*%E *)
+(*%T NearCall *)
+    call __exit
+(*%E *)
+
+public __SigInit :
+
+    cmp  word [__sigsetup], 0
+    jnz  noInt
+    push ds
+    push cs
+    pop  ds
+    mov  dx, _23handler
+    mov  ax, 2523H       (* set vector 23h to new handler *)
+    int  21H
+    mov  ax, 3301H
+    mov  dl, 1
+    int  21H
+    pop  ds
+noInt:
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __initsig
+
+select _TEXT
+
+do_initsig : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initsig : dw MAGIC_NUM
+          db PR3
+          dd do_initsig
+(*%E *)
+(*%T NearCall *)
+initsig : dw MAGIC_NUM
+          db PR3
+          dw do_initsig
+(*%E *)
+
+select _DATA
+public __NSIG :  dw  22, initsig
+
+select  _TEXT
+
+(*%T _WINDOWS *)
+(*%F NearCall *)
+    inc  bp
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    call far __initsig
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%T _WINDOWS *)
+    pop  bp
+    dec  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+segment _BSS(BSS, 28H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+extrn __seterrno
+extrn __table_raise
+
+select _BSS
+
+extrn __sigTable
+                                    SIGINT  = 8
+                                    SIGILL  = 16
+                                    SIGFPE  = 32
+                                    SIGSEGV = 44
+                                    SIGTERM = 60
+                                    SIGUSR1 = 64
+                                    SIGUSR2 = 68
+                                    SIGUSR3 = 80
+                                    SIGABRT = 88
+
+select _DATA
+
+DefMsg : db 'Process Terminated By Signal', 0DH, 0AH, 0
+IntMsg : db 'Process Terminated By Ctl C', 0DH, 0AH, 0
+FpeMsg : db 'Process Terminated By Floating Point Exception', 0DH, 0AH, 0
+AbrtMsg : db 'Process Terminated By Abort', 0DH, 0AH, 0
+
+extrn __sigsetup
+extrn __vec0
+extrn __vec2
+extrn __vec4
+extrn __vec16
+extrn __vec23
+extrn __vec24
+
+extrn  __exitsig
+extrn  __NSIG
+
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+
+
+
+SIG_ERR = -1
+SIG_DFL =  0
+SIG_IGN =  1
+
+
+__do_exitsig :
+
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _BSS
+    mov  ds, ax
+(*%E *)
+    push ds
+    mov  dx, [__vec0]
+    mov  ds, [__vec0][2]
+    mov  ax, 2500H       (* restore vector 0H  *)
+    int  21H
+    pop  ds
+
+    push ds
+    mov  dx, [__vec4]
+    mov  ds, [__vec4][2]
+    mov  ax, 2504H       (* restore vector 04H *)
+    int  21H
+    pop  ds
+
+    push ds
+    mov  dx, [__vec2]
+    mov  ds, [__vec2][2]
+    mov  ax, 2502H       (* restore vector 02H *)
+    int  21H
+    pop  ds
+
+    push ds
+    mov  dx, [__vec24]
+    mov  cx, [__vec24][2]
+    jcxz no24
+    mov  ds, cx
+    mov  ax, 2524H       (* restore vector 24H *)
+    int  21H
+no24:
+    pop  ds
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+setVec:
+    mov  ah, 35H
+    int  21H
+    mov  [si], bx
+    mov  [si][2], es
+    push ds
+    push cs
+    pop  ds
+    mov  ah, 25H
+    int  21H
+    pop  ds
+    ret  0
+
+public __initsig :
+
+                                  (* set up handler table *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _BSS
+    mov  ds, ax
+(*%E *)
+    cmp  word [__sigsetup], 0
+    jnz  near noInit
+    not  word [__sigsetup]
+    mov  bx, __sigTable
+(*%F _WINDOWS *)
+(*%F NearCall *)
+    mov  word [__exitsig][2], cs
+(*%E *)
+    mov  word [__exitsig], __do_exitsig
+(*%E *)
+    sub  dx, dx
+    mov  ax, SIG_DFL
+    mov  [bx][SIGABRT], ax        (* SIGABRT *)
+    mov  [bx][SIGABRT][2], dx
+    mov  [bx][SIGILL], ax         (* SIGILL *)
+    mov  [bx][SIGILL][2], dx
+    mov  [bx][SIGSEGV], ax        (* SIGSEGV *)
+    mov  [bx][SIGSEGV][2], dx
+    mov  [bx][SIGINT], ax         (* SIGINT *)
+    mov  [bx][SIGINT][2], dx
+    mov  [bx][SIGFPE], ax         (* SIGFPE *)
+    mov  [bx][SIGFPE][2], dx
+    mov  [bx][SIGTERM], ax        (* SIGTERM *)
+    mov  [bx][SIGTERM][2], dx
+
+(*%F _WINDOWS *)
+    mov  ax, 3301H                     (* BREAK ON *)
+    mov  dl, 1
+    int  21H
+
+    mov  al, 23H       (* save vector 23H *)
+    mov  si, __vec23
+    mov  dx, __sig23
+    call setVec
+
+    mov  dx, __sigFp
+    mov  al, 0H       (* save vector 0H *)
+    mov  si, __vec0
+    call setVec
+
+    push ds
+    mov ax, 0F000H
+    mov ds, ax
+    cmp byte ds:[0FFFEH], 0FCH (* is it an AT ?*)
+    pop ds
+    mov  dx, __sigFp
+    jne got_FP
+    in al, 0A5H
+    and al, ~20H
+    out 0A5H, al
+    mov dx, __sigFp_AT
+got_FP:
+    mov  al, 2H       (* save vector 2H *)
+    mov  si, __vec2
+    call setVec
+
+    mov  al, 4H       (* save vector 4H *)
+    mov  si, __vec4
+    mov  dx, __sigFp
+    call setVec
+
+(*
+    mov  al, 16       (* save vector 16 *)
+    mov  si, __vec16
+    mov  dx, __sigFp
+    call setVec
+*)
+(*%E *)
+noInit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  far 0
+
+public __sigIgnore :
+
+(* A signal is ignored by doing nothing. *)
+
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+extrn __exc_addr
+
+public __sigDefault :
+
+(* Default action when a signal occurs is to exit the program. *)
+
+    push ax
+    cmp  ax, 2
+    je  typeINT
+    cmp  ax, 8
+    je  typeFPE
+    cmp  ax, 15
+    je  typeABRT
+typeDEFAULT:
+    mov  ax, DefMsg
+    jmp  sendMessage
+typeINT:
+    mov  ax, IntMsg
+    jmp  sendMessage
+typeFPE:
+    mov  ax, FpeMsg
+    jmp  sendMessage
+typeABRT:
+    mov  ax, AbrtMsg
+
+sendMessage:
+(*%T _WINDOWS *)
+    mov  bx, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  bx, _DATA
+    extrn __sysmsg
+    call far __sysmsg
+(*%E *)
+    call far __FatalErrorPos
+    pop  bx
+    mov  cx, 3H
+    push cx
+    cmp  bx, 8
+    jne  notFP
+    mov  dx, [__exc_addr]
+    mov  ax, [__exc_addr][2]
+notFP:
+    push dx
+    push ax
+    call far __FatalError
+
+public __sig23 :
+
+    sti
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+    push ds
+    push es
+    push bp
+    extrn @InProgramFlag
+    mov  byte cs:[@InProgramFlag], 1
+(*%T _WINDOWS *)
+    mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  ax, _BSS
+(*%E *)
+    mov  ds, ax
+    stc
+    mov  bx, SIGINT
+    call __table_raise
+
+    pop  bp
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret  far 0
+
+public __sigFp_AT: (* AT floating point interrupt *)
+    (* adjust for mistakes in BIOS! *)
+    push bp
+    mov bp,sp
+    cmp word [bp][4], 0F000H
+    pop bp
+    jne __sigFp
+    push ax
+    mov al,20H
+    out 020H, al
+    pop ax
+    add sp, 6 (* remove iret to BIOS *)
+public __sigFp :
+    sti
+(*%T _WINDOWS *)
+    push ds
+    push ss
+    pop  ds
+(*%E *)
+    extrn  __FloatMathExcepDos
+    call far __FloatMathExcepDos
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+    push ds
+    push es
+    push bp
+
+(*%T _WINDOWS *)
+    mov  bx, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  bx, _BSS
+(*%E *)
+    mov  ds, bx
+    mov  bx, SIGFPE
+    extrn __SH_sword
+    mov  ax, [__SH_sword]
+    mov  cx, 8
+transLoop:
+    shr  ax, 1
+    jc   foundBit
+    loop transLoop
+foundBit:
+    mov  ax, 89H
+    sub  ax, cx
+    call __table_raise
+
+    pop  bp
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%T _WINDOWS *)
+    pop  ds
+(*%E *)
+    iret
+
+(****************************************************************************)
+section
+(*%T _WINDOWS *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE, 28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+extrn  __table_raise
+extrn  __FloatMathExcepDos
+extrn  __SH_sword
+SIGFPE  = 32
+
+(*
+   Floating-point exception handler for use with the Windows emulator.
+   This must return via a ret far rather than an iret
+*)
+public __sigFpWin:
+    sti
+    push ds
+    push ss
+    pop  ds
+    call far __FloatMathExcepDos
+    (* This doesn't return for 'expected' math library exceptions *)
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+    push ds
+    push es
+    push bp
+    mov  bx, ss
+    mov  ds, bx
+    mov  bx, SIGFPE
+    mov  ax, [__SH_sword]
+    mov  cx, 8
+transLoop:
+    shr  ax, 1
+    jc   foundBit
+    loop transLoop
+foundBit:
+    mov  ax, 89H
+    sub  ax, cx
+    call __table_raise
+
+    pop  bp
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    pop  ds
+    ret  far 0
+
+(*%E _WINDOWS *)
+(****************************************************************************)
+
+section
+(*%F SameDS *)
+segment SIG_TEXT(CODE, 28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+segment _DATA(DATA, 28H)
+segment _BSS(BSS, 28H)
+
+extrn __NSIG
+extrn __sigTable
+extrn __sigIgnore
+extrn __sigDefault
+extrn __seterrno
+
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+
+public _signal :
+
+(*
+void ( *signal(int sig, void ( * func)()))();
+
+sets signal handler to func.
+Returns old function pointer.
+*)
+
+EINVAL = 19
+
+sig    = frame
+func   = 2+frame
+
+(*%F RegParam *)
+    push bp
+    mov  bp, sp
+(*%E *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearCall *)
+    push cx
+    push dx
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+    mov  bx, [bp][sig]           (* check signal number is valid *)
+(*%E *)
+(*%T RegParam *)
+    mov  dx, cx
+    mov  cx, bx
+    mov  bx, ax
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    or   bx, bx
+    je   sigErr
+    cmp  bx, [__NSIG]
+    ja   sigErr
+    shl  bx, 1                   (* calculate table index *)
+    shl  bx, 1
+    add  bx, __sigTable
+    les  ax, [bx]
+(*%F RegParam *)
+    mov  cx, [bp][func]
+(*%F NearCall *)
+    mov  dx, [bp][func][2]
+(*%E *)
+(*%E *)
+(*%T NearCall *)
+    cmp  cx, 1
+    jbe  constantSig
+    mov  dx, cs
+    jmp  storeSig
+constantSig:
+    mov  dx, 0
+(*%E *)
+storeSig:
+    mov  [bx], cx                (* store new function pointer *)
+    mov  [bx][2], dx
+    mov  dx, es                  (* return old function pointer *)
+    jmp  sigDone
+sigErr:
+    mov  ax, EINVAL
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    sub  dx, dx
+sigDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+
+(*%T RegParam *)
+(*%T NearCall *)
+    pop  dx
+    pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+public _raise :
+
+(*
+int raise(sig);
+
+raises signal.
+*)
+
+(*%F RegParam *)
+sig   = frame
+arg   = 2+frame
+
+
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%T RegParam *)
+    mov  dx, bx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][sig]            (* check signal number is valid *)
+(*%E *)
+(*%T RegParam *)
+    mov  bx, ax
+(*%E *)
+    or   bx, bx
+    je   raiseErr
+    cmp  bx, [__NSIG]
+    ja   raiseErr
+    shl  bx, 1                    (* calculate table index *)
+    shl  bx, 1
+(*%F RegParam *)
+    mov  ax, [bp][arg]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, dx
+(*%E *)
+    call __table_raise
+    sub  ax, ax
+    jmp  raiseDone
+raiseErr:                         (* return -1 *)
+    mov  ax, -1
+raiseDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+SIG_DFL =  0
+SIG_IGN =  1
+
+SIGINT  = 8
+SIGILL  = 16
+SIGFPE  = 32
+SIGSEGV = 44
+SIGTERM = 60
+SIGUSR1 = 64
+SIGUSR2 = 68
+SIGUSR3 = 80
+SIGABRT = 88
+
+
+public __table_raise :   (* bx = sig num offset, ax = arg *)
+                         (* It is important for pmd that this does not insert
+                            a stack frame for default signals *)
+    push di
+    push si              (* si = arg *)
+    push bx
+    mov  si, ax
+    mov  ax, bx
+    mov  di, bx
+    shr  ax, 1
+    shr  ax, 1
+    mov  cx, [di][__sigTable]
+    mov  dx, [di][__sigTable][2]
+
+(* If dx = 0 and cx = 1, then SIG_IGN has been specified *)
+    pop  di
+    or   dx,dx
+    jnz  notignore
+    jcxz notignore
+    jmp  trDone
+
+notignore:
+    cmp  di, SIGTERM
+    je   doDFL
+    cmp  di, SIGABRT
+    je   doDFL
+    cmp  di, SIGILL
+    je   doDFL
+    cmp  di, SIGSEGV
+    je   doDFL
+    cmp  di, SIGINT
+    je   doDFL
+    cmp  di, SIGFPE
+    je   doDFL
+    jmp  dontSet
+doDFL:
+    push ax
+    mov  ax, SIG_DFL
+    mov  [di][__sigTable], ax
+    mov  word [di][__sigTable][2], 0
+    pop  ax
+dontSet:
+    or   dx, dx
+    jne  userRaise
+(*%F NearCall *)
+    call far __sigDefault
+(*%E *)
+(*%T NearCall *)
+    call __sigDefault
+(*%E *)
+    jmp  trDone
+
+userRaise:
+(*%F NearCall *)
+    push bp
+    mov  bp,sp
+    push dx          (* call address segment *)
+    push cx          (* call address offset *)
+(*%E *)
+(*%F RegParam *)
+    push si           (* arg *)
+    push ax
+(*%E *)
+(*%T RegParam *)
+    mov  bx, si       (* arg *)
+(*%E *)
+(*%F NearCall *)
+    call far [bp][-4]
+    mov  sp,bp
+    pop  bp
+(*%E *)
+(*%T NearCall *)
+    call cx
+ (*%F RegParam *)
+    add  sp, 4
+ (*%E *)
+(*%E *)
+trDone:
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    pop  si
+    pop  di
+    ret  0
+
+(*%E *) (* NOT OS2 *)
+
+
+(*%T _OS2 *)
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSWRITE
+
+select _TEXT
+
+public __sysmsg :
+
+num_writ = -2
+locals   =  2
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    mov  es, bx
+    mov  di, ax
+    mov  dx, ax
+    mov  cx, -1
+    sub  al ,al
+repne; scasb
+    not  cx
+    dec  cx
+    mov  ax, 2
+    push ax
+    push es
+    push dx
+    push cx
+    push ss
+    lea  ax, [bp][num_writ]
+    push ax
+    call far DOSWRITE
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __getTID
+
+select _DATA
+
+extrn __threadTable
+extrn _errno
+
+select _TEXT
+
+public __errno :
+
+(*%T MThread *)
+    mov  bx, sp
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+(*%F NearCall *)
+    call far __getTID
+(*%E *)
+(*%T NearCall *)
+    call __getTID
+(*%E *)
+    dec  ax
+    mov  dx, THREADTABLESIZE
+    mul  dx
+    mov  bx, ax
+    mov  ax, [__threadTable][bx][_ERRNO]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+
+(*%F MThread *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [_errno]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSOPEN
+extrn DOSWRITE
+extrn DOSCLOSE
+extrn DOSGETMODNAME
+extrn __exit
+extrn __osmode
+extrn _exit
+extrn __x_di
+extrn __hugeshift
+extrn @RecursiveExit
+
+select _DATA
+
+filename : db 'ERRORINF.$$$', 0
+err_msg  : db 'Runtime Error - ERRORINF.$$$ Created', 0DH, 0AH, 0
+cr_str   : db 0DH, 0AH, 0
+extrn  __pmd_stub
+
+stderr = 2
+O_RDWR    = 0002H
+
+select _TEXT
+
+pushes = 6
+lframe = 6+pushes
+
+public __FatalErrorPos :
+
+CSVar = 2
+IPVar = 0
+
+    mov  bx, sp
+    mov  ax, ss:[bx][CSVar]
+    mov  dx, ss:[bx][IPVar]
+    ret  far 0
+
+public __FatalError :
+
+Seg  = lframe
+Off  = 2+lframe
+Code = 4+lframe
+
+file   = -2
+action = -4
+cbuf   = -92
+locals =  92
+
+    push bp
+    push di
+    push si
+    push ds
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    extrn  CoreSig@FatalErrorHandler
+    cmp  word [CoreSig@FatalErrorHandler][2], 0
+    je   noHandler
+    call far [CoreSig@FatalErrorHandler]
+    or   al, al
+    jz   noHandler
+    mov  sp,bp
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+noHandler:
+    cmp  byte [@RecursiveExit], 0
+    je   firstCall
+    mov  ax, [bp][Code]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __exit
+(*%E *)
+(*%T NearCall *)
+    call __exit
+(*%E *)
+firstCall:
+    cmp  word [__pmd_stub][2], 0
+    jz   notInstalled2
+    sub  cx, cx
+    sub  dx, dx
+    mov  ax, [bp][Off]
+    mov  bx, [bp][Seg]
+    mov  di, [bp][Code]
+    call far [__pmd_stub]
+notInstalled2:
+(*%T _WINDOWS *)
+    mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+    mov  ax, _DATA
+(*%E *)
+    mov  ds, ax
+    call openfile
+    or   ax, ax
+    jnz  noOutput
+    push ss
+    pop  es
+    mov  bx, [bp][Seg]
+    call calcSegs
+    mov  bx, [bp][Off]
+    call hexConv
+    mov  ax, 20H
+    stosb
+    mov  bx, [bp][Code]
+    call hexConv
+    mov ax,0A0DH
+    stosw
+    cmp  word [__osmode], 0
+    je   exeNameExit
+    mov ax, [__x_di]
+    push ax
+    mov ax,64
+    push ax
+    push es
+    push di
+    call far DOSGETMODNAME
+    or ax,ax
+    jnz exeNameExit
+    lea  di, [bp][cbuf]
+    call wrString
+    lea  di, [bp][cbuf]
+exeNameExit:
+    mov ax,0A0DH
+    stosw
+    mov ax,1AH
+    stosw
+    lea  di, [bp][cbuf]
+    call wrString
+    push [bp][file]
+    call far DOSCLOSE
+noOutput:
+    mov  word [bp][file], stderr
+    mov  di, err_msg
+    push ds
+    pop  es
+    call wrString
+    mov  ax, [bp][Code]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+hexConv:
+
+    mov  ax, bx
+    and  ax, 0F000H
+    mov  cl, 12
+    call toAscii
+    mov  ax, bx
+    and  ax, 0F00H
+    mov  cl, 8
+    call toAscii
+    mov  ax, bx
+    and  ax, 0F0H
+    mov  cl, 4
+    call toAscii
+    mov  ax, bx
+    and  ax, 0FH
+    sub  cl, cl
+toAscii:
+    shr  ax, cl
+    cmp  al, 0AH
+    jge  hexDig
+    add  al, 30H
+    jmp  store
+hexDig:
+    add  al, 55
+store:
+    stosb
+    ret  0
+
+wrString:
+    mov  bx, di
+    mov  cx, -1
+    sub  al, al
+    repne ; scasb
+    not  cx
+    dec  cx
+    push [bp][file]
+    push es
+    push bx
+    push cx
+    push ss
+    lea ax, [bp][action]
+    push ax
+    call far DOSWRITE
+    ret  0
+
+openfile:
+
+    push ss
+    pop  es
+    push ds
+    mov  ax, filename
+    push ax              (* file name *)
+    push ss
+    lea  ax, [bp][file]
+    push ax              (* handle *)
+    push ss
+    lea  ax, [bp][action]
+    push ax              (* action *)
+    sub  bx, bx
+    push bx
+    push bx              (* size *)
+    push bx              (* attribute *)
+    mov  ax, 12H
+    push ax              (* flag *)
+    mov  ax, O_RDWR+40H
+    push ax              (* access *)
+    push bx              (* 0L *)
+    push bx
+    call far DOSOPEN
+    ret 0
+
+calcSegs:
+    lea  di, [bp][cbuf]
+    call hexConv
+    mov  al, '/'
+    stosb
+    mov  ax, bx
+    sub  bx, bx
+    mov  dx, [__hugeshift]
+    cmp  word [__osmode], 1
+    je   lslLoop
+    sub  bx, bx      (* can't do this in real mode so output 0000 *)
+    jmp  gotSeg
+lslLoop:
+    inc  bx
+    sub  ax, dx
+    db   0FH, 3, 0C8H                  (*I lsl cx, ax *)
+    jz lslLoop
+gotSeg:
+    call hexConv
+    mov  al, ':'
+    stosb
+    ret  0
+
+(****************************************************************************)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __initsig
+
+select _TEXT
+
+do_initsig : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initsig : dw MAGIC_NUM
+          db PR3
+          dd do_initsig
+(*%E *)
+(*%T NearCall *)
+initsig : dw MAGIC_NUM
+          db PR3
+          dw do_initsig
+(*%E *)
+
+select _DATA
+public __NSIG :  dw  22, initsig
+
+select  _TEXT
+
+    call far __initsig
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __FatalError
+extrn __FatalErrorPos
+extrn __seterrno
+extrn DOSSETVEC
+extrn __sigsetup
+
+select _DATA
+
+DefMsg : db 'Process Terminated By Signal', 0DH, 0AH, 0
+IntMsg : db 'Process Terminated By Ctl C', 0DH, 0AH, 0
+FpeMsg : db 'Process Terminated By Floating Point Exception', 0DH, 0AH, 0
+AbrtMsg : db 'Process Terminated By Abort', 0DH, 0AH, 0
+
+extrn __NSIG
+extrn __sigTrans
+
+extrn __sigTable
+                                    SIGINT   =  8
+                                    SIGILL   = 16
+                                    SIGFPE   = 32
+                                    SIGSEGV  = 44
+                                    SIGTERM  = 60
+                                    SIGUSR1  = 64
+                                    SIGUSR2  = 68
+                                    SIGUSR3  = 80
+                                    SIGBREAK = 84
+                                    SIGABRT  = 88
+
+
+select _TEXT
+
+
+
+SIG_ERR = -1
+SIG_DFL =  0
+SIG_IGN =  1
+
+
+(*
+ initialise the signal table with a default entry for SIGINT (not
+	done directly so that segment fixups are avoided).
+*)
+
+(*%T _XTD *)
+public sigHandlerFPE2:
+    push  ax
+    sub   al,al
+    out   0F0H, al        (* reset PEREQ *)
+    mov   al, 20H         (* End-of-interrupt *)
+    out   0A0H, al
+    jmp   near FPE3
+FPE3:
+    jmp   near FPE4
+FPE4:
+    out   020H, al
+    pop   ax
+    push  ax              (* make room for status word *)
+    push  bp
+    mov   bp,sp
+    fstsw [bp][2]
+    pop   bp
+    sti
+    (* we now have state the same as in OS2 *)
+(*%E *)
+public sigHandlerFPE1:
+    (* NB 8087 status word is on stack (see latest OS2 doc for DOSSETVEC) *)
+    extrn  __FloatMathExcepOs2
+    call far __FloatMathExcepOs2
+public sigHandlerFPE:
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+    push ds
+    push es
+    push bp
+
+    mov  bx, _DATA
+    mov  ds, bx
+    mov  bx, SIGFPE
+    extrn __SH_sword
+    mov  ax, [__SH_sword]
+    mov  cx, 8
+transLoop:
+    shr  ax, 1
+    jc   foundBit
+    loop transLoop
+foundBit:
+    mov  ax, 89H
+    sub  ax, cx
+    call __table_raise
+
+    pop  bp
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+ignore:
+    iret
+
+sigHandlerILL:
+
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push si
+    push ds
+    push es
+    push bp
+
+    mov  ax, _DATA
+    mov  ds, ax
+    stc
+    mov  bx, SIGILL
+    call __table_raise
+
+    pop  bp
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret  far 0
+
+oldvec = -4
+locals =  4
+
+installInt:
+
+    push ax
+    mov  ax, cs
+    push ax
+    push bx
+    push ss
+    lea  ax, [bp][oldvec]
+    push ax
+    call far DOSSETVEC
+    ret  0
+
+
+
+public __initsig :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    cmp  word [__sigsetup], 0
+    jnz  noInit
+    not  word [__sigsetup]
+    mov  bx, __sigTable                  (* set up handler table *)
+    sub  dx, dx
+    mov  ax, SIG_DFL
+    mov  [bx][SIGABRT], ax        (* SIGABRT *)
+    mov  [bx][SIGABRT][2], dx
+    mov  [bx][SIGILL], ax         (* SIGILL *)
+    mov  [bx][SIGILL][2], dx
+    mov  [bx][SIGSEGV], ax        (* SIGSEGV *)
+    mov  [bx][SIGSEGV][2], dx
+    mov  [bx][SIGINT], ax         (* SIGINT *)
+    mov  [bx][SIGINT][2], dx
+    mov  [bx][SIGFPE], ax         (* SIGFPE *)
+    mov  [bx][SIGFPE][2], dx
+    mov  [bx][SIGTERM], ax        (* SIGTERM *)
+    mov  [bx][SIGTERM][2], dx
+
+    mov  ax, dx                        (*= mov  ax, 0 *)
+    mov  bx, sigHandlerFPE
+    call installInt
+
+    mov  ax, 4
+    mov  bx, sigHandlerFPE
+    call installInt
+
+(*%F _XTD *)
+    mov  ax, 16
+    mov  bx, sigHandlerFPE1
+    call installInt
+(*%E *)
+(*%T _XTD *)
+    mov  ax, 75H
+    mov  bx, sigHandlerFPE2
+    call installInt
+(*%E *)
+
+noInit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+
+public __sigIgnore :    (* A signal is ignored by doing nothing. *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+extrn __exc_addr
+extrn __sysmsg
+
+public __sigDefault :   (* Default action on a signal is to exit the program. *)
+    push ax
+    cmp  ax, 2
+    je  typeINT
+    cmp  ax, 8
+    je  typeFPE
+    cmp  ax, 15
+    je  typeABRT
+typeDEFAULT:
+    mov  ax, DefMsg
+    jmp  sendMessage
+typeINT:
+    mov  ax, IntMsg
+    jmp  sendMessage
+typeFPE:
+    mov  ax, FpeMsg
+    jmp  sendMessage
+typeABRT:
+    mov  ax, AbrtMsg
+sendMessage:
+    mov  bx, _DATA
+    call far __sysmsg
+    call far __FatalErrorPos
+    pop  bx
+    mov  cx, 3H
+    push cx
+    cmp  bx, 8
+    jne  notFP
+    mov  dx, [__exc_addr]
+    mov  ax, [__exc_addr][2]
+notFP:
+    push dx
+    push ax
+    call far __FatalError
+
+sig  =  frame
+arg  =  2+frame
+
+public __sigHandler :   (* calls user handler when a signal id received by OS *)
+    cld
+    inc  bp
+    push bp
+    mov  bp, sp
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  bx, [bp][sig]
+    mov  cx, bx
+    shl  bx, 1
+    shl  bx, 1
+    call __table_raise
+    pop  ds
+    mov  sp, bp
+    pop  bp
+    dec  bp
+    ret  far 4
+
+public _signal :
+
+(* void ( *signal(int sig, void ( * func)()))();
+
+sets signal handler to func.  Returns old function pointer. *)
+
+SIGINT    =   2
+SIGILL    =   4
+SIGFPE    =   8
+SIGSEGV   =  11
+SIGTERM   =  15
+SIGUSR1   =  16
+SIGUSR2   =  17
+SIGUSR3   =  20
+SIGBREAK  =  21
+SIGABRT   =  22
+
+EINVAL    = 19
+
+(*%F RegParam *)
+sig       = frame
+func      = 2+frame
+prevfunc  = -4
+prevact   = -6
+
+locals    =  6
+(*%E *)
+(*%T RegParam *)
+sig       = -2
+func      = -6
+prevfunc  = -10
+prevact   = -14
+
+locals    =  14
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+(*%T NearCall *)
+    push dx
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%T NearCall *)
+    push cx
+    push dx
+(*%E *)
+(*%F NearCall *)
+    mov  [bp][func][2], cx
+(*%E *)
+    mov  [bp][func], bx
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][sig]           (* check signal number is valid *)
+(*%E *)
+(*%T RegParam *)
+    mov  bx, ax
+(*%E *)
+    or   bx, bx
+    je   sigErr
+    cmp  bx, [__NSIG]
+    ja   sigErr
+(*%F NearCall *)
+    cmp  word [bp][func][2], 0
+    jnz  notException
+(*%E *)
+    mov  ax, [bp][func]
+    cmp  ax, SIGA_ACCEPT
+    jne   notException
+    call sys_exception
+    jmp  sigDone
+notException:
+    cmp  bx, SIGUSR1
+    jb   notOSonly1
+    cmp  bx, SIGUSR3
+    ja   notOSonly1              (* These signals are dealt with by the OS *)
+    jmp  alsoOS
+notOSonly1:
+    cmp  bx, SIGINT
+    je   alsoOS
+    cmp  bx, SIGTERM
+    je   alsoOS
+    cmp  bx, SIGBREAK
+    je   alsoOS
+OSret:
+    shl  bx, 1                   (* calculate table index *)
+    shl  bx, 1
+    add  bx, __sigTable
+    les  ax, [bx]
+    mov  cx, [bp][func]
+(*%F NearCall *)
+    mov  dx, [bp][func][2]
+(*%E *)
+(*%T NearCall *)
+    cmp  cx, 1
+    jbe  constantSig
+    mov  dx, cs
+    jmp  storeSig
+constantSig:
+    mov  dx, 0
+(*%E *)
+storeSig:
+sigFunc:
+    mov  [bx], cx                (* store new function pointer *)
+    mov  [bx][2], dx
+    mov  dx, es                  (* return old function pointer *)
+    jmp  sigDone
+sigErr:                          (* return -1L *)
+    mov  ax, EINVAL
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    sub  dx, dx
+sigDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%F RegParam *)
+(*%T NearCall *)
+    pop  dx
+(*%E *)
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearCall *)
+    pop  dx
+    pop  cx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+alsoOS:
+    push bx
+    call sys_signal
+    pop  bx
+    jmp  OSret
+
+extrn DOSSETSIGHANDLER
+
+
+sys_exception :
+    jmp   ssInstall
+sys_signal :
+    mov  ax, SIGA_ACCEPT    (* install new handler *)
+ssInstall:
+    push cs                 (* handler function *)
+    mov  dx, __sigHandler
+    push dx
+    push ss                 (* previous handler storage *)
+    lea  dx, [bp][prevfunc]
+    push dx
+    push ss
+    lea  dx, [bp][prevact]  (* previous action storage *)
+    push dx
+    push ax                 (* action *)
+    mov  ax, bx
+    mov  bx, __sigTrans
+    xlat
+    push ax                 (* signal number *)
+    call far DOSSETSIGHANDLER
+    or   ax, ax
+    jz   ssOK
+ssError:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    cwd
+    jmp  ssDone
+ssOK:
+    mov  ax, [bp][prevfunc]
+    mov  dx, [bp][prevfunc][2]
+ssDone:
+    ret  0
+
+extrn DOSFLAGPROCESS
+extrn _getpid
+
+public _raise :
+
+(*
+int raise(sig);
+
+raises signal.
+*)
+
+sig   = frame
+arg   = 2+frame
+
+SIGUSR1   =  16
+SIGUSR2   =  17
+SIGUSR3   =  20
+
+
+    push bp
+    mov  bp, sp
+    push bx
+    push cx
+    push dx
+    push di
+(*%F SameDS *)
+    push ds
+    mov  dx, _DATA
+    mov  ds, dx
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][sig]            (* check signal number is valid *)
+(*%E *)
+(*%T RegParam *)
+    mov  bx, ax                   (* check signal number is valid *)
+    mov  cx, ax
+    mov  dx, bx
+(*%E *)
+    or   bx, bx
+    je   raiseErr
+    cmp  bx, [__NSIG]
+    ja   raiseErr
+    cmp  bx, SIGUSR1
+    jb   notOSonly2
+    cmp  bx, SIGUSR3
+    ja   notOSonly2               (* These signals are dealt with by the OS *)
+    call __sys_raise
+    jmp  raiseDone
+notOSonly2:
+    shl  bx, 1                    (* calculate table index *)
+    shl  bx, 1
+(*%F RegParam *)
+    mov  ax, [bp][arg]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, dx
+(*%E *)
+    call __table_raise
+    sub  ax, ax
+    jmp  raiseDone
+raiseErr:                         (* return -1 *)
+    mov  ax, -1
+raiseDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+SIGINT   =  8
+SIGILL   = 16
+SIGFPE   = 32
+SIGSEGV  = 44
+SIGTERM  = 60
+SIGUSR1  = 64
+SIGUSR2  = 68
+SIGUSR3  = 80
+SIGBREAK = 84
+SIGABRT  = 88
+
+(*%F NearCall *)
+sig   = sframe
+arg   = 2+sframe
+(*%E *)
+(*%T NearCall *)
+sig   = frame
+arg   = 2+frame
+(*%E *)
+
+callAddress = -4
+arg         = -6
+locals      =  6
+
+
+public __table_raise :   (* bx = sig num offset, ax = arg *)
+                         (* It is important for pmd that this does not insert
+                            a stack frame for default signals *)
+
+    push di
+    push si
+    push bx
+    mov  si, ax         (* arg *)
+    mov  ax, bx
+    mov  di, bx
+    shr  ax, 1
+    shr  ax, 1
+    mov  cx, [di][__sigTable]
+    mov  dx, [di][__sigTable][2]
+
+(* If dx = 0 and cx = 1, then SIG_IGN has been specified *)
+    pop  di
+    or   dx,dx
+    jnz  notignore
+    jcxz notignore
+    jmp  trDone
+
+notignore:
+    cmp  di, SIGTERM
+    je   doDFL
+    cmp  di, SIGABRT
+    je   doDFL
+    cmp  di, SIGILL
+    je   doDFL
+    cmp  di, SIGSEGV
+    je   doDFL
+    cmp  di, SIGINT
+    je   doDFL
+    cmp  di, SIGFPE
+    je   doDFL
+    jmp  dontSet
+doDFL:
+    push ax
+    mov  ax, SIG_DFL
+    mov  [di][__sigTable], ax
+    mov  word [di][__sigTable][2], 0
+    pop  ax
+dontSet:
+    or   dx, dx
+    jne  userRaise
+(*%F NearCall *)
+    call far __sigDefault
+(*%E *)
+(*%T NearCall *)
+    call __sigDefault
+(*%E *)
+    jmp  trDone
+
+userRaise:
+(*%F NearCall *)
+    push bp
+    mov  bp,sp
+    push dx          (* call address segment *)
+    push cx          (* call address offset *)
+(*%E *)
+(*%F RegParam *)
+    push si          (* arg *)
+    push ax
+(*%E *)
+(*%T RegParam *)
+    mov  bx, si      (* arg *)
+(*%E *)
+(*%F NearCall *)
+    call far [bp][-4]
+    mov  sp,bp
+    pop  bp
+(*%E *)
+(*%T NearCall *)
+    call cx
+ (*%F RegParam *)
+    add  sp, 4
+ (*%E *)
+(*%E *)
+trDone:
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    pop  si
+    pop  di
+    ret  0
+
+public __sys_raise :
+
+FLGP_PID = 1
+
+    push cx
+    push dx
+(*%F NearCall *)
+    call far _getpid
+(*%E *)
+(*%T NearCall *)
+    call _getpid
+(*%E *)
+    pop  dx
+    pop  cx
+    push ax
+    mov  ax, FLGP_PID
+    push ax
+(*%F RegParam *)
+    mov  ax, [bp][sig]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, cx
+(*%E *)
+    mov  bx, __sigTrans
+    xlat
+    sub  al, 5
+    push ax
+(*%F RegParam *)
+    mov  ax, [bp][arg]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, dx
+(*%E *)
+    push ax
+    call far DOSFLAGPROCESS
+    or   ax, ax
+    jz   srDone
+srErr:                         (* return -1 *)
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+srDone:
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn DOSSETSIGHANDLER
+extrn __sigsetup
+extrn __sysmsg
+extrn _exit
+
+prevfunc = -4
+prevact  = -6
+locals   =  6
+
+
+select _DATA
+
+Message : db '^C', 0
+select _TEXT
+
+
+Handler :
+
+(* terminates process *)
+
+    cld
+    inc  bp
+    push bp
+    mov  bp, sp
+    mov  bx, _DATA
+    mov  ds, bx
+    mov  ax, Message
+    call far __sysmsg
+    mov  ax, 3
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+
+
+
+public __siginit :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+
+    mov  cx, 2
+    mov  dx, SIG_CTRLC
+inLoop:
+    push cs                 (* handler function *)
+    mov  ax, Handler
+    push ax
+    push ss                 (* previous handler storage *)
+    lea  ax, [bp][prevfunc]
+    push ax
+    push ss
+    lea  ax, [bp][prevact]  (* previous action storage *)
+    push ax
+    mov  ax, 2
+    push ax                 (* action *)
+    push dx                 (* signal number *)
+    call far DOSSETSIGHANDLER
+    mov  dx, SIG_CTRLBREAK
+    loop inLoop
+ssDone:
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*%E *) (* OS2 *)
+
+(*%T _XTD *)
+section
+(*************************************************************************)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+
+public @DosInterrupt:
+    int  21H
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _XTD *)
+
+end
+

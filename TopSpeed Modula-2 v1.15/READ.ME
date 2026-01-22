@@ -1,0 +1,94 @@
+******************************************************************************
+*                                                                            *
+*  VID : Visual Interactive Debugger                            Version 1.02 *
+*                                                                            *
+*                                                                            *
+*                                                                            *
+*  (c) Copyright 1988 by Jensen & Partner International, London, UK          *
+*                                                                            *
+*                                                                            *
+*                                                                            *
+*  READ.ME : last minute Informationen und Wissenswertes                     *
+*                                                                            *
+*                                                                            *
+******************************************************************************
+
+
+------------------------------------------------------------------------------
+
+   Programme, die EMS-Speicher nutzen, kînnen entgegen der Aussage im
+   Benutzerhandbuch mit Hilfe der /E-Option mit VID bearbeitet werden.
+   Allerdings sollten in User Breakpoint Handlern keine Zugriffe auf
+   EMS-Speicher stattfinden.
+
+------------------------------------------------------------------------------
+
+   Das .DB$-File enthÑlt den vollen Pfad der Modula-2 Source-Dateien.
+   Wenn Sie Source-Dateien innerhalb Ihres Dateisystems kopieren, sollte
+   das .DB$-File neu erzeugt werden durch (Option /R des VID). Alternativ
+   kann das File auch gelîscht werden.
+
+------------------------------------------------------------------------------
+
+   M2Prof erhîht wÑhrend des Programmlaufes die Anzahl der Hardware-
+   Timer-Ticks pro Sekunde. Dies kann die Genauigkeit der internen Uhr
+   beeinflussen. Auch die LED der Floppy-Disk wird eventuell nicht aus-
+   geschaltet. Bei Beendigung des Programmlaufs wird der Timer wieder
+   auf den Normalzustand initialisiert.
+
+------------------------------------------------------------------------------
+
+   Wenn Debug-Information durch die /D-Compiler-Option erzeugt werden,
+   kînnen Namenskonflikte bei lokalen Prozedur-Namen auftreten.
+   Der Grund ist, da· diese Namen dem Debugger bekanntgemacht werden
+   mÅssen. Solche Prozeduren sollten wÑhrend des Debuggings durch Pre- 
+   oder Suffixe unterschiedlich benannt werden.
+
+------------------------------------------------------------------------------
+
+   VID benîtigt den Interrupt 4 wÑhrend der Initialisierung. Wenn Sie
+   die RunTime-Library (RTL.A) verÑndert haben, und diesen Interrupt
+   entfernt haben (in Prozedur Int4Init), kann der VID nicht geladen
+   werden. Stattdessen wird die AusfÅhrung mit einer Meldung abgebrochen.
+
+------------------------------------------------------------------------------
+
+   Wenn der VID aus der TopSpeed-Umgebung aufgerufen wird, sollten die
+   <AltX> und <AltE> ShortCuts-Kommandos nicht redefiniert werden.
+
+------------------------------------------------------------------------------
+
+   Um mit Hercules-Karten die Umschaltung in/von Grafik zu realisieren, ist
+   folgenden énderung im Modul Graph.Mod erforderlich :
+
+           VAR
+             HercFlag [0B7FFH:0EH] : CARDINAL ;
+
+           PROCEDURE HercTextMode;
+           TYPE
+             DataType = ARRAY[0..11] OF SHORTCARD ;
+           CONST
+             Data = DataType(61H,50H,52H,0FH,19H,06H,19H,19H,02H,0DH,0BH,0CH);
+           VAR
+             I: CARDINAL;
+           BEGIN
+               SYSTEM.Out(3B8H,20H);
+               FOR I:= 0 TO 11 DO
+                   SYSTEM.Out(3B4H,SHORTCARD(I));
+                   SYSTEM.Out(3B5H,Data[I])
+               END;
+               Lib.WordFill([0B000H:0],2000,720H);
+               Lib.Delay(500);
+               SYSTEM.Out(3B8H,28H);
+               HercFlag := 720H ;
+           END HercTextMode;
+
+------------------------------------------------------------------------------
+
+   Popup-Programme (z.B. SideKick) erscheinen auf dem Pragramm-Schirm und
+   nicht auf dem Debugger-Schirm, wenn der Debugger im Modus /S1 betrieben
+   wird. Um solche Programme mit VID zu benutzen, sollte der Schirm-Modus
+   /S2 benutzt werden.
+
+------------------------------------------------------------------------------
+

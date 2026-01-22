@@ -1,0 +1,16 @@
+DEFINITION MODULE LIM; (* LIM expanded memory *)
+
+VAR LIMPresent : BOOLEAN;
+    PageFr      : CARDINAL;
+
+PROCEDURE GetStatus() : SHORTCARD;
+PROCEDURE GetPageFrame(): CARDINAL;
+PROCEDURE AllocatePages( n : CARDINAL ) : CARDINAL;
+PROCEDURE FreePages() : CARDINAL;
+PROCEDURE MapPage( PPage,LPage,Handle : CARDINAL ): CARDINAL;
+PROCEDURE DeAllocatePages( Handle : CARDINAL );
+
+END LIM.
+
+
+

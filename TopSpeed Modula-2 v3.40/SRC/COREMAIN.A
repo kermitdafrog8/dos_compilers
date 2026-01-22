@@ -1,0 +1,3447 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMAIN.A - process startup and exit, args, environment                *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreMain
+
+(****************************************************************************)
+segment _BSS(BSS, 28H)
+
+public  __argbuf    : org 192           (* command line buffer *)
+public  __hugeshift : org 2
+public  __osmajor   : org 2
+public  __osminor   : org 2             (* DOS version *)
+public  __exit_stk  : org 32*CodePtrSize(* at/onexit function stack *)
+
+segment _DATA(DATA, 28H)
+
+public @InitCalled      : dw 0
+public @InitGrandTotal  : dw 0
+public @InitCurrent     : dw 0
+public @InitRecPointer  : dw 0, 0
+public @InitPointer     : dw 0, 0
+public @StackContextSP  : dw 0
+public @StackContextBP  : dw 0
+public @InitDone        : db 0
+(*%T MThread *)
+public @StackContextSS  : dw 0
+(*%E *)
+public @InitPriority    : db 0
+
+segment _BSS(BSS, 28H)
+
+public @ExitCode :  org 2
+
+segment _BSS(BSS, 28H)
+
+public __exit_list_done : org 1
+
+segment _DATA(DATA, 28H)
+
+(*%T NearPtr *)
+public __exit_ptr : dw __exit_stk + (32*CodePtrSize)
+public __exit_top : dw __exit_stk + (32*CodePtrSize)
+(*%E *)
+(*%F NearPtr *)
+public __exit_ptr : dd __exit_stk + (32*CodePtrSize)
+public __exit_top : dd __exit_stk + (32*CodePtrSize)
+(*%E *)
+
+segment _BSS(BSS, 28H)
+
+public __exit_io :   org CodePtrSize
+public __exit_file : org CodePtrSize
+public __exit_tmp:   org CodePtrSize
+
+public __exit_proc : org FarCodePtrSize
+
+segment _BSS(BSS, 28H)
+
+public __real_in :   org NearCodePtrSize
+public __real_out :  org NearCodePtrSize
+
+segment _DATA(DATA, 28H)
+
+extrn __Term2
+(*%F NearCall *)
+public standard@haltChain : dd __Term2
+(*%T _DLLOVL *)
+extrn __Term3
+public standard@@haltChain2 : dd __Term3
+(*%E *)
+(*%E *)
+(*%T NearCall *)
+public standard@haltChain : dw __Term2
+(*%E *)
+
+segment _DATA(DATA, 28H)
+
+public  __CmdLine : dd 0
+public  __iHandle : dw 0
+
+segment _DATA(DATA, 28H)
+
+public __farstack : dw 0
+public __sp_temp :  dw 0
+public __ss_temp :  dw 0
+
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+segment _DATA(DATA, 28H)
+
+public DOSHUGESHIFT = 12
+(*%E *)
+(*%E *)
+
+segment _DATA(DATA, 28H)
+
+public  _x_initx :     dw 0,0
+public  _x_bss_end :   dw 0
+public  _x_bss_start : dw 0
+
+segment _BSS(BSS, 28H)
+
+public __sigsetup :   org 2
+public __exitbreak :  org 4
+public __exitsig :    org CodePtrSize
+public __exitgraph :  org CodePtrSize
+
+segment _DATA(DATA, 28H)
+
+public  __psp           : dw 0
+public  __env           : dw 0
+public  __heap_base     : dw 0
+public  __main_args     : dw 0
+public  __env_init      : dw 0
+public  __arg_init      : dw 0
+public  STKHQQ :
+public  __stklen        : dw 0
+public  __SSisDS        : dw 0
+public  __far_ss        : dw 0
+public  __x_near_stack_start : dw 0
+public  __heap_size     : dw 0
+public  __osmode        : dw 0
+
+segment _DATA(DATA, 28H)
+
+public  __x_ax :      dw 0
+public  __x_bx :      dw 0
+public  __x_di :      dw 0
+
+segment _DATA(DATA, 28H)
+
+public  _x_main :      dw 0,0
+public  __stk_base :   dw 0
+
+segment _BSS(BSS, 28H)
+
+public __nmemsetup :    org 1   (* BOOLEAN flag indicating near heap *)
+                                (* has been initialised              *)
+segment _BSS(BSS, 28H)
+
+public __fmodmemsetup : org 1   (* BOOLEAN flag indicating M2 far heap *)
+                                (* has been initialised             *)
+segment _BSS(BSS, 28H)
+
+public __fmemsetup :    org 1   (* BOOLEAN flag indicating far heap *)
+                                (* has been initialised             *)
+
+
+segment _DATA(DATA, 28H)
+(*%F _ENV *)
+(*%T _DLLOVL *)
+extrn Loader$GrowHeap
+extrn Loader$ShrinkHeap
+
+public __res_mem :      dd Loader$GrowHeap
+public __fix_mem :      dd 0
+public __shr_mem :      dd Loader$ShrinkHeap
+(*%E *)
+(*%F _DLLOVL *)
+public __res_mem :      org CodePtrSize
+public __fix_mem :      org CodePtrSize
+public __shr_mem :      org CodePtrSize
+(*%E *)
+(*%E *)
+(*%T _ENV*)
+public __res_mem :      org CodePtrSize
+public __fix_mem :      org CodePtrSize
+public __shr_mem :      org CodePtrSize
+(*%E *)
+
+                                (* procedure variable - points to *)
+                                (* routine to shrink heap *)
+
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn @RecursiveExit
+extrn __exit
+extrn __exit_io
+extrn __exit_file
+extrn __exit_tmp
+extrn __exit_proc
+extrn __InitReset
+extrn @InitPointer
+extrn @InitRecPointer
+extrn @ExitCode
+extrn @StackContextSP
+extrn @StackContextBP
+extrn @StackContextSS
+extrn @InitCurrent
+extrn @InitGrandTotal
+extrn @InitCalled
+extrn @InitPriority
+extrn @InitDone
+extrn $Stage2
+
+retCode : dw 0
+
+select _TEXT
+
+(*%F _WINDLL *)
+public _exit :
+
+(*%F RegParam *)
+
+code = bxframe
+    mov  bx, sp
+    mov  ax, ss:[bx][code]
+(*%E *)
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    mov  [@ExitCode], ax
+    cmp  byte [@RecursiveExit], 0
+    je   notAgain
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __exit
+(*%E *)
+(*%T NearCall *)
+    call __exit
+(*%E *)
+notAgain:
+    not  byte [@RecursiveExit]
+(*%T MThread *)
+    mov  ss, [@StackContextSS]
+(*%E *)
+    mov  sp, [@StackContextSP]
+    mov  bp, [@StackContextBP]
+    jmp  near $TerminateProcess
+(*%E *)
+public __InitLoop :
+
+(*%T _WINDOWS *)
+(*%F NearCall *)
+    inc  bp
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+chainLoop:
+traverseLoop:
+    les  bx, [@InitRecPointer]
+    mov  ax, [@InitCurrent]
+    cmp  ax, es:[bx][InitRecTotal]
+    je   endOfArray
+    les  di, [@InitPointer]
+    add  word [@InitPointer], InitRecSize
+    inc  word [@InitCurrent]
+    mov  al, [@InitPriority]
+    cmp  al, es:[di][Priority]
+    jne  traverseLoop
+    inc  word [@InitCalled]
+(*%F NearCall *)
+    call far es:[di][ProcVar]
+    cmp byte [@InitDone],0
+    jz   traverseLoop
+initLoopRet:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%T _WINDOWS *)
+    pop  bp
+    dec  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    call es:[di][ProcVar]
+    cmp byte [@InitDone],0
+    jz   traverseLoop
+initLoopRet:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    ret  0
+(*%E *)
+
+endOfArray:
+    mov  ax, [@InitCalled]
+    cmp  ax, [@InitGrandTotal]
+    je   stageComplete
+
+    les  bx, [@InitRecPointer]
+    les  bx, es:[bx][InitRecNext]
+    mov  ax, es
+    or   ax, bx
+    jz   endOfList
+    mov  [@InitRecPointer], bx
+    mov  [@InitRecPointer][2], es
+    sub  ax, ax
+    mov  [@InitCurrent], ax
+    mov  [@InitPointer], ax
+    mov  ax, es:[bx][InitRecSeg]
+    mov  [@InitPointer][2], ax
+    jmp  traverseLoop
+
+endOfList:
+    dec  byte [@InitPriority]
+    js   stageComplete
+    call __InitReset
+    jmp  chainLoop
+
+stageComplete:
+    mov  byte [@InitDone],1
+(*%T MThread *)
+    mov  [@StackContextSS], ss
+(*%E *)
+    mov  [@StackContextBP], bp
+    mov  [@StackContextSP], sp
+(*%F NearCall *)
+    call far $Stage2
+(*%E *)
+(*%T NearCall *)
+    call $Stage2
+(*%E *)
+    mov  [@ExitCode], ax
+
+$TerminateProcess:
+(*%T _WINDLL *)
+    jmp  initLoopRet
+(*%E *)
+
+public __Term2 :
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    extrn __exit_ptr
+    extrn __exit_top
+    extrn standard@haltChain
+(*%T _DLLOVL *)
+    extrn standard@@haltChain2
+    push [standard@@haltChain2][2]
+    push [standard@@haltChain2][0]
+(*%E *)
+(*%F _DLLOVL *)
+(*%F NearCall *)
+    push cs
+(*%E *)
+    mov  bx, __Term3
+    push bx
+(*%E *)
+(*%F NearCall *)
+    push [standard@haltChain][2]
+(*%E *)
+    push [standard@haltChain][0]
+
+(* reset halt chain to allow it to be re-used in termination code *)
+(*%T _DLLOVL *)
+    push [standard@@haltChain2][0]
+    pop  [standard@haltChain][0]
+    push [standard@@haltChain2][2]
+    pop  [standard@haltChain][2]
+(*%E *)
+(*%F _DLLOVL *)
+    mov word [standard@haltChain][0],__Term3
+(*%F NearCall *)
+    mov [standard@haltChain][2],cs
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+    ret far 0                        (* jump to termination procedures *)
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+public __Term3:
+(*%F _WINDOWS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+(*%T MThread *)
+    mov  ss, [@StackContextSS]
+(*%E *)
+    mov  bp, [@StackContextBP]
+    mov  sp, [@StackContextSP]
+    mov  si, [__exit_ptr]
+    mov  di, [__exit_top]
+exitLoop:
+    cmp  si, di
+    je   loopDone
+(*%T NearCall *)
+    call [si]
+    add  si, 2
+(*%E *)
+(*%F NearCall *)
+    call far [si]
+    add  si, 4
+(*%E *)
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    jmp  exitLoop
+loopDone:
+
+    jmp  initLoopRet
+
+public __cleanup :
+
+(*%F SameDS *)
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    mov  cx, [__exit_io]
+    jcxz noCall1
+(*%F SameDS *)
+    push ds
+(*%E *)
+(*%F NearCall *)
+    call far [__exit_io]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noCall1:
+    mov  cx, [__exit_file]
+    jcxz noCall2
+(*%F SameDS *)
+    push ds
+(*%E *)
+(*%F NearCall *)
+    call far [__exit_file]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noCall2:
+    mov  cx, [__exit_tmp]
+    jcxz noCall3
+(*%F SameDS *)
+    push ds
+(*%E *)
+(*%F NearCall *)
+    call far [__exit_tmp]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noCall3:
+    mov  cx, [__exit_proc]
+    jcxz noCall4
+(*%F SameDS *)
+    push ds
+(*%E *)
+    call far [__exit_proc]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noCall4:
+    ret  0
+
+(******************************************************************************)
+section
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+select _TEXT
+
+extrn __env_init
+extrn _malloc
+extrn __env
+extrn __env_var
+extrn __env_copy
+extrn __FatalErrorPos
+extrn __FatalError
+
+
+public __setenv :
+
+n       = -2
+p       = -4
+c       = -6
+eptr    = -10
+current = -14
+dgroup  = -16
+locals  =  16
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    mov  [bp][dgroup], ds
+    cmp  byte [__env_init], 0
+    jne  near setDone
+    not  byte [__env_init]
+memSet:
+    sub  dx, dx
+    mov  [bp][n], dx
+    mov  ax, [__env]
+    mov  [bp][eptr][2], ax
+    mov  word [bp][eptr], 0
+Loop1:
+    cmp  dx, 63
+    jge  Loop1Done
+    sub  cx, cx
+    lds  si, [bp][eptr]
+Loop2:
+    cmp  cx, 1024
+    jge  Loop2Done
+    lodsb
+    or  al, al
+    jz  Loop2Done
+    inc  cx
+    jmp  Loop2
+Loop2Done:
+    jcxz Loop1Done
+    inc  cx
+    mov  ax, cx
+    mov  [bp][p], cx
+    mov  [bp][n], dx
+    mov  ds, [bp][dgroup]
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _malloc
+(*%E *)
+(*%T NearCall *)
+    call _malloc
+(*%E *)
+(*%F RegParam *)
+    add  sp, 2
+(*%E *)
+    mov  [bp][current], ax
+(*%F NearPtr *)
+    mov  [bp][current][2], dx
+    or  dx, dx
+(*%E *)
+(*%T NearPtr *)
+(*%F _WINDOWS *)
+    mov  word [bp][current][2], _DATA
+(*%E *)
+(*%T _WINDOWS *)
+    mov  word [bp][current][2], ss
+(*%E *)
+    or  ax, ax
+(*%E *)
+    jz  InternalError
+    mov  di, [bp][current]
+    mov  es, [bp][current][2]
+    mov  si, [bp][eptr]
+    mov  ax, [bp][eptr][2]
+    mov  cx, [bp][p]
+    call __env_copy
+    mov  bx, [bp][n]
+(*%F NearPtr *)
+    mov  cl, 2
+(*%E *)
+(*%T NearPtr *)
+    mov  cl, 1
+(*%E *)
+    shl  bx, cl
+    mov  ax, [bp][current]
+    mov  [bx][__env_var], ax
+(*%F NearPtr *)
+    mov  ax, [bp][current][2]
+    mov  [bx][__env_var][2], ax
+(*%E *)
+    inc  word [bp][n]
+    mov  dx, [bp][n]
+    mov  cx, [bp][p]
+    add  [bp][eptr], cx
+    jmp  Loop1
+Loop1Done:
+    mov  ds, [bp][dgroup]
+    mov  bx, [bp][n]
+(*%F NearPtr *)
+    mov  cl, 2
+(*%E *)
+(*%T NearPtr *)
+    mov  cl, 1
+(*%E *)
+    shl  bx, cl
+    sub  ax, ax
+    mov  [bx][__env_var], ax
+    mov  [bx][__env_var][2], ax
+setDone:
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+InternalError:
+    call far __FatalErrorPos
+    mov  cx, 60H
+    push cx
+    push dx
+    push ax
+    call far __FatalError
+
+(******************************************************************************)
+section
+extrn __env_var
+extrn __core_lock
+extrn __core_unlock
+extrn $StdRet
+
+segment _TEXT(CODE,00028H)
+
+
+nicmp :
+
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+
+
+(*%F NearPtr *)
+num    = sframe
+(*%E *)
+
+(*%F NearPtr *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    push di
+    push si
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+    mov  si, ax
+    mov  di, cx
+    mov  es, dx
+    mov  cx, [bp][num]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, ax
+    mov  di, bx
+    push ds
+    pop  es
+(*%E *)
+    sub  ax, ax
+    jcxz nicmpDone
+nicmpLoop:
+    lodsb
+    cmp  al, 'z'        (* convert to upper if lower *)
+    ja   notlowa
+    cmp  al, 'a'
+    jb   notlowa
+    sub  al, 20H
+notlowa:
+    mov  bl, es:[di]
+    inc  di             (* convert to upper if lower *)
+    cmp  bl, 'z'
+    ja   notlowb
+    cmp  bl, 'a'
+    jb   notlowb
+    sub  bl, 20H
+notlowb:
+    cmp  al, bl
+    jl   nicmpLessThan
+    jg   nicmpGreaterThan
+    or   al, al
+    loopne nicmpLoop
+nicmpSame:
+    sub  ax, ax         (* return 0 *)
+    jmp  nicmpDone
+nicmpLessThan:
+    mov  ax, -1         (* return -1 *)
+    jmp  nicmpDone
+nicmpGreaterThan:
+    mov  ax, 1          (* return 1 *)
+nicmpDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%F NearPtr *)
+    pop  bp
+(*%E *)
+    ret  RetSize
+
+public _getenv :
+
+(*%F RegParam *)
+str = frame
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+str = - 2
+(*%E *)
+(*%F NearPtr *)
+str = - 4
+(*%E *)
+(*%E *)
+
+(*%T NearPtr *)
+    push  bp
+    mov   bp,sp
+    sub   sp, 2
+    push  di
+    push  si
+(*%T RegParam *)
+    push  dx
+    push  cx
+    push  bx
+    mov   [bp][str],ax
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][str]
+(*%E *)
+    push  ds
+    pop   es
+    mov   di, ax
+    mov   cx, 0FFFFH
+    sub   al, al
+repne ;   scasb             (* get length of string *)
+    not   cx
+    dec   cx
+    mov   di,cx
+    xor   dx,dx
+$0:
+    mov   bx,dx
+    add   bx,dx
+    mov   si,[bx][__env_var]
+    test  si,si
+    je    $2
+    mov   cx,di
+    mov   bx,si
+    mov   ax,[bp][str]
+    call  nicmp
+    test  ax,ax
+    je    $3
+$1:
+    inc   dx
+    cmp   dx,3FH
+    jl    $0
+$2:
+    xor   ax,ax
+    jmp   $4
+$3:
+    mov   bx,di
+    add   bx,si
+    cmp   byte [bx],3DH
+    jne   $1
+    inc   bx
+    mov   ax,bx
+$4:
+(*%T RegParam *)
+    pop  bx
+    pop  cx
+    pop  dx
+(*%E *)
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret far 0
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+(*%E *)
+
+(*%F NearPtr *)
+    push  bp
+    mov   bp,sp
+    sub   sp,0AH
+    push  ds
+    push  di
+    push  si
+(*%T MThread *)
+    mov  di, seg __core_lock
+    mov  es, di
+    call far es:[__core_lock]
+(*%E *)
+(*%T RegParam *)
+    push  cx
+    mov   [bp][str],ax
+    mov   [bp][str][2],bx
+(*%E *)
+(*%F RegParam *)
+    mov  ax, [bp][str]
+    mov  bx, [bp][str][2]
+(*%E *)
+    mov   di,ax
+    mov   es,bx
+    mov   cx,-1
+    sub   al,al
+    repne ;scasb
+    not   cx
+    mov   ax,cx
+    dec   ax
+    mov   di,ax
+    xor   si,si
+    mov   ax,seg __env_var
+    mov   [bp][-6],ax
+$0:
+    mov   bx,si
+    shl   bx,1
+    shl   bx,1
+    mov   ds,[bp][-6]
+    lds   cx,[bx][__env_var]
+    mov   [bp][-0AH],cx
+    mov   ax,ds
+    or    ax,cx
+    je    $2
+    push  di
+    mov   dx,ds
+    mov   ax,[bp][str]
+    mov   bx,[bp][str][2]
+    call  nicmp
+    test  ax,ax
+    je    $3
+$1:
+    inc   si
+    cmp   si,3FH
+    jl    $0
+$2:
+    xor   ax,ax
+    xor   dx,dx
+    jmp   $4
+$3:
+    mov   bx,[bp][-0AH]
+    cmp   byte [bx][di],3DH
+    jne   $1
+    lea   ax,[bx][di][1]
+    mov   dx,ds
+$4:
+(*%T RegParam *)
+    pop   cx
+(*%E *)
+(*%T MThread *)
+    mov  di, seg __core_unlock
+    mov  es, di
+    call far es:[__core_unlock]
+(*%E *)
+    pop   si
+    pop   di
+    pop   ds
+    mov   sp,bp
+    pop   bp
+(*%F NearCall *)
+    ret far 0
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+(*%E *)
+
+(****************************************************************************)
+(*%T _OS2 *)
+section
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __exit_ptr
+extrn __exit_top
+extrn __exit_io
+extrn __exit_file
+extrn __exit_tmp
+extrn __exit_proc
+extrn __exit_list_done
+extrn __x_near_stack_start
+extrn __farstack
+extrn standard@haltChain
+extrn DOSEXITLIST
+extrn __do_exit_lists
+
+exit_handler:
+    mov  bx, _DATA
+    mov  ds, bx
+    cmp  byte [__exit_list_done], 0
+    jnz  noCall4
+    cmp  word [__farstack], 0
+    jnz  notNear
+    mov  sp, [__x_near_stack_start]
+    mov  ss, bx
+notNear:
+(*%F NearCall *)
+    push [standard@haltChain][2]
+(*%E *)
+    push [standard@haltChain][0]
+
+(* reset halt chain to allow it to be re-used in termination code *)
+    mov word [standard@haltChain][0],here
+(*%F NearCall *)
+    mov [standard@haltChain][2],cs
+(*%E *)
+
+(*%F NearCall *)
+    ret far 0                        (* jump to termination procedures *)
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+here:
+    mov  bx, _DATA
+    mov  ds, bx
+    mov  si, [__exit_ptr]
+    mov  di, [__exit_top]
+exitLoop:
+    cmp  si, di
+    je   loopDone
+(*%T NearCall *)
+    call [si]
+    add  si, 2
+(*%E *)
+(*%F NearCall *)
+    call far [si]
+    add  si, 4
+(*%E *)
+(*%F SameDS *)
+    mov  bx, _DATA
+    mov  ds, bx
+(*%E *)
+    jmp  exitLoop
+loopDone:
+noCall4:
+    mov  ax, EXLST_EXIT
+    push ax
+    sub  ax, ax
+    push ax
+    push ax
+    call far DOSEXITLIST
+
+public __set_exit_handler :
+    mov  ax, EXLST_ADD
+    push ax
+    push cs
+    mov  ax, exit_handler
+    push ax
+    call far DOSEXITLIST
+    ret far 0
+(*%E *)
+
+section
+(****************************************************************************)
+(*%T _WINDLL *)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __exit_io
+extrn __exit_file
+extrn __exit_tmp
+extrn __exit_proc
+extrn __exit_ptr
+extrn __exit_top
+extrn standard@haltChain
+
+public _exit :
+
+(*%F NearCall *)
+    push [standard@haltChain][2]
+(*%E *)
+    push [standard@haltChain][0]
+
+(* reset halt chain to allow it to be re-used in termination code *)
+    mov word [standard@haltChain][0],here
+(*%F NearCall *)
+    mov [standard@haltChain][2],cs
+(*%E *)
+
+(*%F NearCall *)
+    ret far 0                        (* jump to termination procedures *)
+(*%E *)
+(*%T NearCall *)
+    ret 0
+(*%E *)
+here:
+    mov  bx, _DATA
+    mov  ds, bx
+    mov  si, [__exit_ptr]
+    mov  di, [__exit_top]
+exitLoop:
+    cmp  si, di
+    je   loopDone
+(*%T NearCall *)
+    call [si]
+    add  si, 2
+(*%E *)
+(*%F NearCall *)
+    call far [si]
+    add  si, 4
+(*%E *)
+(*%F SameDS *)
+    mov  ds, bx
+(*%E *)
+    jmp  exitLoop
+loopDone:
+    mov  cx, [__exit_io]
+    jcxz noCall1
+(*%F NearCall *)
+    call far [__exit_io]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noCall1:
+    mov  cx, [__exit_file]
+    jcxz noCall2
+(*%F NearCall *)
+    call far [__exit_file]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noCall2:
+    mov  cx, [__exit_tmp]
+    jcxz noCall3
+(*%F NearCall *)
+    call far [__exit_tmp]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noCall3:
+
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _WINDLL*)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+public @InitChain : dw 0, 0
+
+select _TEXT
+
+public __InitLink :
+  (* Initializes @InitChain from record passed in ax:bx *)
+
+(*%F SameDS *)
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx                        (* ds = _DATA *)
+(*%E *)
+    mov  es, ax                        (* es = seg of record *)
+    mov  ax, [@InitChain]
+    mov  es:[bx], ax                   (* @InitChain -> record passed in *)
+    mov  ax, [@InitChain][2]
+    mov  es:[bx][2], ax
+    mov  [@InitChain], bx
+    mov  [@InitChain][2], es
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _INIT(INIT_CODE,28H)
+
+select _DATA
+
+extrn @InitCalled
+extrn @InitPriority
+extrn @InitCurrent
+extrn @InitPointer
+extrn @InitRecPointer
+extrn @InitGrandTotal
+extrn @InitChain
+extrn __osmode
+
+select _TEXT
+
+public __InitReset :
+
+    les  bx, [@InitChain]
+    sub  cx, cx
+    mov  word [@InitCurrent], cx
+    mov  word [@InitPointer], cx
+    mov  ax, es:[bx][InitRecSeg]
+    mov  [@InitPointer][2], ax
+    mov  [@InitRecPointer], bx
+    mov  [@InitRecPointer][2], es
+    ret  0
+
+public __InitSetup :
+
+Current = -4
+locals  =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    call __InitReset
+chainLoop:
+    mov  ax, es
+    or   ax, bx
+    jz   chainDone
+    mov  [bp][Current], bx
+    mov  [bp][Current][2], es
+    mov  es, es:[bx][InitRecSeg]
+    cmp  byte [__osmode], 1
+    jnz  realMode
+    mov  ax, es
+    (* lsl cx, ax *)
+    db   0FH, 3, 0C8H
+    jcxz gotCount
+    mov  ax, cx
+    mov  cl, InitRecSize
+    div  cl
+    sub  ah, ah
+    mov  cx, ax
+    jmp  gotCount
+realMode:
+    mov  cx, -1
+    mov  di, -InitRecSize
+sizeLoop:
+    add  di, InitRecSize
+    cmp  word es:[di][Magic], MAGIC_NUM
+    loope sizeLoop
+    neg  cx
+    sub  cx, 2
+gotCount:
+    add  [@InitGrandTotal], cx
+    les  bx, [bp][Current]
+    mov  es:[bx][InitRecTotal], cx
+    les  bx, es:[bx][InitRecNext]
+    jmp  chainLoop
+chainDone:
+    mov  word [@InitCalled], 0
+    mov  byte [@InitPriority], PRMAX
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(***************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _x_main
+extrn _main
+
+select _DATA
+
+extrn __argv
+extrn __argc
+
+select _TEXT
+
+public __main_args2 :
+(*%F RegParam *)
+(*%F NearPtr *)
+  push ds                        (*  char *argv[] *)
+(*%E *)
+  mov  ax, __argv
+  push ax
+  push [__argc]                  (*  int argc *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  ax, [__argc]              (* int argc *)
+  mov  bx, __argv                (* char *argv[] *)
+  mov  cx, ds
+(*%E *)
+(*%T NearPtr *)
+  mov  ax, [__argc]
+  mov  bx, __argv
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+  call far [_x_main]             (* call main *)
+(*%E *)
+(*%T NearCall *)
+  call _main
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  add sp, 6
+(*%E *)
+(*%T NearPtr *)
+  add sp, 4
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _x_main
+extrn _main
+
+select _DATA
+
+extrn __env_var
+extrn __argv
+extrn __argc
+
+select _TEXT
+
+public __main_args3 :
+(*%F RegParam *)
+(*%F NearPtr *)              (* pass arguments to main *)
+  push ds
+(*%E *)
+  mov  ax, __env_var
+  push ax                        (*  char *envp[] *)
+(*%F NearPtr *)
+  push ds                        (*  char *argv[] *)
+(*%E *)
+  mov  ax, __argv
+  push ax
+  push [__argc]                  (*  int argc *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov  ax, [__argc]              (* int argc *)
+  mov  bx, __argv                (* char *argv[] *)
+  mov  cx, ds
+  push ds
+  mov  dx, __env_var
+  push dx                        (*  char *envp[] *)
+(*%E *)
+(*%T NearPtr *)
+  mov  ax, [__argc]
+  mov  bx, __argv
+  mov  cx, __env_var
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+  call far [_x_main]             (* call main *)
+(*%E *)
+(*%T NearCall *)
+  call _main
+(*%E *)
+
+(*%F RegParam *)
+(*%F NearPtr *)
+  add sp, 10
+(*%E *)
+(*%T NearPtr *)
+  add sp, 6
+(*%E *)
+(*%E *)
+
+(*%F NearCall *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+section
+(****************************************************************************)
+(*%T _WINDLL *)
+segment _TEXT(CODE,28H)
+
+extrn LIBMAIN
+extrn __heap_size
+extrn __CmdLine
+extrn __iHandle
+extrn __call_main
+
+public __libmain_args :
+
+   push [__iHandle]
+   push ds
+   push [__heap_size]
+   push [__CmdLine][2]
+   push [__CmdLine]
+   jmp  __call_main
+(*%E *)
+
+section
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+segment _BSS(BSS, 28H)
+
+select _BSS
+
+InitLim = 32
+buffer : org (DataPtrSize * InitLim) + 2
+
+select _TEXT
+
+extrn $initm
+
+DummyProc:
+
+(*%F near_init_code *)
+    ret  far 0
+(*%E *)
+(*%T near_init_code *)
+    ret  0
+(*%E *)
+
+public _InitModules :
+
+(*%F _DLLOVL *)
+
+    call Init
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+    call Init
+(*%F NearCall *)
+    ret  far 2
+(*%E *)
+(*%T NearCall *)
+    ret  2
+(*%E *)
+    call Init
+(*%F NearCall *)
+    ret  far 4
+(*%E *)
+(*%T NearCall *)
+    ret  4
+(*%E *)
+    call Init
+(*%F NearCall *)
+    ret  far 6
+(*%E *)
+(*%T NearCall *)
+    ret  6
+(*%E *)
+    call Init
+(*%F NearCall *)
+    ret  far 8
+(*%E *)
+(*%T NearCall *)
+    ret  8
+(*%E *)
+    call Init
+(*%F NearCall *)
+    ret  far 0AH
+(*%E *)
+(*%T NearCall *)
+    ret  0AH
+(*%E *)
+arg1     = frame+2
+(*%E *)
+
+(*%T _DLLOVL *)
+arg1     = frame
+(*%E *)
+
+base     = -2
+StackPos = -4
+locals   =  4
+
+Init:
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T RegParam *)
+    push ax
+    push bx
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  di, buffer
+    push ds
+    mov  ax, ds
+    mov  es, ax
+    mov  ax, DummyProc
+    stosw
+(*%F near_init_code *)
+    mov  ax, cs
+    stosw
+(*%E *)
+    lea  si, [bp][arg1]
+    mov  cx, ss
+    mov  ds, cx
+    mov  cx, InitLim
+storeLoop:
+    lodsw
+(*%T near_init_data *)
+    or   ax, ax
+(*%E *)
+(*%F near_init_data *)
+    mov  bx, ax
+    or   bx, ds:[si]
+(*%E *)
+    jz   terminator
+    stosw
+(*%F NearPtr *)
+(*%F near_init_data *)
+    movsw
+(*%E *)
+(*%T near_init_data *)
+    add  si, 2
+(*%E *)
+(*%E *)
+    loop  storeLoop
+terminator:
+    mov  ax, -1
+    stosw
+    pop  ds
+    extrn _x_main
+    mov  word [_x_main], buffer
+(*%F near_init_data *)
+    mov  [_x_main][2], es
+(*%E *)
+    push bp
+(*%T _DLLOVL *)
+    mov  bp,sp
+    call far $initm
+(*%E *)
+(*%F _DLLOVL *)
+ (*%F near_init_code *)
+    push cs
+ (*%E *)
+    call $initm
+(*%E *)
+    pop  bp
+
+noArgs:
+    pop  ds
+    pop  si
+    pop  di
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F _DLLOVL *)
+    ret  0
+(*%E *)
+(*%T _DLLOVL *)
+    ret  far 0
+(*%E *)
+
+(***************************************************************************)
+section;
+segment PROC_TEXT(CODE,28H)
+
+extrn @MachineId
+
+public __set_machine_id :
+
+  mov ax, 0F000H
+  mov es, ax
+  mov al, es:[0FFFEH]
+  mov cs:[@MachineId], al
+  ret far 0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+select _TEXT
+
+public __env_copy :
+
+    push ds
+    mov  ds, ax
+rep ; movsb
+    pop  ds
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+extrn __call_main
+public __init0 :
+    jmp __call_main
+
+section
+segment _TEXT(CODE,28H)
+extrn __main_args2
+extrn __setargv
+public __init2 :
+    call __setargv
+    jmp __main_args2
+
+section
+segment _TEXT(CODE,28H)
+extrn __main_args3
+extrn __setenv
+extrn __setargv
+public __init3 :
+(*%F NearCall *)
+    call far __setenv
+(*%E *)
+(*%T NearCall *)
+    call __setenv
+(*%E *)
+    call __setargv
+    jmp __main_args3
+
+(***************************************************************************)
+(*%T _WINDLL *)
+section
+segment _TEXT(CODE,28H)
+
+extrn __libmain_args
+
+public __initWDLL :
+
+    jmp  __libmain_args
+
+(*%E *)
+
+(*%F _OS2 *)
+(***************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __stklen
+extrn __nheaptop
+extrn __SSisDS
+extrn __far_ss
+
+select _TEXT
+
+(* ------------------------------------------------------------------------
+   PROCEDURE - _getheapbase.
+
+   PRECONDITIONS - __SSisDS, far_ss and __stklen initialised.
+
+   POSTCONDITIONS - None.
+
+   IN PARAMETERS -  None.
+
+   OUT PARAMETERS - Returns far pointer to far heap base.
+
+   CALLING CONVENTION - Standard.
+
+   NOTES -  Does not cause far heap to be initialsised.
+
+   VERSION - _OS2 and MSDOS.
+
+   ------------------------------------------------------------------------ *)
+
+public __getheapbase :
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F NearPtr *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    sub  ax, ax
+    cmp  byte [__SSisDS], 0
+    jne  nearStack
+    add  ax, [__stklen]
+    add  ax, 0FH
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+    shr  ax, 1
+nearStack:
+    mov  dx, [__far_ss]
+    add  dx, ax
+    sub  ax, ax
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%E *)
+
+(*%T NearPtr *)
+    mov  dx, [__far_ss]
+    sub  ax, ax
+(*%E *)
+
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(****************************************************************************)
+(*%F _WINDLL *)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS, 28H)
+
+extrn __setargv
+
+select _TEXT
+
+do_initargc : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initargc : dw MAGIC_NUM
+           db PR4
+           dd do_initargc
+(*%E *)
+(*%T NearCall *)
+initargc : dw MAGIC_NUM
+           db PR4
+           dw do_initargc
+(*%E *)
+
+select _BSS
+public __argv : org 32*DataPtrSize
+
+select _DATA
+
+public __argc : dw initargc
+
+select  _TEXT
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    call __setargv
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS, 28H)
+
+extrn __setargv
+extrn __setenv
+
+select _TEXT
+
+do_initargce : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initargce : dw MAGIC_NUM
+            db PR4
+            dd do_initargce
+(*%E *)
+(*%T NearCall *)
+initargce : dw MAGIC_NUM
+            db PR4
+            dw do_initargce
+(*%E *)
+
+select _DATA
+
+public __env_var : dw initargce
+                   org ENVNUM*DataPtrSize-2
+
+select  _TEXT
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F NearCall *)
+    call far __setenv
+(*%E *)
+(*%T NearCall *)
+    call __setenv
+(*%E *)
+    call __setargv
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+(****************************************************************************)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __exit
+extrn __osmajor
+extrn __osminor
+
+select _TEXT
+
+
+(* void __osversion(void) - checks DOS version and terminates if v1.x. *)
+
+public __osversion :
+    push ds
+    mov  ah, 30H
+    int  21H
+    or   al, al
+    je   versionOne
+    mov  [__osmajor], al
+    mov  [__osminor], ah
+    jmp  versionDone
+versionOne:
+    mov  ax, cs
+    mov  ds, ax
+    mov  dx, message
+    mov  ah, 9
+    int  21H
+    pop  ds
+(*%F NearCall *)
+    call far __exit
+(*%E *)
+(*%T NearCall *)
+    call __exit
+(*%E *)
+versionDone:
+    pop  ds
+    ret  0
+
+message : db 'Error MSDOS V1$'
+
+(**************************************************************************)
+(*%F _WINDLL *)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __osmajor
+extrn __argv
+extrn __argbuf
+extrn __argc
+extrn __psp
+extrn __arg_init
+
+select _TEXT
+
+public __setargv :
+
+  push di
+  push si
+  push ds
+  cmp  byte [__arg_init], 0
+  jne  near initDone
+  not  byte [__arg_init]
+  mov  di, __argbuf
+  cmp  word [__osmajor], 2             (* process command line *)
+  je   noExecName
+  mov  es, [__psp]
+  mov  es, es:[2CH]
+  sub  di, di
+  sub  ax, ax
+  mov  cx, -1
+execLoop:                              (* get address of command *)
+  scasw
+  je   execFound
+  dec  di
+  loop execLoop
+(*%F NearPtr *)
+execFound:
+  add  di, 2
+  mov  [__argv], di
+  mov  [__argv][2], es
+  jmp  argv1
+noExecName:                            (* version 2 - argv[0]=NULL *)
+  mov  word [__argv], 0
+  mov  word [__argv][2], 0
+argv1:
+  mov  bx, 4                           (* move arguments to buffer  *)
+  mov  es, [__psp]
+  mov  di, 81H
+  mov  si, __argbuf
+  mov  cl, es:[di][-1]
+  sub  ch, ch
+argLoop:
+  mov  al, ' '
+repe ; scasb
+  je   endofLine
+  dec  di
+  inc  cx
+  mov  [__argv][bx], si
+  mov  [__argv][bx][2], ds
+  xchg di, si
+  push es
+  push ds
+  pop  es
+  pop  ds
+  add  bx, 4
+  mov  dl, ' '
+  mov  dh, 0
+moveLoop:
+  lodsb
+  cmp  al, dl
+  jne  notSpace
+  cmp  dh, 1
+  jz   endString
+endStringRet:
+  sub  al, al
+  stosb
+  xchg di, si
+  push es
+  push ds
+  pop  es
+  pop  ds
+  loop argLoop
+  jmp  endofLine
+notSpace:
+  cmp  al, '"'
+  je   startString
+  stosb
+startStringRet:
+  loop moveLoop
+  sub  al, al
+  stosb
+endofLine:
+  shr  bx, 1
+  shr  bx, 1
+(*%E *)
+(*%T NearPtr *)
+execFound:
+  mov  ax, es
+  mov  ds, ax                       (* ds:si = name *)
+(*%T _WINDOWS *)
+  mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+  mov  ax, _DATA
+(*%E *)
+  mov  es, ax
+  add  di, 2
+  mov  si, di
+  mov  di, __argbuf                 (* es:di = buffer *)
+  mov  es:[__argv], di
+nLoop:
+  lodsb
+  stosb
+  or   al, al
+  jz   argv1
+  jmp  nLoop
+noExecName:                            (* version 2 - argv[0]=NULL *)
+  mov  word [__argv], 0
+argv1:
+  mov  bx, 2                           (* move arguments to buffer  *)
+(*%T _WINDOWS *)
+  mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+  mov  ax, _DATA
+(*%E *)
+  mov  ds, ax
+  mov  es, [__psp]
+  mov  si, di
+  mov  di, 81H
+  mov  cl, es:[di][-1]
+  sub  ch, ch
+argLoop:
+  mov  al, ' '
+repe ; scasb
+  je   endofLine
+  dec  di
+  inc  cx
+  mov  [__argv][bx], si
+  xchg di, si
+  push es
+  push ds
+  pop  es
+  pop  ds
+  add  bx, 2
+  mov  dl, ' '
+  mov  dh, 0
+moveLoop:
+  lodsb
+  cmp  al, dl
+  jne  notSpace
+  cmp  dh, 1
+  jz   endString
+endStringRet:
+  sub  al, al
+  stosb
+  xchg di, si
+  push es
+  push ds
+  pop  es
+  pop  ds
+  loop argLoop
+  jmp  endofLine
+notSpace:
+  cmp  al, '"'
+  je   startString
+  stosb
+startStringRet:
+  loop moveLoop
+  sub  al, al
+  stosb
+endofLine:
+  shr  bx, 1
+(*%E *)
+(*%T _WINDOWS *)
+  mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+  mov  ax, _DATA
+(*%E *)
+  mov  ds, ax
+  mov  [__argc], bx
+initDone:
+  pop  ds
+  pop  si
+  pop  di
+  ret  0
+
+startString:
+  mov  dh, 1
+  mov  dl, '"'
+  jmp  startStringRet
+
+endString:
+  mov  dh, 0
+  mov  dl, ' '
+  jmp  endStringRet
+(*%E *)
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+extrn __sigsetup
+extrn __exitbreak
+extrn __exitsig
+extrn __exitgraph
+
+select _TEXT
+
+public __exit :
+
+(*
+void __exit(int code)
+
+terminates process.
+*)
+code   = frame
+
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    mov  di, ax
+(*%E *)
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+(*%F _WINDOWS *)
+    mov  cx, [__exitbreak]
+    jcxz noBreak
+    call far [__exitbreak]
+noBreak:
+    mov  cx, [__exitsig]
+    jcxz noSig
+(*%F NearCall *)
+    call far [__exitsig]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noSig:
+    mov  cx, [__exitgraph]
+    jcxz noGraph
+(*%F NearCall *)
+    call far [__exitgraph]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noGraph:
+(*%E *)
+extrn __FloatFinish
+    call far __FloatFinish
+(*%F RegParam *)
+    mov  al, [bp][code]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, di
+(*%E *)
+(*%T _DLLOVL *)
+    extrn Loader$Terminate
+    call far Loader$Terminate
+(*%E *)
+    mov  ah, 4CH
+    int  21H
+
+db 'TopSpeed RTL (C) Clarion Software Corporation 1989-1992'
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __exit_proc
+extrn __exitbreak
+extrn __exitsig
+extrn __exitgraph
+extrn __FloatFinish
+
+public __term_process :
+
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    mov  cx, [__exit_proc]
+    jcxz noCall4
+(*%F SameDS *)
+    push ds
+(*%E *)
+    call far [__exit_proc]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noCall4:
+    mov  cx, [__exitbreak]
+    jcxz noBreak
+    call far [__exitbreak]
+noBreak:
+    mov  cx, [__exitsig][2]
+    jcxz noSig
+(*%F NearCall *)
+    call far [__exitsig]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noSig:
+    mov  cx, [__exitgraph]
+    jcxz noGraph
+(*%F NearCall *)
+    call far [__exitgraph]
+(*%E *)
+(*%T NearCall *)
+    call cx
+(*%E *)
+noGraph:
+    call far __FloatFinish
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+message : db 'Floating Point Not Loaded$'
+
+select _TEXT
+
+
+public __real_pdef :
+public __real_sdef :
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  dx, message
+    mov  ah, 9
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  0
+
+(*%F _WINDOWS *)
+section
+
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment EMU_STATE(DATA,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment NEAR_STACK(BSS, 28H)
+segment NEAR_HEAP(BSS, 28H)
+group DGROUP(EMU_STATE,_CONST,_DATA,BSS_START,_BSS,BSS_END,NEAR_STACK,NEAR_HEAP)
+
+
+extrn __psp
+extrn __env
+extrn __hugeshift
+extrn __env_var
+extrn __env_size
+extrn __osmajor
+extrn __argv
+extrn __argc
+extrn __argbuf
+extrn __farstack
+extrn __fmemsetup
+extrn __nheaptop
+extrn _main
+extrn __exit
+extrn __cleanup
+extrn __stklen
+extrn __osversion
+extrn _x_initx
+extrn _x_bss_end
+extrn _x_bss_start
+extrn __bss_end
+extrn __bss_start
+extrn _x_main
+extrn __main_args
+extrn __FloatInit
+extrn __SigInit
+extrn __SSisDS
+extrn __far_ss
+extrn __stk_base
+extrn __initx
+extrn __x_near_stack_start
+extrn __set_machine_id
+extrn __InitSetup
+extrn __InitLoop
+extrn @ExitCode
+
+select _TEXT                     (* Process initialisation starts here *)
+                                 (* DON'T TOUCH *)
+public __startup :
+  mov  dx, ds                    (* save PSP *)
+  cld                            (* cld is assumed everywhere *)
+  mov  ax, BSS_START
+  mov  es, ax
+  mov  ax, _DATA
+  mov  ds, ax
+  mov  [__stklen], si
+  mov  [__far_ss], ss
+(*%F MThread *)
+(*%F NearPtr *)
+  mov  [__SSisDS], cl
+(*%E *)
+(*%E *)
+(*%T NearPtr *)
+  mov  byte [__SSisDS], 1        (* SS always == DS in this model *)
+(*%E *)
+(*%T MThread *)
+  mov  byte [__SSisDS], 0        (* SS always != DS in this model *)
+(*%E *)
+(*%F _DLL *)
+  mov  di, [_x_bss_start]        (* set near heap and _BSS bounds *)
+  mov  cx, [_x_bss_end]
+(*%E *)
+(*%T _DLL *)
+  mov  di, __bss_start           (* set near heap and _BSS bounds *)
+  mov  cx, __bss_end
+(*%E *)
+  mov  si, cx                    (* clear _BSS segment *)
+  sub  cx, di
+  sub  ax, ax
+  shr  cx, 1
+  rep; stosw
+  adc  cx, 0
+  rep; stosb
+
+  mov [__psp],dx                 (* save psp segment *)
+  mov es, dx
+  mov dx, es:[2CH]
+  mov [__env], dx                (* save enviromment segment *)
+(*%F NearPtr *)
+  mov byte ss:[CurrentThread], 1
+(*%E *)
+  mov word ss:[InMathLib], 0
+
+  cmp byte [__SSisDS], 1
+  je  nearStack
+  not word [__farstack]                (* far stack required, not much to do *)
+  jmp stackSet
+nearStack:
+  mov bx, [__x_near_stack_start]
+  mov [__stk_base], bx
+  add bx, [__stklen]
+  and bx, ~1
+  sub bx, 2
+  mov ax, _DATA               (* Near stack required, move it to DGROUP *)
+  mov ss, ax
+  mov sp, bx
+
+stackSet:
+  mov  ax, STACK_GUARD
+  push ax
+  sub  bp, bp
+  push bp
+  mov  bp, sp
+  call far __FloatInit       (* initialise floating point if present *)
+  call __osversion           (* get MSDOS version first *)
+  call far __set_machine_id
+  mov  word [__hugeshift], 1000H
+
+  call __InitSetup
+
+(* Program actually starts after library initialization is performed durring *)
+(* the following call                                                        *)
+(*%F NearCall *)
+  call far __InitLoop        (* library module initialisation is called here *)
+(*%E *)
+(*%T NearCall *)
+  call __InitLoop
+(*%E *)
+
+  call __cleanup
+  mov  ax, [@ExitCode]
+(*%F RegParam *)
+  push ax
+(*%E *)
+(*%F NearCall *)
+  call far __exit
+(*%E *)
+(*%T NearCall *)
+  call __exit
+(*%E *)
+(* This call will not return *)
+(*****************************)
+
+public $Stage2 :
+
+(*%F NearCall *)
+  call far __SigInit
+(*%E *)
+(*%T NearCall *)
+  call __SigInit             (* initialise interrupt vectors *)
+(*%E *)
+  add  word [__stk_base], 100H
+
+(*%F _DLLOVL *)
+  cmp  byte [__fmemsetup], 0
+  jnz  dontFree              (* Far heap present memory init complete *)
+
+  sub  dx, dx
+  cmp  byte [__SSisDS], 1
+  je   nearStackSet          (* free surplus memory if near heap and stack *)
+  mov  dx, [__stklen]
+  add  dx, 0FH
+  jnc  sizeOK
+  mov  dx, 1000H
+  jmp  nearStackSet
+sizeOK:
+  mov  cl, 4
+  shr  dx, cl
+nearStackSet:
+  mov  ax, [__psp]
+  mov  es, ax
+  mov  bx, [__far_ss]
+  add  bx, dx
+  mov  es:[2], bx
+  sub  bx, ax
+  mov  ah, 4AH
+  int  21H
+
+dontFree:
+(*%E *)
+(*%F _ENV *)
+(*%T _DLLOVL *)
+  mov  byte [__fmemsetup], 1 (* Far Heap Managed by Loader *)
+(*%E *)
+(*%E *)
+  jmp  far [_x_initx]
+
+
+section
+segment _TEXT(CODE, 28H)
+
+extrn _main
+extrn _x_main
+
+public __call_main :
+(*%F NearCall *)
+(*%T _DLLOVL *)
+  push bp
+  mov  bp,sp
+(*%E *)
+  call far [_x_main]             (* call main *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  call [_x_main]
+  ret  0
+(*%E *)
+
+(*%E *) (* NOT Windows *)
+
+(*%T _WINDOWS *)
+section
+
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment BEGDATA(DATA,28H)
+public __bdata_dummy : org 10
+segment EMU_STATE(DATA,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+
+group DGROUP(BEGDATA,EMU_STATE,_CONST,_DATA,BSS_START,_BSS,BSS_END)
+
+extrn __psp
+extrn __env
+extrn __hugeshift
+extrn __env_var
+extrn __env_size
+extrn __osmajor
+extrn __argv
+extrn __argc
+extrn __argbuf
+extrn __farstack
+extrn __fmemsetup
+extrn __nheaptop
+extrn _main
+extrn __exit
+extrn __cleanup
+extrn __stklen
+extrn __osversion
+extrn _x_bss_end
+extrn _x_bss_start
+extrn _x_main
+extrn __main_args
+extrn __FloatInit
+extrn __SigInit
+extrn __SSisDS
+extrn __stk_base
+extrn _x_initx
+extrn __set_machine_id
+extrn __InitLoop
+extrn __InitSetup
+extrn __ireg
+extrn @ExitCode
+
+select _DATA
+
+dm :  dw 0
+
+select _TEXT                     (* Process initialisation starts here *)
+                                 (* DON'T TOUCH *)
+public __startup :
+  cld                            (* cld is assumed everywhere *)
+(*%F _WINDLL *)
+  mov  [__stk_base], cx          (* cx set by call to INITTASK *)
+(*%E *)
+  mov  cx, ds
+  mov  es, cx
+  mov  cx, [_x_bss_end]
+(*%T _WINDLL *)
+  mov  [__stk_base], cx
+(*%E *)
+  mov  di, [_x_bss_start]        (* set near heap and _BSS bounds *)
+  mov  si, cx                    (* clear _BSS segment *)
+  sub  cx, di
+  sub  ax, ax
+  rep; stosb                           (* cx = 0 *)
+
+(*%F _WINDLL *)
+  mov dx, [__ireg][PSPSeg]
+  mov [__psp],dx                 (* save psp segment *)
+  mov es, dx
+  mov dx, es:[2CH]
+  mov [__env], dx                (* save enviromment segment *)
+(*%E *)
+  mov  ax, STACK_GUARD                 (* set up stack *)
+  push ax
+  push cx
+  mov  bp, sp
+
+  call far __FloatInit       (* initialise floating point if present *)
+  mov  word [__hugeshift], 1000H
+
+  call __InitSetup
+(*%F NearCall *)
+  call far __InitLoop        (* lib module initialisation is called here *)
+(*%E *)
+(*%T NearCall *)
+  call __InitLoop
+(*%E *)
+
+  call __cleanup
+  mov  ax, [@ExitCode]
+(*%T _WINDLL *)
+  add  sp, 4
+  ret  far 0
+(*%E *)
+(*%F RegParam *)
+  push ax
+(*%E *)
+(*%F _WINDLL *)
+(*%F NearCall *)
+  call far __exit
+(*%E *)
+(*%T NearCall *)
+  call __exit
+(*%E *)
+(*%E *)
+(*%T _WINDLL *)
+  ret  far 0
+(*%E *)
+
+(* This call will not return *)
+(*****************************)
+
+public $Stage2 :
+(*%F NearCall *)
+    inc  bp
+    push bp
+    mov  bp, sp
+(*%E *)
+
+    add  word [__stk_base], 100H
+    jmp  far [_x_initx]
+
+public __call_main :
+(*%F NearCall *)
+    call far [_x_main]                 (* call main *)
+    pop  bp
+    dec  bp
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    call [_x_main]
+    ret  0
+(*%E *)
+
+section
+
+segment EMU_TEXT  (EMU_CODE,28H)
+
+public __FloatInitStack :
+
+(*%T RegParam *)
+ push cx     (* initialise fp registers except for stack top *)
+ mov cx,7
+push_zero:
+ fldz st(0)
+ loop push_zero
+ pop cx
+(*%E *)
+ ret  far 0
+
+(*%E _WINDOWS *)
+
+section
+
+segment _TEXT(CODE,28H)
+segment PROC_TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+segment EMU_STATE(DATA,68H)
+
+extrn @Save8087
+extrn emuBuffer
+extrn __initsig
+extrn __real_in
+extrn __real_out
+extrn __rreal_in
+extrn __rreal_out
+extrn __farstack
+extrn __stk_base
+
+select _TEXT
+
+public __fp_1 :
+
+
+(*%F _WINDOWS *)
+    mov  ax, PROC_TEXT
+    mov  es, ax
+    mov  byte es:[@Save8087], 1
+    mov  ax, _DATA
+    mov  es, ax
+    cmp  word es:[__farstack], 0
+    je   nearStack
+    add  word es:[__stk_base], 490
+nearStack:
+(*%F _DLL *)
+    mov  word es:[__real_in], __rreal_in     (* initialise 'C' fp output *)
+    mov  word es:[__real_out], __rreal_out
+(*%E *)
+    call far __initsig
+    ret  far 0
+
+dw emuBuffer
+(*%E *)
+
+(*%T _WINDOWS *)
+    mov  word [__real_in], __rreal_in     (* initialise 'C' fp output *)
+    mov  word [__real_out], __rreal_out
+    call far __initsig
+    ret  far 0
+
+(*%E *)
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __real_in
+extrn __real_out
+extrn __real_pdef
+extrn __real_sdef
+
+select _TEXT
+
+public __fp_0 :
+
+(*%F _DLL *)
+(*%F _WINDOWS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  word [__real_in], __real_sdef
+    mov  word [__real_out], __real_pdef
+(*%E *)
+    ret  far 0
+
+(*%E *) (* NOT OS2 *)
+
+section
+(****************************************************************************)
+(*%T _OS2 *)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS, 28H)
+
+extrn __setargv
+extrn __InitLoop
+
+select _DATA
+
+extrn __x_ax
+extrn __x_bx
+
+select _TEXT
+
+do_initargc : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initargc : dw MAGIC_NUM
+           db PR4
+           dd do_initargc
+(*%E *)
+(*%T NearCall *)
+initargc : dw MAGIC_NUM
+           db PR4
+           dw do_initargc
+(*%E *)
+
+select _BSS
+public __argv : org 32*DataPtrSize
+
+select _DATA
+public __argc : dw initargc
+
+
+select  _TEXT
+
+    call __setargv
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS, 28H)
+
+extrn __setargv
+extrn __setenv
+extrn __InitLoop
+
+select _DATA
+
+select _TEXT
+
+do_initargce : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initargce : dw MAGIC_NUM
+            db PR4
+            dd do_initargce
+(*%E *)
+(*%T NearCall *)
+initargce : dw MAGIC_NUM
+            db PR4
+            dw do_initargce
+(*%E *)
+
+select _DATA
+
+public __env_var : dw initargce
+                   org ENVNUM*DataPtrSize-2
+
+select  _TEXT
+
+(*%F NearCall *)
+    call far __setenv
+(*%E *)
+(*%T NearCall *)
+    call __setenv
+(*%E *)
+    call __setargv
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSGETVERSION
+extrn DOSGETMACHINEMODE
+
+select _DATA
+
+extrn __osmajor
+extrn __osminor
+extrn __osmode
+
+select _TEXT
+
+public __osversion :
+
+(*
+void __osversion(void)
+
+sets OS version
+*)
+
+version = -2
+locals  =  2
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    push ss
+    lea  ax, [bp][version]
+    push ax
+    call far DOSGETVERSION
+    sub  ax, ax
+    mov  al, [bp][version]
+    mov  [__osminor], ax
+    mov  al, [bp][version][1]
+    mov  [__osmajor], ax
+    push ds
+    mov  ax, __osmode
+    push ax
+    call far DOSGETMACHINEMODE
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+select _DATA
+
+extrn __x_ax
+extrn __x_bx
+
+extrn __argv
+extrn __argbuf
+extrn __argc
+extrn __arg_init
+
+select _TEXT
+
+public __setargv :
+
+    push bp
+    push di
+    push si
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    cmp  byte [__arg_init], 0
+    jne  near initDone
+    not  byte [__arg_init]
+    mov  di, __argbuf
+(*%F NearPtr *)
+    push ds
+    mov  si, [__x_bx]
+    mov  ds, [__x_ax]
+    mov  ax, _DATA
+    mov  es, ax
+    mov  di, __argbuf
+    mov  bx, __argv
+    sub  bp, bp
+    mov  cx, 1
+    mov  dl, ' '
+    mov  dh, 0
+mainLoop:
+    mov  es:[bx], di
+    mov  es:[bx][2], es
+    inc  bp
+copyLoop:
+startStringRet:
+    lodsb
+    or   al, al
+    je   copyDone
+    cmp  al, dl
+    je   getNextCommand
+    cmp  al, '"'
+    je   startString
+    stosb
+    jmp  copyLoop
+getNextCommand:
+    cmp  dh, 1
+    jz   endString
+endStringRet:
+    sub  al, al
+    stosb
+    add  bx, 4
+skipLoop:
+    mov  al, [si]
+    or   al, al
+    je   copyDone
+    cmp  al, ' '
+    jne  mainLoop
+    inc  si
+    loop skipLoop
+copyDone:
+    dec  cx
+    jcxz getNextCommand
+    stosb
+    pop  ds
+(*%E *)
+(*%T NearPtr *)
+    push ds
+    mov  si, [__x_bx]
+    mov  ds, [__x_ax]
+    mov  ax, _DATA
+    mov  es, ax
+    mov  di, __argbuf
+    mov  bx, __argv
+    sub  bp, bp
+    mov  cx, 1
+    mov  dl, ' '
+    mov  dh, 0
+mainLoop:
+    mov  es:[bx], di
+    inc  bp
+copyLoop:
+startStringRet:
+    lodsb
+    or   al, al
+    je   copyDone
+    cmp  al, dl
+    je   getNextCommand
+    cmp  al, '"'
+    je   startString
+    stosb
+    jmp  copyLoop
+getNextCommand:
+    cmp  dh, 1
+    jz   endString
+endStringRet:
+    sub  al, al
+    stosb
+    add  bx, 2
+skipLoop:
+    mov  al, [si]
+    or   al, al
+    je   copyDone
+    cmp  al, ' '
+    jne  mainLoop
+    inc  si
+    loop skipLoop
+copyDone:
+    dec  cx
+    jcxz getNextCommand
+    stosb
+    pop  ds
+(*%E *)
+    mov  [__argc], bp
+initDone:
+    pop  ds
+    pop  si
+    pop  di
+    pop  bp
+    ret  0
+
+startString:
+    mov  dl, '"'
+    mov  dh, 1
+    jmp  startStringRet
+
+endString:
+    mov  dl, ' '
+    mov  dh, 0
+    inc  si
+    jmp  endStringRet
+
+
+(***************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn VIOWRTCHARSTR
+
+select _DATA
+
+message : db 'Floating Point Not Loaded'
+MESLEN = 25
+
+select _TEXT
+
+
+public __real_pdef :
+public __real_sdef :
+
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    push ds
+    mov  ax, message
+    push ax
+    mov  ax, MESLEN
+    push ax
+    sub  ax, ax
+    push ax
+    push ax
+    push ax
+    call far VIOWRTCHARSTR
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  0
+
+section
+
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment NEAR_STACK(BSS,28H)
+segment NEAR_HEAP(BSS,28H)
+
+group DGROUP(_CONST,_DATA,BSS_START,_BSS,BSS_END,NEAR_STACK,NEAR_HEAP)
+
+
+extrn __hugeshift
+extrn __env_var
+extrn __env_size
+extrn __env
+extrn __psp
+extrn __osmajor
+extrn __osmode
+extrn __osversion
+extrn @ExitCode
+extrn __argv
+extrn __argc
+extrn __argbuf
+extrn __farstack
+extrn __nheaptop
+extrn __sp_temp
+extrn __ss_temp
+extrn _x_bss_end
+extrn _x_main
+extrn __x_ax
+extrn __x_bx
+extrn __x_di
+extrn __main_args
+extrn __exit
+extrn __cleanup
+extrn _main
+extrn __SSisDS
+extrn __stk_base
+extrn _x_initx
+extrn __stklen
+extrn __FloatInit
+(*%F _DLL *)
+extrn __siginit
+(*%E *)
+extrn __x_near_stack_start
+extrn DOSGETHUGESHIFT
+extrn DOSFREESEG
+extrn DOSREALLOCSEG
+extrn DOSGETMACHINEMODE
+extrn __set_exit_handler
+extrn __InitSetup
+extrn __InitLoop
+
+select _TEXT
+
+public __startup :
+  mov  dx, _DATA
+  mov  ds, dx
+  mov  [__stklen], si
+  mov  [__SSisDS], cx
+  mov  [__x_ax], ax
+  mov  [__x_bx], bx
+  mov  [__x_di], di
+  mov  [__env], ax
+  mov  [__sp_temp], sp
+  mov  [__ss_temp], ss
+(*%T _XTD *)
+  push ax
+  push bx
+  mov  ah, 51H
+  int  21H
+  mov  [__psp],bx
+  call far __osversion
+  pop  bx
+  pop  ax
+(*%E *)
+  push ds
+  mov  ax, __osmode
+  push ax
+  call far DOSGETMACHINEMODE
+(*%T MThread *)
+  mov  byte ss:[CurrentThread], 1      (* Thread number *)
+(*%E *)
+  mov word ss:[InMathLib], 0
+(*%T NearPtr *)
+  cmp  byte [__SSisDS], 0
+  jnz  sidSet
+  mov  byte [__SSisDS], 1
+sidSet:
+(*%E *)
+  cmp  byte [__SSisDS], 1
+  je   nearStack
+  cmp  byte [__SSisDS], 2
+  je   pmStack
+  not  word [__farstack]       (* far stack required, not much to do *)
+  jmp  stackSet
+nearStack:
+  mov  bx, [__x_near_stack_start]
+  mov  [__stk_base], bx
+  add  bx, [__stklen]
+  and  bx, ~1
+  sub  bx, 2
+  mov  ax, _DATA               (* Near stack required, move it to DGROUP *)
+  mov  ss, ax
+  mov  sp, bx
+  jmp  stackSet
+pmStack:
+  mov  ax, sp
+  sub  ax, [__stklen]
+  mov  [__stk_base], ax
+stackSet:
+  mov  ax, __hugeshift
+  push ds
+  push ax
+  call far DOSGETHUGESHIFT
+  mov  cx, [__hugeshift]
+  mov  ax, 1
+  shl  ax, cx
+  mov  [__hugeshift], ax
+  mov  ax, STACK_GUARD
+  push ax
+  sub  bp, bp
+  push bp
+  mov  bp, sp
+  call far __FloatInit
+  cmp  word [__osmode], 0
+  je   notPMode
+  call far __set_exit_handler
+notPMode:
+  call __InitSetup
+(*%F NearCall *)
+  call far __InitLoop        (* lib module initialisation is called here *)
+(*%E *)
+(*%T NearCall *)
+  call __InitLoop
+(*%E *)
+  call __cleanup
+  mov  ax, [@ExitCode]
+(*%F RegParam *)
+  push ax
+(*%E *)
+(*%F NearCall *)
+  call far __exit
+(*%E *)
+(*%T NearCall *)
+  call __exit
+(*%E *)
+(* This call will not return *)
+(*****************************)
+
+public $Stage2 :
+(*%F _DLL *)
+  call __siginit
+(*%E *)
+  add  word [__stk_base], 100H
+  jmp far [_x_initx]
+public __call_main :
+(*%F NearCall *)
+  call far [_x_main]
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  call [_x_main]
+  ret  0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn  DOSEXIT
+
+select _DATA
+
+extrn __sp_temp
+extrn __ss_temp
+extrn __SSisDS
+extrn __exit_list_done
+
+select _TEXT
+
+public __exit :
+
+(*
+void __exit(int code)
+
+terminates process.
+*)
+(*%F RegParam *)
+code   = frame
+
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][code]
+(*%E *)
+    cmp  byte [__SSisDS], 1
+    jne  farStack
+    mov  ss, [__ss_temp]
+    mov  sp, [__sp_temp]
+farStack:
+    mov  byte [__exit_list_done], 1
+    mov  bx, EXIT_PROCESS
+    push bx
+    push ax
+    call far  DOSEXIT                (* call exit function *)
+
+db 'TopSpeed RTL (C) JPI 1989'
+
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+segment EMU_STATE(DATA,68H)
+
+extrn emuBuffer
+extrn __initsig
+extrn __real_in
+extrn __real_out
+extrn __rreal_in
+extrn __rreal_out
+extrn __stk_base
+extrn __farstack
+
+select _TEXT
+
+public __fp_1 :
+
+    mov  ax, _DATA
+    mov  es, ax
+    cmp  word [__farstack], 0
+    je   nearStack
+    add  word [__stk_base], 490
+nearStack:
+(*%F _DLL *)
+    mov  word es:[__real_in], __rreal_in     (* initialise 'C' fp output *)
+    mov  word es:[__real_out], __rreal_out
+(*%E *)
+    call far __initsig
+    ret  far 0
+
+dw emuBuffer
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn __real_in
+extrn __real_out
+extrn __real_pdef
+extrn __real_sdef
+
+select _TEXT
+
+public __fp_0 :
+
+(*%F _DLL *)
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  word [__real_in], __real_sdef
+    mov  word [__real_out], __real_pdef
+(*%E *)
+    ret  far 0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn DOSGETPID
+
+select _TEXT
+
+
+public _getpid :
+
+(* struct _PIDINFO *)
+
+pid         = 0
+tid         = 2
+pidParent   = 6
+
+PidInfoSize = 6
+
+pidbuf  = -PidInfoSize
+locals  = PidInfoSize
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push ss
+    lea  ax, [bp][pidbuf]
+    push ax
+    call far DOSGETPID
+    mov  ax, [bp][pidbuf][pid]
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *) (* OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+  (***********************************************************************)
+  (* $SWInt - Generate a SoftWare Interrupt                              *)
+  (*                                                                     *)
+  (* DOS Memory Models                                                   *)
+  (*                                                                     *)
+  (*   Internal Procedure - Near Call                                    *)
+  (*     Parameters:                                                     *)
+  (*       All Registers set up                                          *)
+  (*       Interrupt number on stack                                     *)
+  (*     Return:                                                         *)
+  (*       All Registers set up                                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+IntNo                   = frame + 2
+Flags                   = 2
+
+public $SWInt :
+    pushf
+    push bp
+    mov  bp, sp
+    push ax
+    mov  ax, [bp][IntNo]
+    cli
+    mov  cs:[$$InterruptNo], al
+    mov  cs:[$$InterruptNo2], al
+    db   0EAH                         (*I far jmp *)
+    dw   $$Next,_TEXT                 (* purge pre-fetch *)
+$$Next:
+    cmp  al, 25H
+    je   $$Int2526
+    cmp  al, 26H
+    je   $$Int2526
+    pop  ax
+    pop  bp
+    db   0CDH                          (*I int *)
+$$InterruptNo:
+    db   0
+$$IntDone:
+    push bp
+    mov  bp, sp
+    push ax
+    lahf
+    mov  [bp][Flags], ah
+    pop  ax
+    pop  bp
+    popf
+(*%T _fcall *)
+    ret  far 2
+(*%E *)
+(*%F _fcall *)
+    ret  2
+(*%E *)
+$$Int2526:
+    pop  ax
+    pop  bp
+    db   0CDH                          (*I int *)
+$$InterruptNo2:
+    db   0
+    inc  sp
+    inc  sp
+    jmp  $$IntDone
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%T _WINDOWS *)
+  (***********************************************************************)
+  (* $SWInt - Generate a SoftWare Interrupt                              *)
+  (*                                                                     *)
+  (* Windows Memory Models                                               *)
+  (*                                                                     *)
+  (*   Internal Procedure - Near Call                                    *)
+  (*     Parameters:                                                     *)
+  (*       All Registers set up                                          *)
+  (*       Interrupt number on stack                                     *)
+  (*     Return:                                                         *)
+  (*       All Registers set up                                          *)
+  (*                                                                     *)
+  (***********************************************************************)
+segment _TEXT(CODE,48H)
+
+extrn ALLOCCSTODSALIAS
+extrn FREESELECTOR
+
+IntNo                   = frame + 2
+Flags                   = 2
+
+public $SWInt :
+    pushf
+    push bp
+    mov  bp, sp
+    push ax
+    push ds
+    push cs
+    call far ALLOCCSTODSALIAS
+    mov  ds, ax
+    mov  ax, [bp][IntNo]
+    cli
+    mov  [$$InterruptNo],  al
+    mov  [$$InterruptNo2], al
+(*  call far $ClearPipe *)
+    mov  ax, ds
+    pop  ds
+    push ax
+    call far FREESELECTOR
+    mov  ax, [bp][IntNo]
+    cmp  al, 25H
+    je   $$Dos2526
+    cmp  al, 26H
+    je   $$Dos2526
+    pop  ax
+    pop  bp
+    db   0CDH                          (*I int *)
+$$InterruptNo:
+    db   0
+$$IntDone:
+    push bp
+    mov  bp, sp
+    push ax
+    lahf
+    mov  [bp][Flags], ah
+    pop  ax
+    pop  bp
+    popf
+(*%T _fcall *)
+    ret  far 2
+(*%E *)
+(*%F _fcall *)
+    ret  2
+(*%E *)
+$$Dos2526:
+    pop  ax
+    pop  bp
+    db   0CDH                          (*I int *)
+$$InterruptNo2:
+    db   0
+    inc  sp
+    inc  sp
+    jmp  $$IntDone
+
+(*%E _WINDOWS *)
+
+end
+
+
+

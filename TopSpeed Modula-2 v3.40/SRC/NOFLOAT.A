@@ -1,0 +1,73 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  NOFLOAT.A - dummy fixups for programs without f.p. requirements         *               *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module nofloat
+
+public  FIDRQQ    (* wait, esc*)  =  0
+public  FIARQQ    (* wait, ds:*)  =  0
+public  FICRQQ    (* wait, cs:*)  =  0
+public  FIERQQ    (* wait, es:*)  =  0
+public  FISRQQ    (* wait, ss:*)  =  0
+
+public  FIWRQQ    (* nop, wait*)  =  0
+
+public  FJARQQ    (* Esc nn -> ds:nn*) =  0
+public  FJCRQQ    (* Esc nn -> cs:nn*) =  0
+public  FJSRQQ    (* Esc nn -> es:nn*) =  0
+public  FJERQQ    (* ???????????????*) =  0
+
+public  FIXRQQ  =  0 (* brings this module in - known to linker *)
+
+segment EMU_STATE(DATA,28H)
+
+select EMU_STATE
+
+nullOffset : dw 0        (* stops variables having address of zero *)
+
+segment _TEXT(CODE,28H)
+
+extrn __fp_0
+
+select _TEXT
+
+public __FloatInit :
+    push bp
+    mov  bp, sp
+    call far __fp_0
+    pop  bp
+    ret  far 0
+public __FloatFinish:
+public __FloatInitInstance:
+public __FloatStoreSW :
+public __FloatStoreCW :
+public __FloatLoadCW :
+public __FloatSave :
+public __FloatRestore :
+public __FloatExecSave :
+public __FloatExecRestore :
+public __FloatJmpSave :
+public __FloatJmpRestore :
+public __FloatMathExcepDos :
+    push bp
+    mov  bp, sp
+    pop  bp
+    ret  far 0
+
+public __FloatMathExcepOs2 :
+    push bp
+    mov  bp, sp
+    pop  bp
+    ret  far 0
+    ret  far 2
+
+dw nullOffset
+
+end
+

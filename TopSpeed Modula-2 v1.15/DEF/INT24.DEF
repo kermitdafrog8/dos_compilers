@@ -1,0 +1,9 @@
+DEFINITION MODULE Int24 ;
+
+(* Int 24 - Critical Error handler *)
+
+(* No Exports, Initialization installs handler *)
+
+END Int24.
+
+

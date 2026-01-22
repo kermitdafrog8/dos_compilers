@@ -1,0 +1,199 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  NOEMUL.A - hardware-only floating point support                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module noemul
+
+NearCall = 1 - _fcall
+SameDS   = 1 - _fdata
+NearPtr  = 1 - _fptr
+MThread  = _mthread
+RegParam = _jpicall
+
+segment EMU_TEXT  (EMU_CODE,28H)
+segment _BSS(BSS,68H)
+
+ExecFloatState: org 94
+
+select EMU_TEXT
+
+foption 2
+
+ProcessFloat    = 14
+
+public __FloatStoreSW :
+    push bp
+    mov  bp, sp
+    sub  sp, 2
+    fstsw [bp][-2]
+    fwait
+    mov  ax, [bp][-2]
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+
+public __FloatStoreCW :
+    push bp
+    mov  bp, sp
+    sub  sp, 2
+    fstcw [bp][-2]
+    fwait
+    mov  ax, [bp][-2]
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+
+public __FloatLoadCW :
+    push bp
+    mov  bp, sp
+    sub  sp, 2
+    mov  [bp][-2], ax
+    fwait
+    fldcw [bp][-2]
+    mov  sp, bp
+    pop  bp
+    ret  far 0
+
+public __FloatExecSave :
+
+    push ax
+    mov  ax, _BSS
+    mov  es, ax
+    fsave es:[ExecFloatState]
+    pop  ax
+    fwait
+    ret  far 0
+
+public __FloatExecRestore :
+
+    push ax
+    mov  ax, _BSS
+    mov  es, ax
+    frstor es:[ExecFloatState]
+    pop  ax
+    fwait
+    ret  far 0
+
+public __FloatSave :
+
+    fsave es:[ProcessFloat]
+    fwait
+    ret  far 0
+
+public __FloatRestore :
+
+    frstor ds:[ProcessFloat]
+    fwait
+    ret  far 0
+
+public __FloatFinish:
+ ret far 0
+
+public __FloatJmpSave :
+
+st1_reg = 20
+st2_reg = 30
+
+    fld st(0), st(1)
+    fstp  tbyte es:[di][st1_reg], st(0)
+    fld st(0), st(2)
+    fstp  tbyte es:[di][st2_reg], st(0)
+    fwait
+    ret  far 0
+
+public __FloatJmpRestore :
+
+    fld  tbyte st(0), ds:[si][st1_reg]
+    fstp st(2), st(0)
+    fld  tbyte st(0), ds:[si][st2_reg]
+    fstp st(3), st(0)
+    ret  far 0
+
+extrn __math_excep
+
+public __FloatMathExcepOs2 :
+    (* always far called from coresig *)
+    (*
+       stack contains far return address to signal handler, then status word,
+       then far return address to error location, the iret flags.
+       This is how __math_excep likes it, so just jump there.
+    *)
+    fclex
+    fwait
+    jmp far __math_excep
+
+public __FloatMathExcepDos :
+  (*
+     the stack contains a FAR return address to signal handler, then
+     the far address of the point of exception, then the iret flags
+  *)
+  push ax              (* make room for status word *)
+  push bp
+  mov bp,sp
+  push  ax
+  mov   ax,[bp][4]     (* return ip *)
+  mov   [bp][2],ax
+  mov   ax,[bp][6]     (* return cs *)
+  mov   [bp][4],ax
+  fstsw [bp][6]        (* will bring in emulator ! *)
+  pop   ax
+  pop   bp
+  fclex
+  jmp far __math_excep
+
+public __FloatInitInstance:
+ push bp
+ mov bp, sp
+ push ax (* dummy *)
+ finit
+ fstcw [bp][-2]
+ fwait
+ or  word [bp][-2] , 0C00H (* round towards zero (chop) *)
+ and word [bp][-2] ,~001DH (* enable invalid op/underflow/overflow/divide by zero exception *)
+ fldcw [bp][-2]
+ extrn __FloatInitStack
+ call far __FloatInitStack
+ mov sp,bp
+ pop bp
+ ret far 0
+
+public __FloatInit:
+ extrn __fp_1
+ call far __fp_1
+ call far __FloatInitInstance
+ ret far 0
+
+
+section
+
+(*emuinit2*)
+public  FIDRQQ   =  0
+public  FIWRQQ   =  0
+
+public  FIERQQ   =  0
+public  FIARQQ   =  0
+public  FISRQQ   =  0
+public  FICRQQ   =  0
+
+
+public  FJERQQ  =  0
+public  FJARQQ  =  0
+public  FJSRQQ  =  0
+public  FJCRQQ  =  0
+
+public  FIXRQQ  =  0 (* brings this module in - known to linker *)
+
+segment EMU_STATE(DATA,68H)
+select EMU_STATE
+public  emuBuffer :
+  org 0
+
+end (*NUEMUL.A*)
+
+

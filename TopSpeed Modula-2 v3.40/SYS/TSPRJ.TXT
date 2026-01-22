@@ -1,0 +1,624 @@
+! Project Predefined
+!! predefine TopSpeed compilers
+
+#set verbose=off
+!if cla
+#if %tsmode=claenv #and %verbose #then
+ #if '%parent'='' #then
+  #message 'Project file   : (%prjname)'
+ #else
+  #message 'Project file   : (%prjname) nested from (%parent)'
+ #endif
+ #if #exists %prjname%.red #then
+  #if '%verbose' #then
+   #message 'Redirection    : (%prjname%.red)'
+  #endif
+  #file redirect %prjname%.red
+ #endif
+ #abort on
+#endif
+
+#declare_compiler cla=
+'#if "%%verbose" #then
+  #message "Source         : (%%src)"
+ #endif
+ #set make=%%remake_jpi
+ #if %%make #then #rundll TSCLA %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tscla=on'
+!end
+
+!if mod
+#declare_compiler mod=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSMOD %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tsm2=on'
+!end
+!if pas
+#declare_compiler pas=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSPAS %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tspas=on'
+#declare_compiler plg=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSPAS_LG %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tspas=on'
+!end
+!if cpp
+#declare_compiler cpp=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSCPP %%src %%obj #endif
+ #pragma link_option(decode=>on)
+ #pragma link(%%obj)
+ #set tsc=on #set tscpp=on'
+!! This declaration is overriden by the one below if TopSpeed C is installed
+#declare_compiler c=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSCPP %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tsc=on'
+!end
+!if C
+#declare_compiler c=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSC %%src %%obj #endif
+ #pragma link(%%obj)
+ #set tsc=on'
+!end
+!if asm
+#declare_compiler a=
+'#set make=%%remake_jpi
+ #if %%make #then #rundll TSASM %%src %%obj #endif
+ #pragma link(%%obj)'
+!end
+!if masm
+#declare_compiler asm=
+'#set make=%%remake
+ #if %%make #then
+  #edit save %%src
+  #expand %%src
+  #set _masmsrc=%%opath
+  #expand %%obj
+  #set _masmobj=%%cpath
+  #run "masm %%_masmsrc,%%_masmobj/MX/e; >masmtmp.$$$" no_window no_abort
+  #file adderrors masmtmp.$$$
+  #file delete masmtmp.$$$
+ #endif
+ #pragma link(%%obj)'
+!end
+
+#declare_compiler rc=
+'#if %%system=os2 #then
+  #error "The TopSpeed Resource Compiler is for Windows only"
+ #endif
+ #split %%obj
+ #set obj = %%name.res
+ #set make=%%remake
+ #if %%make #then
+  #edit save %%src
+  #run "tsrc %%src >rctmp.$$$" no_window no_abort
+  #file adderrors rctmp.$$$
+  #file delete rctmp.$$$
+ #endif
+ #pragma link(%%obj)'
+
+#if %action%=compile #then
+!! declarations to allow compilation of include files
+!if mod
+ #declare_compiler def='#rundll TSMOD %%src %%obj'
+!end
+!if cpp
+ #declare_compiler hpp='#rundll TSCPP %%src %%obj'
+ #declare_compiler h='#rundll TSCPP %%src %%obj'
+!end
+!if C
+ #declare_compiler h='#rundll TSC   %%src %%obj'
+!end
+#endif
+
+!! End of compiler predefinition section
+!! =========================================================================
+! Project Model
+!! The following lines are executed whenever the #model command is used
+!! in a project file.
+
+!if cla
+#if %tsmode=claenv #then
+ #if #not '%parent'='' #then
+  #set model=%mastermodel_
+  #set system=%mastersystem_
+ #endif
+ #if '%verbose' #then
+  #message 'System         : %system %filetype'
+  #message 'Model          : %model %jpicall'
+ #endif
+#endif
+!end
+
+#pragma call(near_call=>on,same_ds=>on,ds_eq_ss=>on,overlay=>off)
+#pragma data(far_ext=>off,near_ptr=>on,threshold=>65535,const_in_code=>off,ss_in_dgroup=>on,ds_dynamic=>off)
+#pragma define(_fdata=>off,_fcall=>off,_fptr=>off,_mthread=>off)
+#pragma link_option(map=>on,case=>on,pack=>on,oldexe=>off,prot_mode=>off,overlay=>off)
+
+!! C/C++ Predefined Macro Names
+#pragma define(__OS2__=>off,__MSDOS__=>off)
+#if %system=dos #then #pragma define(__MSDOS__=>on) #endif
+#if %system=os2 #then #pragma define(__OS2__=>on) #endif
+#pragma define(M_I86SM=>off,M_I86CM=>off,M_I86MM=>off,M_I86LM=>off,M_I86XM=>off,M_I86TM=>off,M_I86MTM=>off,M_I86OM=>off,M_I86DM=>off)
+
+!! defines used by library source files
+#pragma define(_ENV=>off,_WINDOWS=>off,_WINDLL=>off,_OVL=>off,_DLL=>off)
+#if %system=win #then #pragma define(_WINDOWS=>on) #endif
+#if %model=overlay  #then #pragma define(_OVL=>on) #endif
+#if %model=dynalink #then #pragma define(_DLL=>on) #endif
+
+!! Target Operating System
+#pragma define(_DOS=>off,_OS2=>off,_WIN=>off,_XTD=>off)
+#if %system=dos #then
+ #if (%model=extended) #or (%model=extendmt) #then
+  #pragma define(_OS2=>on,_XTD=>on)
+ #else
+  #pragma define(_DOS=>on)
+ #endif
+#elsif %system=os2 #then
+ #pragma define(_OS2=>on)
+#elsif %system=win #then
+ #pragma define(_WIN=>on)
+#endif
+
+#if "%system"="" #then
+ #error "#model not preceded by #system"
+!if smallmodel
+#elsif %model=small #then
+ #set M=S
+ #pragma define(M_I86SM=>on)
+!end
+!if compactmodel
+#elsif %model=compact #then
+ #set M=C
+ #pragma call(ds_eq_ss=>off)
+ #pragma data(near_ptr=>off,threshold=>32767,ss_in_dgroup=>off)
+ #pragma define(_fptr=>on)
+ #pragma define(M_I86CM=>on)
+!end
+!if mediummodel
+#elsif %model=medium #then
+ #set M=M
+ #pragma call(near_call=>off)
+ #pragma define(_fcall=>on)
+ #pragma define(M_I86MM=>on)
+!end
+!if largemodel
+#elsif %model=large #then
+ #set M=L
+ #pragma call(near_call=>off,ds_eq_ss=>off),data(near_ptr=>off,threshold=>32767,ss_in_dgroup=>off)
+ #pragma define(_fcall=>on,_fptr=>on)
+ #pragma define(M_I86LM=>on)
+!end
+!if xlargemodel
+#elsif %model=xlarge #then
+ #if #not %system=win #then
+  #set M=X
+  #pragma call(near_call=>off,same_ds=>off,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,const_in_code=>on,ss_in_dgroup=>off,ds_dynamic=>on)
+  #pragma define(_fcall=>on,_fdata=>on,_fptr=>on)
+  #pragma define(M_I86XM=>on)
+ #else
+  #error "Extra-large model not available for Windows programs"
+ #endif
+!end
+!if mthreadmodel
+#elsif %model=mthread #then
+ #if #not %system=win #then
+  #set M=T
+  #pragma call(near_call=>off,same_ds=>off,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,const_in_code=>on,ss_in_dgroup=>off,ds_dynamic=>on)
+  #pragma define(_fcall=>on,  _fdata=>on,_fptr=>on,_mthread=>on)
+  #pragma define(M_I86TM=>on,M_I86MTM=>on)
+ #else
+  #error "Multi-thread model not available for Windows programs"
+ #endif
+!end
+!if overlaymodel
+#elsif %model=overlay #then
+ #if %system=dos #then
+  #set M=O
+  #pragma call(near_call=>off,same_ds=>off,overlay=>on,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,const_in_code=>off,ss_in_dgroup=>off,ds_dynamic=>on)
+  #pragma define(_fcall=>on,_fdata=>on,_fptr=>on,_mthread=>on)
+  #pragma define(M_I86OM=>on)
+ #else
+  #error "Overlay model not available for %system programs"
+ #endif
+!end
+!if dynalinkmodel
+#elsif %model=dynalink #then
+ #if #not %system=win #then
+  #set M=D
+  #pragma call(near_call=>off,same_ds=>off,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,ss_in_dgroup=>off,ds_dynamic=>on)
+  #if %system=dos #then
+   #pragma call(overlay=>on)
+  #else
+   #pragma data(const_in_code=>on)
+  #endif
+  #pragma define(_fcall=>on,_fdata=>on,_fptr=>on,_mthread=>on)
+  #pragma define(M_I86DM=>on)
+  #pragma link_option(smart_method=>off)
+ #else
+  #error "Dynalink model not available for Windows programs"
+ #endif
+!end
+!if extendedmodel
+#elsif %model=extended #then
+ #if %system=dos #then
+  #set M=X
+  #pragma call(near_call=>off,same_ds=>off,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,const_in_code=>on,ss_in_dgroup=>off,ds_dynamic=>on)
+  #pragma define(_fcall=>on,_fdata=>on,_fptr=>on)
+  #pragma define(M_I86XM=>on,__MSDOS__=>off,__OS2__=>on)
+ #else
+  #error "Extended model only available for DOS programs"
+ #endif
+!end
+!if extendmtmodel
+#elsif %model=extendmt #then
+ #if %system=dos #then
+  #set M=T
+  #pragma call(near_call=>off,same_ds=>off,ds_eq_ss=>off),data(far_ext=>on,near_ptr=>off,const_in_code=>on,ss_in_dgroup=>off,ds_dynamic=>on)
+  #pragma define(_fcall=>on,_fdata=>on,_fptr=>on,_mthread=>on)
+  #pragma define(M_I86TM=>on,M_I86MTM=>on,__MSDOS__=>off,__OS2__=>on)
+ #else
+  #error "Extendmt model only available for DOS programs"
+ #endif
+!end
+#else
+ #error "Unrecognized argument %model"
+#endif
+
+#if "%jpicall"="" #then #set jpicall=jpi #endif
+#if %jpicall=jpi #then
+ #if %system=win #then
+  #pragma call(standard_float=>on)
+  #pragma call(reg_saved=>(ax,bx,cx,dx,si,di,ds,st1,st2))
+  #pragma call(reg_param=>(ax,bx,cx,dx))
+  #pragma call(reg_return=>(ax,dx))
+ #else
+  #pragma call(standard_float=>off)
+  #pragma call(reg_saved=>(ax,bx,cx,dx,si,di,ds,st1,st2))
+  #pragma call(reg_param=>(ax,bx,cx,dx,st0,st6,st5,st4,st3))
+  #pragma call(reg_return=>(ax,dx,st0))
+ #endif
+ #pragma call(standard_conv=>off,opt_var_arg=>on)
+ #if %model=overlay #or (%model=dynalink #and %system=dos) #then
+  #pragma call(opt_var_arg=>off)
+ #endif
+ #set C=_
+ #pragma define(_jpicall=>on)
+#elsif %jpicall=stack #then
+ #pragma call(reg_saved=>(si,di,ds,st1,st2))
+ #pragma call(reg_param=>())
+ #pragma call(reg_return=>(ax,dx))
+ #pragma call(standard_conv=>on,standard_float=>on,opt_var_arg=>off)
+ #set C=F
+ #pragma define(_jpicall=>off)
+#else
+ #error "Unrecognized argument %jpicall"
+#endif
+
+#if %system=win #then
+ #set O=W
+ #pragma link_option(pack=>off,windows=>on,emul=>winfloat.obj),call(windows=>on)
+#elsif %system=dos #then
+!if extendedmodel | extendmtmodel
+ #if %model=extended #or %model=extendmt #then
+  #set O=X
+  #pragma optimize(cpu=>286),call(windows=>off)
+  #pragma link_option(pack=>off,extended=>on,prot_mode=>on,emul=>x_emul.obj)
+ #else
+!end
+  #set O=R
+  #pragma link_option(oldexe=>on,pack=>off,emul=>r_emul.obj),call(windows=>off)
+  #pragma optimize(cpu=>86)
+!if extendedmodel | extendmtmodel
+ #endif
+!end
+#elsif %system=os2 #then
+ #set O=P
+ #pragma optimize(cpu=>286),call(windows=>off),link_option(prot_mode=>on,emul=>p_emul.obj)
+#else
+ #error "Unknown argument to #system: %system"
+#endif
+
+!if cla
+#if '%parent'='' #then     --   #and %tsmode=claenv ?
+ #set mastermodel_=%model
+ #set mastersystem_=%system
+#endif
+!end
+
+!! End of Project model section
+!! =========================================================================
+! Project Link
+!! The following lines are executed whenever a #link command is executed in
+!! a project file
+
+#autocompile
+#pragma save
+
+!! Calculate lfiletype - the type of file being made for this #link only
+!! Default is the filetype specified by #system (%filetype)
+
+#if "%filetype"="" #then
+ #set filetype=exe
+#endif
+
+#split %link_arg
+#if "%ext"="" #then
+ #set lfiletype_=%filetype
+ #set ext=%filetype
+#elsif (%ext=exe) #or (%ext=dll) #or (%ext=lib) #then
+ #set lfiletype_=%ext
+#else
+ #set lfiletype_=%filetype
+#endif
+
+!! Calculate any additional libraries or object files that need to be linked
+
+#if #not %lfiletype_=lib #then
+ #if %system=win #then
+  #if %lfiletype_=dll #then
+   #compile initwdll.a
+   #pragma linkfirst(initwdll.obj)
+  #elsif %filetype=exe #then
+   #if "%tsm2" #or "%tspas" #then
+    #compile initmwin.a
+    #pragma linkfirst(initmwin.obj)
+   #else
+    #compile initwin.a
+    #pragma linkfirst(initwin.obj)
+   #endif
+  #else
+   #error "Unknown argument to #system: %filetype"
+  #endif
+ #else
+  #if %lfiletype_=dll #then
+   #pragma linkfirst(initdll.obj)
+  #elsif %lfiletype_=exe #then
+   #if (#not ("%tsc" #or "%tscpp" #or "%tscla")) #and (%system = dos)
+      #and (("%model"=xlarge) #or ("%model"=mthread)) #then
+    #pragma linkfirst(initnew.obj)
+   #elsif "%pm_api" #and (%system=os2) #then
+    #pragma link_option(pm=>on,non_pm=>off)
+    #pragma linkfirst(initpm.obj)
+   #else
+    #pragma linkfirst(initexe.obj)
+   #endif
+   #if (%system=os2) #then
+    #if "%pm_compat" #then
+     #pragma link_option(pm=>on,non_pm=>on)
+    #elsif "%pm_noncompat" #then
+     #pragma link_option(pm=>off,non_pm=>on)
+    #endif
+   #endif
+  #else
+   #error "Unknown argument to #system: %filetype"
+  #endif
+ #endif
+
+!! calculate required libraries
+
+ #set prefix_="%O%%M%%C%"
+ #if %%model = 'extended' #then
+  #set clapfx_ = 'DES'
+ #else
+  #set clapfx_ = 'D%M%V'
+ #endif
+ #if "%tscla" #then
+  #pragma link(%clapfx_%cla.lib)
+  #set tsc=on
+!! tsc on picks appropriate m2/pascal libraries if mixed with clarion
+ #elsif (%lfiletype_=dll) #and (%system=win) #then
+  #pragma link(%prefix_%comd.lib)
+ #else
+  #pragma link(%prefix_%com.lib)
+ #endif
+
+ #if "%tsc" #and #not "%tscla" #then
+  #pragma link(%prefix_%clib.lib)
+ #endif
+
+ #if "%tscpp" #then
+  #if (%model=dynalink) #or (%system=win) #then
+   #set CPPprefix_="%O%%M%%C%"
+  #else
+   #set CPPprefix_="C%M%%C%"
+  #endif
+  #pragma link(%CPPprefix_%slib.lib)
+  #if "%usertool" #then
+   #pragma link(%CPPprefix_%rtool.lib)
+  #endif
+  #if "%usermath" #then
+   #pragma link(%CPPprefix_%rmath.lib)
+  #endif
+ #endif
+
+ #if "%tsm2" #then
+  #pragma link(%prefix_%m2.lib)
+  #if "%tsc" #then
+   #pragma link(%prefix_%mlibc.lib)
+   #if "%cwindow"=jpi #then
+    #pragma link(%prefix_%wind.lib)
+   #endif
+  #else
+   #pragma link(%prefix_%mlib.lib)
+  #endif
+ #endif
+
+ #if "%tspas" #then
+  #if %model=dynalink #then
+   #if "%tsc" #then
+    #pragma link(%prefix_%pasc.lib)
+   #elsif "%tsm2" #then
+    #pragma link(%prefix_%pasm.lib)
+   #else
+    #pragma link(%prefix_%pas.lib)
+   #endif
+  #else
+   #pragma link(%prefix_%pas.lib)
+  #endif
+  #if "%tsc" #then
+   #pragma link(%prefix_%mlibc.lib)
+   #if "%cwindow"=jpi #then
+    #pragma link(%prefix_%wind.lib)
+   #endif
+  #elsif "%tsm2" #then
+   #pragma link(%prefix_%mlib.lib)
+  #else
+   #pragma link(%prefix_%plib.lib)
+  #endif
+  #pragma link_option(case=>off)
+ #endif
+
+ #if "%cgraph"=jpi #then
+  #pragma link(%prefix_%graph.lib)
+ #elsif "%cgraph"=borland #then
+  #pragma link(graphics.lib)
+ #endif
+
+ #if ("%cwindow"=jpi) #and #not("%tsm2" #or "%tspas") #then
+  #pragma link(%prefix_%wind.lib)
+ #elsif "%cwindow"=borland #then
+  #pragma link(%prefix_%borw.lib)
+ #endif
+
+ #if "%system"=os2 #then
+  #if "%pm_api" #then
+   #pragma link(pmjpi.lib,os2jpi.lib)
+  #else
+   #pragma link(os2jpi.lib)
+  #endif
+ #elsif (%model=overlay) #or (%model=dynalink) #then
+  #pragma link(loader.lib)
+ #endif
+#endif
+
+!! Now do the link
+#if (%ext=dll) #then
+ #pragma link_option(smart_method=>off)
+ #if (%system=dos) #then
+  #if #not ((%model=overlay) #or (%model=dynalink) #or (%model=extended) #or
+            (%model=extendmt)) #then
+   #error "DOS DLLs must use overlay, dynalink or extended model"
+  #endif
+ #elsif (%system=os2) #then
+  #if #not ((%model=xlarge) #or (%model=mthread) #or (%model=dynalink)) #then
+   #error "OS2 DLLs must use xlarge, mthread or dynalink model"
+  #endif
+ #endif
+#endif
+
+#if "%ext%"=lib #then
+ #dolink %name%.%ext%
+#elsif (%model=extended) #or (%model=extendmt) #then
+ #if "%ext%"=dll #then
+  #if #not "%manual_export" #then
+   #if #not "%exports"=="" #then
+    #set expname=%name%.exp
+    #mkexp %expname xoverlay.exp %exports
+   #endif
+   #if #not "%expname"=="" #then
+    #implib %name%.lib %expname
+   #elsif #exists %name%.exp #then
+    #implib %name%.lib %name%.exp
+   #else
+    #implib %name%.lib
+   #endif
+  #endif
+ #else
+  #if %model=extendmt #then
+   #pragma link_option(stub=>xloadmt.exe)
+  #else
+   #pragma link_option(stub=>xload.exe)
+  #endif
+ #endif
+ #pragma link_option(map=>on,oldexe=>off)
+ #dolink %name%.%ext%
+#elsif ("%model"=overlay) #or ((%system=dos) #and ("%model"=dynalink)) #then
+ #if "%ext%"=dll #then
+  #if #not "%manual_export" #then
+   #if #not "%exports"=="" #then
+    #set expname=%name%.exp
+    #mkexp %expname roverlay.exp %exports
+   #endif
+   #if #not "%expname"=="" #then
+    #implib %name%.lib %expname
+   #elsif #exists %name%.exp #then
+    #implib %name%.lib %name%.exp
+   #else
+    #implib %name%.lib
+   #endif
+  #endif
+ #else
+  #pragma link_option(stub=>ovlload.exe)
+ #endif
+ #pragma link_option(map=>on,oldexe=>off,overlay=>on)
+ #dolink %name%.%ext%
+ #message "link complete"
+ #if %make #then
+  #set ovrexe_=%name%.%ext%
+  #set ovrmap_=%name%.map
+  #if #exists %name%.exp #then
+   #set ovrexp_=%name%.exp
+  #else
+   #set ovrexp_=overlay.exp
+  #endif
+  #exemod %ovrexe_ %ovrexp_ %ovrmap_
+ #endif
+#elsif (%system=os2) #and ("%ext%"=dll) #then
+ #if #not "%manual_export" #then
+  #if #exists %name%.exp #then
+   #implib %name%.lib %name%.exp
+  #else
+   #implib %name%.lib
+  #endif
+ #endif
+ #pragma link_option(map=>on,oldexe=>off)
+ #dolink %name%.%ext%
+ #message "link complete"
+#elsif %system = win #then
+ #set link_arg=%name%.%ext%
+ #set winexp_=%name%.exp
+ #set winexe_=%name%.%ext%
+ #set winlib_=%name%.lib
+ #set winmap_=%name%.map
+ #implib %winlib_ %winexp_
+ #pragma link_option(map=>on,oldexe=>off,windows=>on,export=>on)
+ #pragma link(windows.lib)
+ #dolink %link_arg
+ #message "link complete"
+ #if "%make" #then
+  #exemod %winexe_ %winexp_ %winmap_
+ #endif
+#else
+ #dolink %name%.%ext%
+#endif
+
+!! Reset macros indicating what libraries are required
+
+#set tsc=off
+#set tscpp=off
+#set tspas=off
+#set tsm2=off
+#set tscla=off
+#set cwindow=""
+#set cgraph=""
+#set pm_api=""
+#set pm_compat=""
+#set pm_noncompat=""
+#set manual_export=""
+
+#pragma restore
+!! End of Project Link section
+! Project End
+!! =========================================================================
+
+

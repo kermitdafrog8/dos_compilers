@@ -1,0 +1,34 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  STRINGS.DEF - Modula-2 core library interface                           *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE Strings;
+
+IMPORT Str ;
+
+CONST
+  Delete     = Str.Delete ;
+  Length     = Str.Length ;
+  CompareStr = Str.Compare ;
+
+PROCEDURE Assign ( source : ARRAY OF CHAR ;
+                   VAR dest : ARRAY OF CHAR ) ;
+PROCEDURE Insert ( substr : ARRAY OF CHAR;
+                   VAR str : ARRAY OF CHAR ;
+                   inx : CARDINAL ) ;
+PROCEDURE Pos    ( substr : ARRAY OF CHAR;
+                   VAR str : ARRAY OF CHAR ) : CARDINAL ;
+PROCEDURE Copy   ( str : ARRAY OF CHAR ;
+                   inx : CARDINAL ;
+                   len : CARDINAL ;
+                   VAR result : ARRAY OF CHAR ) ;
+PROCEDURE Concat ( s1,s2 : ARRAY OF CHAR ;
+                   VAR result : ARRAY OF CHAR ) ;
+END Strings.
+

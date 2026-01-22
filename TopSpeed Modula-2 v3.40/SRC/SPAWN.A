@@ -1,0 +1,2661 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  SPAWN.A - child process spawning                                        *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module SPAWN
+
+
+(*%F _OS2 *)
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn Str$RCharPos
+extrn Str$Length
+
+select _TEXT
+
+public __CatProg :
+
+
+ptr    = sframe
+temp   = -4
+locals =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    les  bx, [bp][ptr]
+(*%F NearPtr *)
+    mov  dx, '\'
+    mov  cx, es:[bx][2]
+    mov  bx, es:[bx]
+    mov  ax, 128
+(*%E *)
+(*%T NearPtr *)
+    mov  cx, '\'
+    mov  bx, es:[bx]
+    mov  ax, 128
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+    push ax
+    push cx
+    push bx
+    push dx
+(*%E *)
+(*%T NearPtr *)
+    push ax
+    push bx
+    push cx
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far Str$RCharPos
+(*%E *)
+(*%T NearCall *)
+    call Str$RCharPos
+(*%E *)
+    cmp  ax, -1
+    pushf
+    add  ax, [bp][ptr]
+    mov  dx, [bp][ptr][2]
+    popf
+    jnz  getLength
+    les  bx, [bp][ptr]
+    mov  ax, es:[bx]
+(*%F NearPtr *)
+    mov  dx, es:[bx][2]
+(*%E *)
+getLength:
+    mov  [bp][temp], ax
+(*%F NearPtr *)
+    mov  [bp][temp][2], dx
+    mov  bx, dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][temp][2], ds
+(*%E *)
+(*%F NearPtr *)
+    mov  cx, bx
+(*%E *)
+    mov  bx, ax
+    mov  ax, 128
+(*%F RegParam *)
+(*%T NearPtr *)
+    push ax
+    push bx
+(*%E *)
+(*%F NearPtr *)
+    push ax
+    push cx
+    push bx
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far Str$Length
+(*%E *)
+(*%T NearCall *)
+    call Str$Length
+(*%E *)
+
+    mov  cx, ax
+    mov  ax, [bp][temp]
+    mov  dx, [bp][temp][2]
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+SEARCH = 80H
+
+extrn  Str$Length
+extrn  Lib$EnvironmentFind
+
+select _DATA
+
+extrn __seterrno
+PATH :  db  'PATH', 0
+
+select _TEXT
+
+public	__FindProg :
+
+(*
+char  *FindProg (usePath, nameP);
+
+boolean  usePath;
+char    *nameP;
+
+The given file name *nameP is to be interpreted as the name of an
+executable file, given the usual MSDOS rules for program names:
+
+- if the name ends in ".*" or "." then no endings are substituted,
+otherwise the endings ".COM" and ".EXE" will be the trial endings.
+
+- if the name begins with "/" or "\" or "?:", or if the usePath
+  argument is false, then there are no trial prefixes, else the trial
+  prefixes are those in the PATH variable in the environment.
+
+- with each prefix, beginning with a null prefix, the name is searched
+  for using each of its trial endings, continuing until the first
+  match or until all prefixes and endings have been tried.
+
+A buffer is allocated for the trial paths.  If a trial match succeeds,
+the result of the function is a pointer to the buffer which holds the
+complete path.  The file is not open (the CHMOD function is used to
+test if the file exists, not FIND).  The caller is responsible to free()
+the buffer when it is no longer needed.
+
+The function result is a pointer to the buffer.  If the search fails
+then the buffer is de-allocated and the function result is NULL.
+
+The function also returns the size of the path in CX, with a value of
+zero if the search failed.
+
+In the case where a path is found the caller is responsible for
+deallocating the buffer, using free().
+*)
+
+fpr_bufP    = sframe
+fpr_usePath = 4+sframe
+fpr_nameP   = 6+sframe
+
+fpr_preP    = -4
+fpr_suffix  = -6
+fpr_len	    = -8
+fpr_res     = -10
+PathStr     = -142
+locals = 142
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    push es
+    les  si, [bp][fpr_nameP]
+(*%F RegParam *)
+    mov  ax, 128
+    push ax
+(*%F NearPtr *)
+    push es
+(*%E *)
+    push si
+(*%E *)
+(*%T RegParam *)
+    mov  ax, 128
+    mov  cx, es
+    mov  bx, si
+(*%E *)
+(*%F NearCall *)
+    call far Str$Length
+(*%E *)
+(*%T NearCall *)
+    call Str$Length
+(*%E *)
+
+    xchg cx, ax                           (* CX is length of supplied name *)
+    or   cx, cx
+    jnz  fpr_hasName
+
+
+    mov  ax, ENOENT
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    jmp  near fpr_badEnd
+
+fpr_hasName:
+    mov  [bp][fpr_len], cx                (* keep a copy of the string length *)
+
+    mov  es, [bp][fpr_nameP][2]
+    add  si, cx                           (* ES:[si] point to end of string *)
+    dec  si
+    std                                   (* scan backwards *)
+
+
+(* Does the name already have a specific ".*" ending ?
+If the name ends in ".*" or "." then no endings are substituted.
+*)
+
+    mov  word [bp][fpr_suffix], FALSE     (* default is a fixed ending. *)
+fpr_checkEnding:
+    mov  al, es:[si]
+    dec  si
+    cmp  al, '.'
+    je   fpr_checkPrefix
+    cmp  al, '/'
+    je   fpr_useSuffixes
+    cmp  al, '\'
+    je   fpr_useSuffixes
+    loop fpr_checkEnding
+
+(* The endings ".COM" and ".EXE" will be the trial endings.*)
+
+fpr_useSuffixes:
+    mov  word [bp][fpr_suffix], TRUE      (* enable trial endings *)
+
+(* If the name begins with "/" or "\" or "?:" or if usePath == false
+then there are no trial prefixes, else the trial prefixes are those
+in the PATH= variable in the environment.
+*)
+
+fpr_checkPrefix:
+    cld	                                   (* forward scan *)
+    cmp  word [bp][fpr_usePath], FALSE
+    je   fpr_allocBuf
+
+    mov  word [bp][fpr_usePath], FALSE     (* default is no prefixes *)
+    mov  cx, [bp][fpr_len]
+    mov  si, [bp][fpr_nameP]
+    mov  al, es:[si]
+    inc  si
+    cmp  al, '/'
+    je   fpr_allocBuf
+    cmp  al, '\'
+    je   fpr_allocBuf
+    cmp  al, ':'
+    je   fpr_allocBuf
+
+(* Prefixes are possible.  Look to see if the PATH environment variable
+is defined.
+*)
+(*%F RegParam *)
+(*%F NearPtr *)
+    mov  ax, 4
+    push ax
+    mov  ax, PATH
+    push ds
+    push ax
+    mov  ax, 128
+    push ax
+    lea  ax, [bp][PathStr]
+    push ss
+    push ax
+(*%E *)
+(*%T NearPtr *)
+    mov  ax, 4
+    push ax
+    mov  ax, PATH
+    push ax
+    mov  ax, 128
+    push ax
+    lea  ax, [bp][PathStr]
+    push ax
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    lea  ax, [bp][PathStr]
+    push ss
+    push ax
+    mov  ax, 4
+    mov  bx, PATH
+    mov  cx, ds
+    mov  dx, 128
+(*%E *)
+(*%T NearPtr *)
+    mov  ax, 4
+    mov  bx, PATH
+    mov  cx, 128
+    lea  dx, [bp][PathStr]
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far Lib$EnvironmentFind
+(*%E *)
+(*%T NearCall *)
+    call Lib$EnvironmentFind
+(*%E *)
+    lea  ax, [bp][PathStr]
+    cmp  byte [bp][PathStr], 0
+    jz   fpr_allocBuf
+
+    mov  [bp][fpr_preP][2], ss
+    mov  [bp][fpr_preP], ax
+    mov  word [bp][fpr_usePath], SEARCH        (* enable prefixes. *)
+
+(* buffer is allocated to hold the complete trial pathnames *)
+
+fpr_allocBuf:
+
+(* With each prefix, beginning with a null prefix, the name is searched
+for using each of its trial endings, continuing until the first
+match or until all prefixes and endings have been tried.
+*)
+    mov  dx, [bp][fpr_bufP][2]
+    mov  ax, [bp][fpr_bufP]
+    mov  es, dx
+    xchg di, ax
+    sub  bx, bx	                         (* bx counts length of pathname. *)
+
+fpr_copyName:
+    mov  cx, [bp][fpr_len]
+    add  bx, cx
+    cmp  bx, 64
+    jnb  fpr_nextPrefix
+
+    lds  si, [bp][fpr_nameP]
+rep ; movsb
+
+    cmp  word [bp][fpr_suffix], FALSE    (* are suffixes allowed ? *)
+    je   fpr_nameFormed
+
+    add  bl, 4
+    cmp  bl, 64
+    jnb  fpr_nextPrefix
+
+    mov  ax, 432EH
+    stosw                                (* '.C' *)
+    mov  ax, 4D4FH
+    stosw                                (*  'OM'*)
+
+fpr_nameFormed:
+    lds  dx, [bp][fpr_bufP]
+    mov  byte [di], 0
+
+    mov  ax, 4300H                       (* Read File's Attributes *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   fpr_tryEXE
+    test cl, 18H                         (* Avoid subdir or label attributes. *)
+    jz   near fpr_found
+
+fpr_tryEXE:
+    cmp  word [bp][fpr_suffix], FALSE    (* are suffixes allowed ? *)
+    je   fpr_nextPrefix	                 (* jump if not allowed. *)
+
+    mov  word [di][-4], 452EH            (* '.E' *)
+    mov  word [di][-2], 4558H            (* 'XE' *)
+    mov  ax, 4300H                       (* Read File's Attributes *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   fpr_nextPrefix
+    test cl, 18H                         (* Avoid subdir or label attributes. *)
+    jz   fpr_found
+
+
+(* The prefixes in the PATH variable are of the form "abc;" where abc
+represents any string and ';' is a separator.  The string may
+also be bounded by \0, the terminator for the whole path sequence.
+When there is no prefix remaining in PATH, then the search is
+finished.
+*)
+
+fpr_nextPrefix:
+    cmp  word [bp][fpr_usePath], FALSE    (* are prefixes allowed ? *)
+    je   fpr_notFound
+    lds	 si, [bp][fpr_preP]              (* copy the next path prefix *)
+    sub  bx, bx
+    mov  cx, 60
+    les  di, [bp][fpr_bufP]              (* into the working buffer. *)
+fpr_scanPrefix:
+    lodsb
+    cmp  al, ';'
+    je   fpr_preSeparator
+    cmp  al, 0
+    je   fpr_preTerminator
+    stosb
+    inc  bx
+    loop fpr_scanPrefix
+
+    jmp  fpr_notFound                    (* give up if PATH is badly formed. *)
+
+
+fpr_preTerminator:
+    dec  si                              (* the terminator cannot be passed. *)
+
+fpr_preSeparator:
+    mov  [bp][fpr_preP], si              (* remember where the PATH continues. *)
+    or   bx, bx                          (* was that the end of the PATH ? *)
+    jz   fpr_notFound
+    mov  al, es:[di][-1]                 (* may need to insert '\' *)
+    cmp  al, '\'
+    je   fpr_joinable
+    cmp  al, ':'
+    je   fpr_joinable
+    cmp  al, '/'
+    je   fpr_joinable
+    mov  al, '\'
+    stosb
+    inc  bx
+fpr_joinable:
+    jmp  fpr_copyName	                 (* join name to trial path *)
+
+
+(* If not found, then de-allocate the name buffer. *)
+
+fpr_notFound:
+    mov  ax, ENOENT
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+fpr_allocFailed:
+fpr_badEnd:
+    sub  ax, ax
+    cwd
+    mov  cx, ax
+
+    jmp  fpr_end
+
+fpr_found:
+    mov  ax, dx
+    mov  dx, ds
+    mov  cx, _DATA                 (* DX:AX points to the name *)
+    mov  ds, cx
+    mov  cx, di
+    inc  cx                        (* include the terminating zero *)
+    sub  cx, ax                    (* CX = length of name *)
+
+fpr_end:
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+
+extrn  Str$Length
+extrn __seterrno
+
+select _TEXT
+
+
+extrn Str$Length
+
+
+public __CatArgV :
+
+(*
+char   *_CatArgV (argV)
+
+char   *argV [];
+
+Take the vector of arguments and concatenate them into an MSDOS-style
+command line.  Use a space to separate each argument, with a maximu of
+126 characters, plus a preceding length byte and a following CR ('0x0D').
+
+Also, check the assumption that *argV[1] and *argV[2] may be MSDOS 1.xx
+style (CPM-era) file names.  If so, construct FCBs from them.
+
+A NULL entry in the argV vector is taken as a terminator.  The entry
+argV[0] by Unix convention is a command name which should not appear in
+the MSDOS command line, so it is entirely ignored here.
+
+Allocate a structure to hold the two FCBs and the command line.  If the
+command line does not overflow, then the return value is the pointer to
+the structure:
+
+argComposite
+   FCB1		char [16];
+   FCB2		char [16];
+   length	char;
+   text		char [127];  /* includes trailing 0x0D */
+
+The size of the arguments is calculated.  If it will total more than
+126 bytes, including spaces, then the function quits without allocating
+an argComposite.  If the total is OK, then the size of argComposite is
+trimmed to hold just the necessary number of characters.
+
+The return value is a pointer to the argComposite, in DX:AX, with the
+total length of the argComposite in CX.  If an error occurs, then
+DX:AX == NULL and CX == 0.
+*)
+
+cav_bufP   = sframe
+cav_argV   = 4+sframe
+
+locals     =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    push es
+
+    sub  di, di                       (* DI = total length of arguments *)
+    lds  si, [bp][cav_argV]
+    mov  ax, ds
+    or   ax, si
+    jz   cav_argVnull	              (* NULL argV is allowed, arg total == 0 *)
+
+cav_measureNext:                      (* note: argV[0] deliberately skipped *)
+(*%F NearPtr *)
+    add  si, 4
+    les  bx, [si]
+    mov  ax, es
+    or   ax, bx
+(*%E *)
+(*%T NearPtr *)
+    add  si, 2
+    mov  bx, [si]
+    or   bx, bx
+(*%E *)
+    jz   cav_allMeasured
+
+(*%F RegParam *)
+    mov  ax, 128
+    push ax
+(*%F NearPtr *)
+    push es
+(*%E *)
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, 128
+    mov  cx, es
+(*%E *)
+(*%F NearCall *)
+    call far Str$Length
+(*%E *)
+(*%T NearCall *)
+    call Str$Length
+(*%E *)
+    add  di, ax
+    inc  di                           (*  plus a separating space or final CR *)
+    jmp  cav_measureNext
+
+cav_argVnull:
+    inc  di                           (* allow for trailing CR *)
+
+cav_allMeasured:
+    mov  ax, _DATA                    (* is command line NearPtr enough ? *)
+    mov  ds, ax
+    cmp  di, 127
+    ja   cav_tooLarge
+
+    mov  dx, [bp][cav_bufP][2]
+    mov  ax, [bp][cav_bufP]
+
+(* Now the composite is allocated.  First fill out the FCB headers, using
+ *argV[1] & [2]. *)
+
+
+    mov  es, dx
+    xchg di, ax
+    mov  word es:[di], 20FFH           (* default FCBs *)
+    mov  word es:[di][10H], 20FFH      (* are marked as empty. *)
+
+    lds  si, [bp][cav_argV]
+    mov  ax, ds
+    or   ax, si
+    jz   cav_copyArgs                  (* no FCBs if argV == NULL *)
+(*%F NearPtr *)
+    lds  si, [si][4]                   (* argV[1] *)
+    mov  ax, ds
+    or   ax, si
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [si][2]                   (* argV[1] *)
+    or   si, si
+(*%E *)
+    jz   cav_copyArgs
+    mov  ax, 2901H                     (* parse filename, allow leading spaces *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    add  di, 10H                       (* point to the second FCB *)
+    lds  si, [bp][cav_argV]
+(*%F NearPtr *)
+    lds  si, [si][8]                   (* argV[1] *)
+    mov  ax, ds
+    or   ax, si
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [si][4]                   (* argV[1] *)
+    or   si, si
+(*%E *)
+    jz   cav_copyArgs
+    mov  ax, 2901H                     (* parse filename, allow leading spaces *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+
+cav_copyArgs:
+    les  di, [bp][cav_bufP]
+    add  di, 21H                       (* begin after the length byte *)
+    lea  cx, [di][-1]                  (* remember where the length byte is. *)
+    mov  bx, [bp][cav_argV]
+
+cav_nextArg:
+(*%F NearPtr *)
+    mov  ds, [bp][cav_argV][2]
+    mov  ax, ds
+    or   ax, bx                        (* is argV == NULL ? *)
+    jz   cav_terminate
+
+    add  bx, 4                         (* next argument *)
+    lds  si, [bx]
+    mov  ax, ds
+    or   ax, si
+    jz   cav_terminate
+(*%E *)
+(*%T NearPtr *)
+    or   bx, bx                        (* is argV == NULL ? *)
+    jz   cav_terminate
+
+    add  bx, 2                         (* next argument *)
+    mov  si, [bx]
+    or   si, si
+    jz   cav_terminate
+(*%E *)
+    mov  al, ' '                       (* separate the arguments *)
+    stosb	
+cav_copyLoop:
+    lodsb                              (* copy argument *)
+    or   al, al
+    jz   cav_nextArg
+    stosb                              (* to the new command line *)
+    jmp	cav_copyLoop
+
+
+cav_tooLarge:
+    mov  ax, E2BIG
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+
+
+cav_allocFailed:
+    sub  ax, ax                        (* return a NULL pointer *)
+    cwd
+    mov  cx, ax                        (* and a zero length *)
+    jmp	cav_end	
+
+
+cav_terminate:
+    mov  ax, _DATA
+    mov  ds, ax
+    mov  al, 0DH                       (* arriage return *)
+    stosb
+    xchg di, cx                        (* DI = &lengthByte, CX = &last byte *)
+    mov  ax, [bp][cav_bufP]
+    sub  cx, ax	                       (* CX = composite length *)
+    mov  bx, cx
+    sub  bl, 22H
+    mov  es:[di], bl                   (* prefix the command line with length *)
+
+(* The argComposite is now complete. *)
+
+    mov  dx, es
+
+cav_end:
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+
+extrn  Str$Length
+
+select _DATA
+
+extrn __seterrno
+extrn __env_var
+
+select _TEXT
+
+
+extrn Str$Length
+
+
+
+public __CatEnvV :
+
+(*
+char   *_CatEnvV (envV)
+
+char   *envV [];
+
+Take the environment vector and concatenate the environment strings into
+an MSDOS-style contiguous environment.  Each string remains terminated by
+a zero, with a null string as an overall terminator and a maximum length
+of 32k bytes.
+
+If a NULL envV value is supplied, then replace it with the global _environ
+variable.
+
+The size of the environment is totalled, and if it does not exceed 32k bytes
+then a space is allocated, including 15 byte extra for paragraph alignment.
+The environment is adjusted to begin on a paragraph boundary since MSDOS
+uses segment values alone to locate environment strings.
+
+A NULL entry in the envV vector or a pointer to an empty string are taken
+as terminators.
+
+The return value in DX:AX is the pointer to the allocated memory (NULL if
+none allocated).  The register ES contains the paragraph number at which
+the environment string actually begins (zero if none allocated).  Note
+that while MSDOS needs only the ES value, the DX:AX pointer will in general
+be required in order to free() the allocation.
+
+The register CX returns the length of the environment string, including
+the terminating zero.  CX == 0 in cases of error.
+*)
+
+cev_bufP  = sframe
+cev_envV  = 4+sframe
+
+
+locals     =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+
+    les  si, [bp][cev_envV]
+(*%F NearPtr *)
+    mov  ax, es
+    or   ax, si
+(*%E *)
+(*%T NearPtr *)
+    or   si, si                    (* is a NULL parameter supplied ? *)
+(*%E *)
+    jnz  cev_envVset
+
+    sub  ax, ax
+    mov  es, ax
+    mov  dx, ax
+    mov  cx, 1
+    jmp  near cev_end
+
+cev_envVset:
+    push es
+    pop  ds
+    sub  di, di	                   (* DI = total length of strings *)
+
+cev_measureNext:
+(*%F NearPtr *)
+    les  bx, [si]
+    add  si, 4
+    mov  ax, es
+    or   ax, bx
+    jz   cev_allMeasured
+
+(*%F RegParam *)
+    mov  ax, 128
+    push ax
+(*%F NearPtr *)
+    push es
+(*%E *)
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, 128
+    mov  cx, es
+(*%E *)
+(*%F NearCall *)
+    call far Str$Length
+(*%E *)
+(*%T NearCall *)
+    call Str$Length
+(*%E *)
+    or   ax, ax
+    jz   cev_allMeasured
+
+    add  di, ax
+    inc  di                        (*  plus a terminating \0 *)
+    jmp  cev_measureNext
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [si]
+    add  si, 2
+    or   bx, bx
+    jz   cev_allMeasured
+
+(*%F RegParam *)
+    mov  ax, 128
+    push ax
+(*%F NearPtr *)
+    push es
+(*%E *)
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, 128
+    mov  cx, es
+(*%E *)
+(*%F NearCall *)
+    call far Str$Length
+(*%E *)
+(*%T NearCall *)
+    call Str$Length
+(*%E *)
+    or   ax, ax
+    jz   cev_allMeasured
+
+    add  di, ax
+    inc  di                        (*  plus a terminating \0 *)
+    jmp  cev_measureNext
+(*%E *)
+
+cev_allMeasured:
+    inc  di                        (* plus an overall terminator \0 *)
+    mov  ax, _DATA
+    mov  ds, ax
+
+    cmp  di, ARG_BUF_SIZE-0FH
+    ja   cev_tooLarge
+
+    mov  dx, [bp][cev_bufP][2]
+    mov  ax, [bp][cev_bufP]
+
+(* Align the environment on a paragraph boundary. *)
+
+    add  ax, 15
+    mov  cl, 4
+    shr  ax, cl
+    add  dx, ax
+    sub  ax, ax                    (* DX:AX is now paragraph aligned *)
+
+(* Now the environment is allocated.  Copy the strings into it. *)
+
+    mov	 es, dx
+    mov  di, ax
+    mov  bx, [bp][cev_envV]
+
+cev_nextArg:
+(*%F NearPtr *)
+    mov	 ds, [bp][cev_envV][2]
+    lds  si, [bx]
+    add  bx, 4                      (* next string *)
+    mov  ax, ds
+    or   ax, si
+    jz   cev_terminate
+    cmp  byte [si], 0
+    je   cev_terminate
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bx]
+    add  bx, 2                      (* next string *)
+    or   si, si
+    jz   cev_terminate
+    cmp  byte [si], 0
+    je   cev_terminate
+(*%E *)
+
+cev_copyLoop:
+    lodsb                           (* copy string *)
+    or   al, al
+    stosb	                    (* to the new environment *)
+    jnz  cev_copyLoop
+    jmp  cev_nextArg
+
+
+cev_tooLarge:
+    mov  ax, E2BIG
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+
+cev_allocFailed:
+    sub  ax, ax                      (* return a NULL pointer *)
+    cwd
+    mov  cx, ax	                     (* with zero size. *)
+    jmp  cev_end
+
+
+cev_terminate:
+    mov  ax, _DATA
+    mov	 ds, ax
+
+    mov  al, 0                        (* overall terminator zero *)
+    stosb
+
+(* The environment is now complete. *)
+
+    mov  cx, di                       (* CX = size of environment. *)
+    mov  ax, [bp][cev_bufP]           (* DX:AX = &allocation block *)
+    mov  dx, [bp][cev_bufP][2]        (* ES:0 = &environment. *)
+
+cev_end:
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+extrn __shr_mem
+extrn __res_mem
+extrn __get_retcode
+extrn __FindProg
+extrn __CatArgV	
+extrn __CatEnvV	
+extrn __FloatExecSave
+extrn __FloatExecRestore
+
+select _DATA
+
+extrn __seterrno
+extrn __fmemsetup
+
+select _TEXT
+
+
+
+public __beget :
+
+(*
+int  _beget (pathP, argV, envV, flag)
+
+char   *pathP;
+char   *argV [];
+char   *envV [];
+int flag
+
+A child process, with program identified by *pathP, is found, validated,
+and executed.  The current process continues to exist but is asleep
+until the child process is finished.
+
+A return value of -1 indicates that the child process could not be
+created.  Otherwise, the return value will be the exit code of the
+child process, which by convention is zero if the child executed
+without fault.  The exact meaning and severity of non-zero exit
+codes are not standardised.
+
+If usePath is true then the PATH environment variable will be used to
+help find the program name, otherwise *pathP is assumed to include
+directory names and the PATH is not used.  However, in either case
+the suffixes ".COM" and ".EXE" will automatically be tried unless
+the supplied name already ends with an extention.
+
+Method
+
+The basis for the begetting of a child process is the MSDOS Exec command,
+function 4Bh request kind 0.  However, there are several preliminary actions
+required.  Firstly the exact and complete program name must be found, which
+involves tracing the PATH= environment variable.  This is done by the
+_FindProg function.
+
+Next the arguments must be scanned and concatenated into a single command
+string of up to 126 bytes, plus a length byte and a trailing carriage return.
+Arguments [1] and [2] may be file names, and so the MSDOS Parse Filename
+function (29h) is used to build matching FCB's if possible.  This is done
+with the _CatArgV function.
+
+Note that argument [0] is by convention the same as pathP.  It is not used
+and not checked.  The end of the argV vector must be set by placing a NULL
+pointer in the final element of the vector.
+
+The envV vector points to a collection of environment strings.  These must
+also be concatenated into a contiguous region of up to 32k bytes, terminated
+with a double zero, which is the form expected by Exec.  This is done by the
+_CatEnvV function.  The envV vector is terminated either by a NULL pointer
+or by a pointer to a null string.  If envV == NULL then the current program's
+environment is used.
+
+When all these things have been done the child program may be executed using
+function 4Bh, with the environment, command line, and dummy FCBs supplied as
+parameters to function 4Bh.  After the child has terminated, function 4Dh is
+used to pick up the exit code.
+*)
+
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 6
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+bgt_pathP  = frame
+(*%F NearPtr *)
+bgt_argV   = 4+frame
+bgt_envV   = 8+frame
+bgt_flag   = 12+frame
+(*%E *)
+(*%T NearPtr *)
+bgt_argV   = 2+frame
+bgt_envV   = 4+frame
+bgt_flag   = 6+frame
+(*%E *)
+
+bgt_fullP   = - 4
+bgt_environ = - 8
+bgt_params  = -22
+bgt_result  = -24
+bgt_ProgBuf = -94
+bgt_ArgBuf  = -254
+bgt_EnvBuf  = bgt_ArgBuf-ARG_BUF_SIZE
+locals      = -bgt_EnvBuf
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+bgt_envV   = 2+frame
+bgt_flag   = frame
+bgt_fullP   = - 4
+bgt_environ = - 8
+bgt_params  = -22
+bgt_result  = -24
+bgt_pathP   = -28
+bgt_argV    = -32
+bgt_ProgBuf = -102
+bgt_ArgBuf  = -262
+bgt_EnvBuf  = bgt_ArgBuf-ARG_BUF_SIZE
+locals      = -bgt_EnvBuf
+(*%E *)
+(*%T NearPtr *)
+bgt_fullP   = - 4
+bgt_environ = - 8
+bgt_params  = -22
+bgt_result  = -24
+bgt_pathP   = -26
+bgt_argV    = -28
+bgt_envV    = -30
+bgt_flag    = -32
+bgt_ProgBuf = -102
+bgt_ArgBuf  = -262
+bgt_EnvBuf  = bgt_ArgBuf-ARG_BUF_SIZE
+locals      = -bgt_EnvBuf
+(*%E *)
+(*%E *)
+
+
+    push bp
+(*%T StackChecks *)
+    mov  bp, locals+40
+(*%F NearCall *)
+    extrn F$StkChk
+    call far F$StkChk
+(*%E *)
+(*%T NearCall *)
+    extrn N$StkChk
+    call N$StkChk
+(*%E *)
+(*%E *)
+    mov  bp, sp
+    sub  sp, locals
+    call far __FloatExecSave
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  [bp][bgt_pathP], ax
+    mov  [bp][bgt_pathP][2], bx
+    mov  [bp][bgt_argV], cx
+    mov  [bp][bgt_argV][2], dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][bgt_pathP], ax
+    mov  [bp][bgt_argV], bx
+    mov  [bp][bgt_envV], cx
+    mov  [bp][bgt_flag], dx
+(*%E *)
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  ax, seg __fmemsetup
+    mov  ds, ax
+(*%E *)
+    mov  word [bp][bgt_result], -1       (* default if Exec can't be done *)
+
+(* The exact and complete program name must be found. *)
+
+(*%F NearPtr *)
+    push [bp][bgt_pathP][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][bgt_pathP]
+    push [bp][bgt_flag]            (* the usePath flag. *)
+    push ss
+    lea  ax, [bp][bgt_ProgBuf]
+    push ax
+    call __FindProg
+    add  sp, 10
+    or   cx, cx
+    jnz  bgt_progFound
+    jmp  near bgt_notFound
+
+bgt_progFound:
+    mov  [bp][bgt_fullP], ax       (*the full path of the program file *)
+    mov  [bp][bgt_fullP][2], dx
+
+
+(* The arguments must be scanned and concatenated into a single command
+string of up to 126 bytes, plus a length byte and a trailing CR.
+Args [1] and [2] are used to build matching FCB's if possible.
+*)
+(*%F NearPtr *)
+    push [bp][bgt_argV][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push  [bp][bgt_argV]
+    push ss
+    lea  ax, [bp][bgt_ArgBuf]
+    push ax
+    call  __CatArgV	        (* returns FCB1, FCB2, command line, at DX:AX *)
+    add   sp, 8
+    jcxz  bgt_badArgs
+
+    mov   [bp][bgt_params][8], dx              (* pointer to FCB1 *)
+    mov   [bp][bgt_params][6], ax
+    add   ax, 10H
+    mov   [bp][bgt_params][12], dx             (* pointer to FCB2 *)
+    mov   [bp][bgt_params][10], ax
+    add   ax, 10H
+    mov   [bp][bgt_params][4], dx              (* pointer to command line *)
+    mov   [bp][bgt_params][2], ax
+
+(* The environment strings must also be concatenated into a contiguous region
+ of up to 32k bytes, terminated with a double zero.
+*)
+(*%F NearPtr *)
+    push [bp][bgt_envV][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][bgt_envV]
+    push ss
+    lea  ax, [bp][bgt_EnvBuf]
+    push ax
+    call __CatEnvV	             (* returns environment at DX:AX, ES:0 *)
+    add  sp, 8
+    jcxz bgt_badEnv
+    mov  [bp][bgt_environ], ax
+    mov  [bp][bgt_environ][2], dx
+    mov  [bp][bgt_params], es        (* paragraph aligned within DX:AX *)
+
+(*  Open a memory space. *)
+    mov  cx, [__shr_mem]
+    sub  ax, ax
+(*%F NearCall *)
+    or   cx, [__shr_mem][2]
+    jz   dontShrink
+    call dword [__shr_mem]
+(*%E *)
+(*%T NearCall *)
+    jcxz dontShrink
+    call cx
+(*%E *)
+dontShrink:
+
+(* The child program may be executed using function 4Bh. *)
+
+    push ds
+    push ss
+    pop  es
+    lds  dx, [bp][bgt_fullP]
+    lea	 bx, [bp][bgt_params]
+    mov  ax, 4B00H                     (* Execute (DS:DX using ES:BX) *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    pop  ds
+    jnc  execOK
+    mov  ax, ENOMEM
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    jmp  bgt_afterExec
+execOK:
+(*%F NearCall *)
+    call far __get_retcode
+(*%E *)
+(*%T NearCall *)
+    call __get_retcode
+(*%E *)
+
+
+bgt_afterExec:
+    mov  [bp][bgt_result], ax
+    mov  cx, [__res_mem]
+(*%F NearCall *)
+    or   cx, [__res_mem][2]
+    jz   dontRestore
+    call dword [__res_mem]
+(*%E *)
+(*%T NearCall *)
+    jcxz dontRestore
+    call cx
+(*%E *)
+dontRestore:
+bgt_badEnv:                            (* arrive here if CatEnvV failed *)
+bgt_badArgs:	                       (* arrive here if CatArgV failed *)
+bgt_notFound:	                       (* jump to here if program not found *)
+bgt_end:
+    mov  ax, [bp][bgt_result]
+    pop  ds
+    pop  si
+    pop  di
+    call far __FloatExecRestore
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+(* Arrive here if cannot satisfy the request, with DOS error number in AX. *)
+
+bgt_execFailed:
+    jmp	bgt_afterExec
+
+(****************************************************************************)
+section
+segment _TEXT(CODE,28H)
+
+select _TEXT
+$init:
+(*%T NearCall*)
+  ret near 0
+(*%E*)
+(*%F NearCall*)
+  ret far 0
+(*%E*)
+
+segment _DATA(DATA,00028H)
+
+extrn Str$
+extrn Lib$
+
+public SPAWN$:
+(*%T NearCall*)
+  dw $init
+(*%E*)
+(*%F NearCall*)
+  dd $init
+(*%E*)
+(*%F SameDS *)
+  dd Str$
+  dd Lib$
+(*%E *)
+(*%T SameDS *)
+  dw Str$
+  dw Lib$
+(*%E *)
+  dw -1
+(*%E *)
+
+(*%T _OS2 *)
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+extrn __getfmode
+extrn  _strlen
+extrn  _malloc
+extrn  _free
+extrn __seterrno
+extrn _getenv
+
+select _DATA
+
+PATH :  db  'PATH', 0
+
+
+select _TEXT
+
+
+
+public	__FindProg :
+
+(*
+char  *FindProg (usePath, nameP);
+
+boolean  usePath;
+char    *nameP;
+
+The given file name *nameP is to be interpreted as the name of an
+executable file, given the usual MSDOS rules for program names:
+
+- if the name ends in ".*" or "." then no endings are substituted,
+otherwise the endings ".COM" and ".EXE" will be the trial endings.
+
+- if the name begins with "/" or "\" or "?:", or if the usePath
+  argument is false, then there are no trial prefixes, else the trial
+  prefixes are those in the PATH variable in the environment.
+
+- with each prefix, beginning with a null prefix, the name is searched
+  for using each of its trial endings, continuing until the first
+  match or until all prefixes and endings have been tried.
+
+A buffer is allocated for the trial paths.  If a trial match succeeds,
+the result of the function is a pointer to the buffer which holds the
+complete path.  The file is not open (the CHMOD function is used to
+test if the file exists, not FIND).  The caller is responsible to free()
+the buffer when it is no longer needed.
+
+The function result is a pointer to the buffer.  If the search fails
+then the buffer is de-allocated and the function result is NULL.
+
+The function also returns the size of the path in CX, with a value of
+zero if the search failed.
+
+In the case where a path is found the caller is responsible for
+deallocating the buffer, using free().
+*)
+
+fpr_usePath = sframe
+fpr_nameP   = 2+sframe
+
+fpr_preP    = -4
+fpr_suffix  = -6
+fpr_len	    = -8
+fpr_res     = -10
+fpr_bufP    = -14
+
+SEARCH      = 80H
+
+locals = 14
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    push es
+    les  si, [bp][fpr_nameP]
+(*%F RegParam *)
+    push es
+    push si
+(*%E *)
+(*%T RegParam *)
+    mov  bx, es
+    mov  ax, si
+(*%E *)
+(*%F NearCall *)
+    call far _strlen
+(*%E *)
+(*%T NearCall *)
+    call _strlen
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    xchg cx, ax                           (* CX is length of supplied name *)
+    or   cx, cx
+    jnz  fpr_hasName
+
+    mov  ax, ENOENT
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    jmp  near fpr_badEnd
+
+fpr_hasName:
+    mov  [bp][fpr_len], cx                (* keep a copy of the string length *)
+
+    mov  es, [bp][fpr_nameP][2]
+    add  si, cx                           (* ES:[si] point to end of string *)
+    dec  si
+    std                                   (* scan backwards *)
+
+
+(* Does the name already have a specific ".*" ending ?
+If the name ends in ".*" or "." then no endings are substituted.
+*)
+
+    mov  word [bp][fpr_suffix], FALSE     (* default is a fixed ending. *)
+fpr_checkEnding:
+    mov  al, es:[si]
+    dec  si
+    cmp  al, '.'
+    je   fpr_checkPrefix
+    cmp  al, '/'
+    je   fpr_useSuffixes
+    cmp  al, '\'
+    je   fpr_useSuffixes
+    loop fpr_checkEnding
+
+(* The endings ".COM" and ".EXE" will be the trial endings.*)
+
+fpr_useSuffixes:
+    mov  word [bp][fpr_suffix], SEARCH      (* enable trial endings *)
+
+(* If the name begins with "/" or "\" or "?:" or if usePath == false
+then there are no trial prefixes, else the trial prefixes are those
+in the PATH= variable in the environment.
+*)
+
+fpr_checkPrefix:
+    cld	                                   (* forward scan *)
+    cmp  word [bp][fpr_usePath], FALSE
+    je   fpr_allocBuf
+
+    mov  word [bp][fpr_usePath], FALSE     (* default is no prefixes *)
+    mov  cx, [bp][fpr_len]
+    mov  si, [bp][fpr_nameP]
+    mov  al, es:[si]
+    inc  si
+    cmp  al, '/'
+    je   fpr_allocBuf
+    cmp  al, '\'
+    je   fpr_allocBuf
+    cmp  al, ':'
+    je   fpr_allocBuf
+
+(* Prefixes are possible.  Look to see if the PATH environment variable
+is defined.
+*)
+(*%F RegParam *)
+    mov  ax, PATH
+    push ds
+    push ax
+(*%E *)
+(*%T RegParam *)
+    mov  ax, PATH
+    mov  bx, ds
+(*%E *)
+(*%F NearCall *)
+    call far _getenv
+(*%E *)
+(*%T NearCall *)
+    call _getenv
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, ax
+    or   bx, bx
+    mov  dx, ds
+(*%E *)
+(*%F NearPtr *)
+    mov  bx, ax
+    or   bx, dx
+(*%E *)
+    jz   fpr_allocBuf
+
+    mov  [bp][fpr_preP][2], dx
+    mov  [bp][fpr_preP], ax
+    mov  word [bp][fpr_usePath], SEARCH        (* enable prefixes. *)
+
+(* buffer is allocated to hold the complete trial pathnames *)
+
+fpr_allocBuf:
+    mov  ax, 64                          (* DOS paths are up to 64 chars *)
+    push ax
+(*%F NearCall *)
+    call far _malloc
+(*%E *)
+(*%T NearCall *)
+    call _malloc
+(*%E *)
+    pop  bx
+(*%F NearPtr *)
+    or   dx, dx
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, ds
+    or   ax, ax
+(*%E *)
+    je   near fpr_allocFailed
+
+fpr_allocated:
+    mov  [bp][fpr_bufP][2], dx
+    mov  [bp][fpr_bufP], ax
+
+(* With each prefix, beginning with a null prefix, the name is searched
+for using each of its trial endings, continuing until the first
+match or until all prefixes and endings have been tried.
+*)
+
+    mov  es, dx
+    xchg di, ax
+    sub  bx, bx	                         (* bx counts length of pathname. *)
+
+fpr_copyName:
+    mov  cx, [bp][fpr_len]
+    add  bx, cx
+    cmp  bx, 64
+    jnb  fpr_nextPrefix
+
+    lds  si, [bp][fpr_nameP]
+rep ; movsb
+
+    cmp  word [bp][fpr_suffix], FALSE    (* are suffixes allowed ? *)
+    je   fpr_nameFormed
+
+    add  bl, 4
+    cmp  bl, 64
+    jnb  fpr_nextPrefix
+
+    mov  ax, 432EH
+    stosw                                (* '.C' *)
+    mov  ax, 4D4FH
+    stosw                                (*  'OM'*)
+
+fpr_nameFormed:
+    lds  dx, [bp][fpr_bufP]
+    mov  byte [di], 0
+
+    push ds                              (* Read File's Attributes *)
+    push dx
+(*%T RegParam *)
+    mov  bx, ds
+    mov  ax, dx
+(*%E *)
+(*%F NearCall *)
+    call far __getfmode
+(*%E *)
+(*%T NearCall *)
+    call __getfmode
+(*%E *)
+    pop  dx
+    pop  ds
+    cmp  ax, -1                          (* Avoid subdir or label attributes. *)
+    je   fpr_tryEXE
+    test ax, 10H
+    jz   near fpr_found
+
+fpr_tryEXE:
+    cmp  word [bp][fpr_suffix], FALSE    (* are suffixes allowed ? *)
+    je   fpr_nextPrefix	                 (* jump if not allowed. *)
+
+    mov  word [di][-4], 452EH            (* '.E' *)
+    mov  word [di][-2], 4558H            (* 'XE' *)
+    push ds                              (* Read File's Attributes *)
+    push dx
+(*%T RegParam *)
+    mov  bx, ds
+    mov  ax, dx
+(*%E *)
+(*%F NearCall *)
+    call far __getfmode
+(*%E *)
+(*%T NearCall *)
+    call __getfmode
+(*%E *)
+    pop  dx
+
+    pop  ds
+    cmp  ax, -1                          (* Avoid subdir or label attributes. *)
+    je   fpr_nextPrefix
+    test ax, 10H
+    jz   near fpr_found
+
+(* The prefixes in the PATH variable are of the form "abc;" where abc
+represents any string and ';' is a separator.  The string may
+also be bounded by \0, the terminator for the whole path sequence.
+When there is no prefix remaining in PATH, then the search is
+finished.
+*)
+
+fpr_nextPrefix:
+    cmp  word [bp][fpr_usePath], FALSE    (* are prefixes allowed ? *)
+    je   fpr_notFound
+    lds	 si, [bp][fpr_preP]              (* copy the next path prefix *)
+    sub  bx, bx
+    mov  cx, 60
+    les  di, [bp][fpr_bufP]              (* into the working buffer. *)
+fpr_scanPrefix:
+    lodsb
+    cmp  al, ';'
+    je   fpr_preSeparator
+    cmp  al, 0
+    je   fpr_preTerminator
+    stosb
+    inc  bx
+    loop fpr_scanPrefix
+
+    jmp  fpr_notFound                    (* give up if PATH is badly formed. *)
+
+
+fpr_preTerminator:
+    dec  si                              (* the terminator cannot be passed. *)
+
+fpr_preSeparator:
+    mov  [bp][fpr_preP], si              (* remember where the PATH continues. *)
+    or   bx, bx                          (* was that the end of the PATH ? *)
+    jz   fpr_notFound
+    mov  al, es:[di][-1]                 (* may need to insert '\' *)
+    cmp  al, '\'
+    je   fpr_joinable
+    cmp  al, ':'
+    je   fpr_joinable
+    cmp  al, '/'
+    je   fpr_joinable
+    mov  al, '\'
+    stosb
+    inc  bx
+fpr_joinable:
+    jmp  fpr_copyName	                 (* join name to trial path *)
+
+
+(* If not found, then de-allocate the name buffer. *)
+
+fpr_notFound:
+    mov  ax, _DATA
+    mov  ds, ax
+(*%F RegParam *)
+    push [bp][fpr_bufP][2]
+    push [bp][fpr_bufP]
+(*%E *)
+(*%T RegParam *)
+    mov  bx, [bp][fpr_bufP][2]
+    mov  ax, [bp][fpr_bufP]
+(*%E *)
+(*%F NearCall *)
+    call far _free
+(*%E *)
+(*%T NearCall *)
+    call _free
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    mov  ax, ENOENT
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+fpr_allocFailed:
+fpr_badEnd:
+    sub  ax, ax
+    cwd
+    mov  cx, ax
+
+    jmp  fpr_end
+
+fpr_found:
+    mov  ax, dx
+    mov  dx, ds
+    mov  cx, _DATA                 (* DX:AX points to the name *)
+    mov  ds, cx
+    mov  cx, di
+    inc  cx                        (* include the terminating zero *)
+    sub  cx, ax                    (* CX = length of name *)
+
+fpr_end:
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+
+extrn  _getenv
+extrn  _strlen
+extrn  _strcpy
+extrn  _malloc
+extrn  _free
+extrn __seterrno
+
+select _DATA
+
+
+select _TEXT
+
+
+extrn _malloc
+extrn _strlen
+
+
+public __CatArgV :
+
+(*
+char   *_CatArgV (argV)
+
+char   *argV [];
+
+The return value is a pointer to the argComposite, in DX:AX, with the
+total length of the argComposite in CX.  If an error occurs, then
+DX:AX == NULL and CX == 0.
+*)
+
+cav_argV   = sframe
+cav_path   = 4+sframe
+
+cav_bufP   = -4
+locals     =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+    push es
+
+    sub  di, di                       (* DI = total length of arguments *)
+    lds  si, [bp][cav_argV]
+    mov  ax, ds
+(*%F NearPtr *)
+    or   ax, si
+(*%E *)
+(*%T NearPtr *)
+    or   si, si
+(*%E *)
+    jz   cav_argVnull	              (* NULL argV is allowed, arg total == 0 *)
+
+cav_measureNext:                      (* note: argV[0] deliberately skipped *)
+(*%F NearPtr *)
+    add  si, 4
+    les  bx, [si]
+    mov  ax, es
+    or   ax, bx
+    jz   cav_allMeasured
+(*%E *)
+(*%T NearPtr *)
+    add  si, 2
+    mov  bx, [si]
+    or   bx, bx
+    jz   cav_allMeasured
+(*%E *)
+(*%F RegParam *)
+    push es
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, bx
+    mov  bx, es
+(*%E *)
+(*%F NearCall *)
+    call far _strlen
+(*%E *)
+(*%T NearCall *)
+    call _strlen
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    add  di, ax
+    inc  di                           (*  plus a separating space *)
+    jmp  cav_measureNext
+
+cav_argVnull:
+    inc  di                           (* allow for trailing 0 *)
+
+cav_allMeasured:
+    mov  ax, _DATA                    (* is command line NearPtr enough ? *)
+    mov  ds, ax
+    cmp  di, 127
+    ja   cav_tooLarge
+
+(*%F RegParam *)
+    push [bp][cav_path][2]
+    push [bp][cav_path]
+(*%E *)
+(*%T RegParam *)
+    mov  bx, [bp][cav_path][2]
+    mov  ax, [bp][cav_path]
+(*%E *)
+(*%F NearCall *)
+    call far _strlen
+(*%E *)
+(*%T NearCall *)
+    call _strlen
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    inc  ax
+    mov  si, ax
+    mov  di, 100H                    (* OS2 needs max seg size *)
+    add  di, ax
+(*%T RegParam *)
+    mov  ax, di
+(*%E *)
+    push di
+(*%F NearCall *)
+    call far _malloc
+(*%E *)
+(*%T NearCall *)
+    call _malloc
+(*%E *)
+    pop  bx
+(*%F RegParam *)
+(*%F NearPtr *)
+    or   dx, dx
+    je   cav_allocFailed
+    mov  [bp][cav_bufP][2], dx
+    mov  [bp][cav_bufP], ax
+    push [bp][cav_path][2]
+    push [bp][cav_path]
+    push dx
+    push ax
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, ds
+    or   ax, ax
+    je   cav_allocFailed
+    mov  [bp][cav_bufP][2], dx
+    mov  [bp][cav_bufP], ax
+    push [bp][cav_path]
+    push ax
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    or   dx, dx
+    je   cav_allocFailed
+    mov  [bp][cav_bufP][2], dx
+    mov  [bp][cav_bufP], ax
+    mov  bx, dx
+    mov  dx, [bp][cav_path][2]
+    mov  cx, [bp][cav_path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, ds
+    or   ax, ax
+    je   cav_allocFailed
+    mov  [bp][cav_bufP][2], dx
+    mov  [bp][cav_bufP], ax
+    mov  bx, [bp][cav_path]
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    call far _strcpy
+(*%E *)
+(*%T NearCall *)
+    call _strcpy
+(*%E *)
+(*%F RegParam *)
+(*%F NearPtr *)
+    add  sp, 8
+(*%E *)
+(*%T NearPtr *)
+    add  sp, 4
+(*%E *)
+(*%E *)
+cav_copyArgs:
+    les  di, [bp][cav_bufP]
+    add  di, si
+    mov  bx, [bp][cav_argV]
+
+cav_nextArg:
+    mov  ds, [bp][cav_argV][2]
+    mov  ax, ds
+    or   ax, bx                        (* is argV == NULL ? *)
+    jz   cav_terminate
+(*%F NearPtr *)
+    add  bx, 4                         (* next argument *)
+    lds  si, [bx]
+    mov  ax, ds
+    or   ax, si
+    jz   cav_terminate
+(*%E *)
+(*%T NearPtr *)
+    add  bx, 2                         (* next argument *)
+    mov  si, [bx]
+    or   si, si
+    jz   cav_terminate
+(*%E *)
+    mov  al, ' '
+    stosb
+cav_copyLoop:
+    lodsb                              (* copy argument *)
+    or   al, al
+    jz   cav_nextArg
+    stosb                              (* to the new command line *)
+    jmp	cav_copyLoop
+
+cav_tooLarge:
+    mov  ax, E2BIG
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+cav_allocFailed:
+    sub  ax, ax                        (* return a NULL pointer *)
+    cwd
+    mov  cx, ax                        (* and a zero length *)
+    jmp	cav_end	
+
+
+cav_terminate:
+    mov  ax, _DATA
+    mov  ds, ax
+    sub  al, al
+    stosb
+    mov  cx, di
+
+(* The argComposite is now complete. *)
+
+    mov  ax, [bp][cav_bufP]
+    sub  cx, ax
+    mov  dx, es
+
+cav_end:
+    pop  es
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(*****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+
+
+extrn  _getenv
+extrn  _strlen
+extrn  _malloc
+extrn  _free
+extrn  __seterrno
+
+select _DATA
+
+extrn __env_var
+
+select _TEXT
+
+
+extrn _malloc
+extrn _strlen
+
+
+
+public __CatEnvV :
+
+(*
+char   *_CatEnvV (envV)
+
+char   *envV [];
+
+
+The register CX returns the length of the environment string, including
+the terminating zero.  CX == 0 in cases of error.
+*)
+
+cev_envV  =  sframe
+
+cev_bufP   = -4
+
+locals     =  4
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push di
+    push si
+    push ds
+
+    les  si, [bp][cev_envV]
+    mov  ax, es
+(*%F NearPtr *)
+    or   ax, si                    (* is a NULL parameter supplied ? *)
+(*%E *)
+(*%T NearPtr *)
+    or   si, si
+(*%E *)
+    jnz  cev_envVset
+    mov  ax, seg __env_var
+    mov  es, ax                    (* if so, return parent's environ. *)
+    mov  si, __env_var
+    mov  [bp][cev_envV], si
+    mov  [bp][cev_envV][2], es
+
+cev_envVset:
+    push es
+    pop  ds
+    sub  di, di	                   (* DI = total length of strings *)
+
+cev_measureNext:
+(*%F NearPtr *)
+    les  bx, [si]
+    add  si, 4
+    mov  ax, es
+    or   ax, bx
+    jz   cev_allMeasured
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [si]
+    add  si, 2
+    or   bx, bx
+    jz   cev_allMeasured
+(*%E *)
+(*%F RegParam *)
+    push es
+    push bx
+(*%E *)
+(*%T RegParam *)
+    mov  ax, bx
+    mov  bx, es
+(*%E *)
+(*%F NearCall *)
+    call far _strlen
+(*%E *)
+(*%T NearCall *)
+    call _strlen
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    or   ax, ax
+    jz   cev_allMeasured
+
+    add  di, ax
+    inc  di                        (*  plus a terminating \0 *)
+    jmp  cev_measureNext
+
+cev_allMeasured:
+    inc  di                        (* plus an overall terminator \0 *)
+    mov  ax, _DATA
+    mov  ds, ax
+
+    cmp  di, 32767-15
+    ja   cev_tooLarge
+
+    lea  ax, [di][0FH]	           (* allow for paragraph alignment *)
+    push ax
+(*%F NearCall *)
+    call far _malloc
+(*%E *)
+(*%T NearCall *)
+    call _malloc
+(*%E *)
+    pop  bx	
+(*%F NearPtr *)
+    or   dx, dx
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, ds
+    or   ax, ax
+(*%E *)
+    jz   cev_allocFailed
+    mov  [bp][cev_bufP][2], dx
+    mov  [bp][cev_bufP], ax
+
+(* Now the environment is allocated.  Copy the strings into it. *)
+
+    mov	 es, dx
+    mov  di, ax
+    mov  bx, [bp][cev_envV]
+
+cev_nextArg:
+(*%F NearPtr *)
+    mov	 ds, [bp][cev_envV][2]
+    lds  si, [bx]
+    add  bx, 4                      (* next string *)
+    mov  ax, ds
+    or   ax, si
+    jz   cev_terminate
+    cmp  byte [si], 0
+    je   cev_terminate
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bx]
+    add  bx, 2                      (* next string *)
+    or   si, si
+    jz   cev_terminate
+    cmp  byte [si], 0
+    je   cev_terminate
+(*%E *)
+cev_copyLoop:
+    lodsb                           (* copy string *)
+    or   al, al
+    stosb	                    (* to the new environment *)
+    jnz  cev_copyLoop
+    jmp  cev_nextArg
+
+
+cev_tooLarge:
+    mov  ax, E2BIG
+    jmp  cev_errorRet
+cev_allocFailed:
+    mov  ax, ENOMEM
+cev_errorRet:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    sub  ax, ax                      (* return a NULL pointer *)
+    cwd
+    mov  cx, -1	                     (* with zero size. *)
+    jmp  cev_end
+
+
+cev_terminate:
+    mov  ax, _DATA
+    mov	 ds, ax
+
+    mov  al, 0                       (* overall terminator zero *)
+    stosb
+
+(* The environment is now complete. *)
+
+    mov  ax, [bp][cev_bufP]           (* DX:AX = &allocation block *)
+    mov  dx, [bp][cev_bufP][2]        (* ES:0 = &environment. *)
+    mov  cx, di                       (* CX = size of environment. *)
+    sub  cx, ax
+cev_end:
+
+    pop  ds
+    pop  si
+    pop  di
+    mov  sp, bp
+    pop  bp
+    ret  0
+
+(****************************************************************************)
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+extrn _exit
+extrn _free
+extrn __FindProg
+extrn __CatArgV	
+extrn __CatEnvV	
+extrn __seterrno
+extrn __FloatExecSave
+extrn __FloatExecRestore
+
+extrn DOSEXECPGM
+
+select _DATA
+
+extrn __env
+
+select _TEXT
+
+EXEC_SYNC           = 0
+EXEC_ASYNC          = 1
+EXEC_ASYNCRESULT    = 2
+EXEC_TRACE          = 3
+EXEC_BACKGROUND     = 4
+EXEC_LOAD           = 5
+
+SEARCH      = 80H
+
+P_WAIT      = 0
+P_NOWAIT    = 1
+P_OVERLAY   = 2
+
+
+public __beget :
+
+(*
+
+int  _beget (pathP, argV, envV, flag)
+
+char   *pathP;
+char   *argV [];
+char   *envV [];
+int flag
+
+A child process, with program identified by *pathP, is found, validated,
+and executed.  The current process continues to exist but is asleep
+until the child process is finished.
+
+A return value of -1 indicates that the child process could not be
+
+If usePath is true then the PATH environment variable will be used to
+help find the program name, otherwise *pathP is assumed to include
+directory names and the PATH is not used.  However, in either case
+the suffixes ".COM" and ".EXE" will automatically be tried unless
+the supplied name already ends with an extention.
+
+*)
+
+codeTerminate = 0
+codeResult    = 2
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 6
+(*%E *)
+(*%E *)
+
+
+(*%F RegParam *)
+path  = frame
+(*%F NearPtr *)
+argv   = 4+frame
+env   = 8+frame
+flag   = 12+frame
+(*%E *)
+(*%T NearPtr *)
+argv   = 2+frame
+env   = 4+frame
+flag   = 6+frame
+(*%E *)
+
+argbuf   =  -4
+envbuf   =  -8
+pathbuf  = -12
+resbuf   = -16
+locals   =  16
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+flag    = frame
+env     = 2+frame
+argbuf      =  -4
+envbuf      =  -8
+pathbuf     = -12
+resbuf      = -16
+path   = -20
+argv    = -24
+
+locals      =  24
+(*%E *)
+(*%T NearPtr *)
+argbuf     =  -4
+envbuf     =  -8
+pathbuf    =  -12
+resbuf     =  -16
+path  =  -18
+argv   =  -20
+env    = -22
+flag    = -24
+locals      =  24
+(*%E *)
+(*%E *)
+
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    call far __FloatExecSave
+(*%T RegParam *)
+(*%F NearPtr *)
+    mov  [bp][path], ax
+    mov  [bp][path][2], bx
+    mov  [bp][argv], cx
+    mov  [bp][argv][2], dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][path], ax
+    mov  [bp][argv], bx
+    mov  [bp][env], cx
+    mov  [bp][flag], dx
+(*%E *)
+(*%E *)
+
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  ax, seg __env
+    mov  ds, ax
+(*%E *)
+(*%F NearPtr *)
+    push [bp][path][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][path]
+    mov  ax, [bp][flag]
+    and  ax, SEARCH
+    push ax
+    call __FindProg
+    add  sp, 6
+    jcxz near notFound
+    mov  [bp][pathbuf][2], dx
+    mov  [bp][pathbuf], ax
+    push dx
+    push ax
+(*%F NearPtr *)
+    push [bp][argv][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][argv]
+    call __CatArgV
+    add  sp, 8
+    jcxz near badargv
+    mov  [bp][argbuf][2], dx
+    mov  [bp][argbuf], ax
+(*%F NearPtr *)
+    push [bp][env][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][env]
+    call __CatEnvV
+    add  sp, 4
+    cmp  cx, -1
+    je   near badenv
+    mov  [bp][envbuf][2], dx
+    mov  [bp][envbuf], ax
+    mov  ax, [bp][flag]
+    and  ax, ~SEARCH
+    mov  [bp][flag], ax
+    call __selectmode
+    cmp  ax, -1
+    je   badMode
+
+    sub  bx, bx
+    push bx
+    push bx
+    push bx
+    push ax
+    push [bp][argbuf][2]
+    push [bp][argbuf]
+
+    mov  ax, [bp][envbuf][2]
+    or   ax, ax
+    jnz  envNew
+    mov  ax, [__env]
+    sub  bx, bx
+    jmp  envSet
+envNew:
+    mov  bx, [bp][envbuf]
+envSet:
+    push ax
+    push bx
+    push ss
+    lea  ax, [bp][resbuf]
+    push ax
+    push [bp][pathbuf][2]
+    push [bp][pathbuf]
+    call far DOSEXECPGM
+    or   ax, ax
+    jnz  begetError
+    mov  ax, [bp][flag]
+    cmp  ax, P_OVERLAY
+    je   terminate
+    cmp  ax, P_WAIT
+    je   getRetcode
+    mov  si, [bp][resbuf][codeTerminate] (* child's PID *)
+    jmp  begetDone
+getRetcode:                              (* child's return code  *)
+    mov  si, [bp][resbuf][codeResult]
+begetDone:
+    call __freeenv
+    call __freeargv
+    call __freepath
+    mov  ax, si
+begetExit:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+    call far __FloatExecRestore
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+
+
+terminate:
+    sub  ax, ax
+(*%F RegParam *)
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far _exit
+(*%E *)
+(*%T NearCall *)
+    call _exit
+(*%E *)
+
+badMode:
+    call __freepath
+    call __freeargv
+    call __freeenv
+    mov  ax, EINVAL
+    jmp  begetError
+
+notFound:
+    mov  ax, ENOPATH
+    jmp  begetError
+badargv:
+    call __freepath
+    mov  ax, E2BIG
+    jmp  begetError
+badenv:
+    call __freepath
+    call __freeargv
+    mov  ax, E2BIG
+    jmp  begetError
+begetError:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    jmp  begetExit
+
+
+__freepath :
+(*%F RegParam *)
+    push [bp][pathbuf][2]
+    push [bp][pathbuf]
+(*%E *)
+(*%T RegParam *)
+    mov  bx, [bp][pathbuf][2]
+    mov  ax, [bp][pathbuf]
+(*%E *)
+(*%F NearCall *)
+    call far _free
+(*%E *)
+(*%T NearCall *)
+    call _free
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    ret  0
+
+__freeargv :
+(*%F RegParam *)
+    push [bp][argbuf][2]
+    push [bp][argbuf]
+(*%E *)
+(*%T RegParam *)
+    mov  bx, [bp][argbuf][2]
+    mov  ax, [bp][argbuf]
+(*%E *)
+(*%F NearCall *)
+    call far _free
+(*%E *)
+(*%T NearCall *)
+    call _free
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+    ret  0
+
+__freeenv :
+    mov  cx, [bp][envbuf][2]
+    jcxz dontFree
+(*%F RegParam *)
+    push cx
+    push [bp][envbuf]
+(*%E *)
+(*%T RegParam *)
+    mov  bx, cx
+    mov  ax, [bp][envbuf]
+(*%E *)
+(*%F NearCall *)
+    call far _free
+(*%E *)
+(*%T NearCall *)
+    call _free
+(*%E *)
+(*%F RegParam *)
+    add  sp, 4
+(*%E *)
+dontFree:
+    ret  0
+
+__selectmode :
+
+    cmp  ax, P_WAIT
+    jne  s1
+    mov  ax, EXEC_SYNC
+    jmp  done
+s1:
+    cmp  ax, P_NOWAIT
+    jne  s2
+    mov  ax, EXEC_ASYNC
+    jmp  done
+s2:
+    cmp  ax, P_OVERLAY
+    jne  serr
+    mov  ax, EXEC_ASYNC
+    jmp  done
+serr:
+    mov  ax, -1
+done:
+    ret  0
+
+section
+segment _TEXT(CODE,28H)
+
+select _TEXT
+$init:
+(*%T NearCall*)
+  ret near 0
+(*%E*)
+(*%F NearCall*)
+  ret far 0
+(*%E*)
+
+segment _DATA(DATA,00028H)
+
+public SPAWN$:
+(*%T NearCall*)
+  dw $init
+(*%E*)
+(*%F NearCall*)
+  dd $init
+(*%E*)
+  dw -1
+
+(*%E *)
+end
+
+

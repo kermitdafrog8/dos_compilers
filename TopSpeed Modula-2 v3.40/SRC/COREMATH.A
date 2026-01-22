@@ -1,0 +1,5944 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREMATH.A - trig functions and error handling                          *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+StdFloat                = (_WINDOWS) | ~(_jpicall)
+
+module CoreMath
+(*%T RegParam *)
+PopParam = 1
+(*%E RegParam *)
+(*************************************************************************)
+segment _BSS(BSS,28H)
+
+public _matherr         : org CodePtrSize
+public __SH_sword       : org 2
+public __exc_addr       : org 4
+
+segment _BSS(BSS,28H)
+public __fac            : org 10  (* return address & first error argument *)
+
+segment _DATA(DATA,28H)
+public _HUGE            : db 098H,060H,0B9H,0D7H,0FFH,0FFH,0EFH,07FH
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public @coremath_HUGE    : db 098H,060H,0B9H,0D7H,0FFH,0FFH,0EFH,07FH
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public @coremath_MIN     : db 00H,00H,00H,00H,00H,00H,10H,00H
+
+segment _DATA(DATA,28H)
+public _LHUGE           : db 0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FEH,07FH
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public @coremath_LHUGE   : db 0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FFH,0FEH,07FH
+
+segment PROC_TEXT(CODE,28H)
+public @Save8087        : dw 0  (* 1 if floating point context save required *)
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_int_one : dw 1
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_int_two : dw 2
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_int_four : dw 4
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_int_ten : dw 10
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_tbyte_Pi_By_2 : dw 0C235H, 02168H, 0DAA2H, 0C90FH, 03FFFH
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public @coremath_tbyte_Pi_By_4: dw 0C235H, 02168H, 0DAA2H, 0C90FH, 03FFEH
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_floor: dw 173FH   (* affine,errors masked *)
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_ceil: dw 1B3FH    (* affine errors masked *)
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_nearest: dw 133FH (* affine,errors masked *)
+
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public  @coremath_default:  dw 1F22H (* affine,chop,64 bit precision,*)
+                                    (* denorm & precision masked *)
+(*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public __fpreset :
+  db    Ret0@
+
+(************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,48H)
+
+extrn _matherr
+extrn __seterrno
+extrn @coremath_HUGE
+extrn @coremath_MIN
+
+(* __report_math_error is used for error reporting from math error functions.
+   It is called from __lib_error where the table mechanism for error recovery
+   is used, or may be called directly from a function detecting an error
+   condition.
+
+   On entry, st(0) == intended return value
+             st(5) == arg1
+             st(6) == arg2
+             cs:bx points to function name, null terminated
+             ax == exception type.
+
+   If a user-defined matherr has been installed, it is called, otherwise
+   errno is set and we return to the caller.
+
+   struct exception { int    type;
+                      char  *name;
+                      double arg1;
+                      double arg2;
+                      double retval; }
+*)
+
+public __report_math_error:
+    push  bp
+    mov   bp,sp
+    push  di
+    push  si
+    push  cx
+(*%F SameDS *)
+    push  ds
+(*%E *)
+    mov   cx,ax               (* cx == exception type *)
+(*%T _fcall *)
+(*%F SameDS *)
+    mov   ax, seg _matherr
+    mov   ds, ax
+(*%E *)
+    les   ax, [_matherr]
+    mov   si, es
+    or	  si, ax
+(*%E *)
+(*%F _fcall *)
+    cmp  word [_matherr], 0
+(*%E *)
+    je   doerrno
+
+    (* A user-defined error handler has been installed. Call it *)
+    (* First, copy the name into the stack segment *)
+    push cs
+    pop  es
+    mov  di,bx
+    sub  al,al
+    push cx
+    mov  cx,-1
+    repne; scasb
+    not  cx
+    inc  cx
+    and  cx,-2
+    mov  si,cx
+    pop  cx
+    sub  sp,si
+    mov  si,sp       (* si = ^name *)
+    mov  di,si
+lp: mov  al,es:[bx]
+    mov  ss:[di],al
+    inc  bx
+    inc  di
+    or   al,al
+    jnz  lp
+
+     (* Now create the structure on the stack *)
+     sub   sp,34       (* space for 3 doubles, one tbyte *)
+     mov   bx,sp
+     fld   st(0),st(0)
+     fstp  tbyte ss:[bx][24], st(0)
+     call forcedouble
+     fst   qword ss:[bx][16], st(0)
+     fld   st(0),st(6)
+     call forcedouble
+     fstp  qword ss:[bx][8], st(0)
+     fld   st(0),st(5)
+     call forcedouble
+     fstp  qword ss:[bx][0], st(0)
+(*%T FarPtr *)
+     push  ss
+(*%E *)
+     push  si          (* ^name *)
+     push  cx          (* type *)
+     mov   ax,sp       (* pointer to exception structure *)
+(*%T FarPtr *)
+     mov   bx,ss       (* segment part of the above *)
+(*%E *)
+(*%T _fcall *)
+     call  dword [_matherr]
+(*%E *)
+(*%F _fcall *)
+     call  word [_matherr]
+(*%E *)
+     test  ax,ax
+     mov   bx,sp
+     jnz   newretval            (* matherr supplied a new retval *)
+     (* Reload the saved return value *)
+(*%T FarPtr *)
+     fld   tbyte st(0),ss:[bx][30]
+(*%E *)
+(*%F FarPtr *)
+     fld   tbyte st(0),ss:[bx][28]
+(*%E *)
+     fstp  st(1),st(0)             (* retval in st(0) *)
+     jmp   doerrno
+
+newretval:
+(*%T FarPtr *)
+     fld   qword st(0),ss:[bx][22]
+(*%E *)
+(*%F FarPtr *)
+     fld   qword st(0),ss:[bx][20]
+(*%E *)
+     fstp  st(1),st(0)             (* user's new retval in st(0) *)
+     jmp   done
+
+doerrno:
+     mov   ax, EDOM
+     cmp   cx,_DOMAIN              (* type == _DOMAIN *)
+     je    wasdomain
+     mov   ax, ERANGE
+wasdomain:
+(*%T _fcall *)
+     call  far __seterrno
+(*%E *)
+(*%F _fcall *)
+     call  __seterrno
+(*%E *)
+done:
+(*%F SameDS *)
+     lea   sp,[bp][-8]
+     pop   ds
+(*%E *)
+(*%T SameDS *)
+     lea   sp,[bp][-6]
+(*%E *)
+     pop   cx
+     pop   si
+     pop   di
+     mov   sp,bp
+     pop   bp
+     ret   0
+
+forcedouble:
+   (* force st(0) into the range that fits in a double *)
+     push  ax
+     push  bx
+     mov   bx,sp
+     fcom  qword st(0),cs:[@coremath_HUGE]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     jb    NotPosH
+     fstp  st(0),st(0)
+     fld   qword st(0),cs:[@coremath_HUGE]
+     jmp   fddone
+NotPosH:
+     fcom  qword st(0),cs:[@coremath_MIN]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     ja    fddone
+(* now st(0) must be < coremath_min *)
+     fchs  st(0)
+     fcom  qword st(0),cs:[@coremath_HUGE]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     jb    NotNegH
+     fstp  st(0),st(0)
+     fld   qword st(0),cs:[@coremath_HUGE]
+     fchs  st(0)
+     jmp   fddone
+NotNegH:
+     fcom  qword st(0),cs:[@coremath_MIN]
+     push  ax
+     fstsw ss:[bx][-2]
+     fchs  st(0)
+     pop   ax
+     sahf
+     ja    fddone
+     fstp  st(0),st(0)
+     fldz  st(0)
+fddone:
+     pop   bx
+     pop   ax
+     ret   0
+
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __report_math_error
+
+(* __lib_error is used by the math library functions to report range, domain
+   and underflow errors etcetera. It may be called via two routes:
+
+   1. An exception occurring inside a math library function will cause
+      __math_excep to call this function. __math_excep reads the address
+      of a table from ss:InMathLib. This table contains a (short) resume
+      address and then a table in the format below. The address of the
+      table (excluding the resume address) is passed to __lib_error in si.
+
+   2. math library functions pre-emptively detecting an error case without
+      causing an exception may call __lib_error directly. In this case,
+      si must point to a table as described below.
+
+   The table processed by __lib_error is in the following format:
+
+    [si][0]  short address of procedure to yield return value when
+             arg1 is negative
+    [si][2]  ditto when arg1 is positive
+    [si][4]  flags byte.
+             If [si][4] & f_st5 != 0, arg1 is in the st(5) register
+             at the point of the exception or call to __lib_error.
+             Otherwise, it is in st(0).
+             If [si][4] & f_two != 0, there is a second argument in
+             st(6).
+    [si][6]  null terminated string containing name of function with error.
+
+    The procedures pointed to by [si][0] and [si][2] push the required return
+    value into st(0), and return the error type in ax.
+*)
+
+public __lib_error:
+  push bp
+  mov  bp, sp
+  sub  sp,2
+  push ax
+  push bx
+  push cx
+  push dx
+  test byte cs:[si][4], f_st5 (* is arg1 in st5? *)
+  jz   not_st5
+  fld  st(0), st(5)
+  fstp st(1), st(0)           (* st(0) == st(5) == arg1 *)
+  jmp  st5_done
+not_st5:
+  fst  st(5), st(0)           (* st(0) == st(5) == arg1 *)
+st5_done:
+  ftst st(0)
+  fstsw [bp][-2]
+  fwait
+  test byte [bp][-1], 1       (* Check if arg1 was +ve *)
+  mov  ax, cs:[si][2]         (* negative entry from table *)
+  jz   me_positive
+  mov  ax, cs:[si][0]         (* positive entry from table *)
+me_positive:
+  call ax                     (* Call function to yield retval, pushed into st(0) *)
+  fstp st(1), st(0)           (* retval into st(0), arg1 in st(5) *)
+  or   ax, ax                 (* is it an error? *)
+  jz   me_ok
+  test byte cs:[si][4], f_two (* Clear st(6) if there is only one argument *)
+  jnz  has_two
+  fldz st(0)
+  fstp st(7), st(0)
+has_two:
+  lea  bx, [si][5]            (* st(0)==retval, st(5)==arg1, st(6)==arg2, bx=name *)
+  call __report_math_error
+me_ok:
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_int_one
+extrn $err_domain
+
+public $check_abs_one:
+  fld  st(0), st(0)
+  fabs st(0)
+  ficomp word st(0), cs:[@coremath_int_one]
+  fstsw [bp][-2]
+  fwait
+  test byte [bp][-1], 40H
+  jz   ab1_err
+  ret  0
+ab1_err:
+  add  sp,2
+  jmp  near $err_domain
+
+(*%E NOT StdFloat *)
+
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_underflow
+extrn $err_plus_infinity
+extrn $err_minus_infinity
+
+public _ldexp:
+  push  bp
+  mov   bp,sp
+  sub   sp,10
+  mov   word ss:[InMathLib], ldexptable
+  mov   word ss:[InMathLib][2], bp
+  push  ax
+  fst   st(5), st(0)
+  fild  word st(0), [bp][-12]
+  fst   st(7), st(0)
+  fxch  st(0),st(1)
+  fscale st(0), st(1)
+  fst   qword [bp][-10],st(0)   (* to provoke error if too big for double *)
+  fstp  st(1), st(0)
+ldexp_exit:
+  mov   sp,bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+ldexptable:
+  dw ldexp_exit, ldexp_err_neg, ldexp_err_pos; db f_st5+f_two, "ldexp", 0
+
+ldexp_err_pos:
+  fld st(0),st(6)
+  ftst st(0)
+  fstsw [bp][-2]
+  fstp st(0), st(0)
+  test byte [bp][-1], 1
+  jnz $err_underflow
+  jmp $err_plus_infinity
+
+ldexp_err_neg:
+  fld st(0),st(6)
+  ftst st(0)
+  fstsw [bp][-2]
+  fstp st(0), st(0)
+  test byte [bp][-1], 1
+  jnz $err_underflow
+  jmp $err_minus_infinity
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_underflow
+extrn $err_huge_plus_infinity
+extrn $err_huge_minus_infinity
+
+public _ldexpl :
+  push  bp
+  mov   bp,sp
+  mov   word ss:[InMathLib], ldexpltable
+  mov   word ss:[InMathLib][2], bp
+  push  ax
+  fst   st(5), st(0)
+  fild  word st(0), [bp][-2]
+  fst   st(7), st(0)
+  fxch  st(0),st(1)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)
+ldexpl_exit:
+  mov   sp,bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+ldexpltable:
+  dw ldexpl_exit, ldexpl_err_neg, ldexpl_err_pos; db f_st5+f_two, "ldexpl", 0
+
+ldexpl_err_pos:
+  fld st(0),st(6)
+  ftst st(0)
+  fstsw [bp][-2]
+  fstp st(0), st(0)
+  test byte [bp][-1], 1
+  jnz $err_underflow
+  jmp $err_huge_plus_infinity
+
+ldexpl_err_neg:
+  fld st(0),st(6)
+  ftst st(0)
+  fstsw [bp][-2]
+  fstp st(0), st(0)
+  test byte [bp][-1], 1
+  jnz $err_underflow
+  jmp $err_huge_minus_infinity
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public _hypot:
+public _hypotl:
+(*%T _DLLOVL *)
+  push  bp
+  mov   bp, sp
+(*%E *)
+hypotCommon:
+  fmul  st(0), st(0)
+  fld   st(0), st(6)
+  fmul  st(0), st(0)
+  faddp st(1), st(0)
+  fsqrt st(0)
+(*%T _DLLOVL *)
+  pop   bp
+(*%E *)
+  db Ret0@
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public __round:
+(*%T _DLLOVL *)
+  push  bp
+  mov   bp, sp
+(*%E *)
+  frndint st(0)
+(*%T _DLLOVL *)
+  pop   bp
+(*%E *)
+(*%F NearCall *)
+  ret   far 0
+(*%E *)
+
+(*%T NearCall *)
+  ret   0
+(*%E *)
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_tbyte_Pi_By_4
+public _sin :
+public _sinl :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  push  cx
+  xor   cl, cl
+  jmp   trig
+
+public _cos :
+public _cosl :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  push  cx
+  mov   cl, 2
+  jmp   trig
+
+public _tan :
+public _tanl :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  push  cx
+  mov   cl, 4
+
+trig:
+  push  ax
+trigCommon:
+  fxam  st(0)    (* '87 works while we enter routine*)
+  fstsw [bp][-2]
+  fwait
+  mov   ah, [bp][-1]
+  fabs  st(0)
+  fldpi st(0)
+  fadd  st(0),st(0)      (* st(0) = 2*pi *)
+  fxch  st(0),st(1)
+Lp: fprem st(0)            (* reduce abs(arg1) by 2*pi *)
+  fwait
+  fstsw [bp][-2]
+  test  byte [bp][-1],4
+  jnz   Lp
+  fstp  st(1),st(0)
+  fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_4]
+  fxch  st(0),st(1)
+  fprem st(0)
+  mov   ch, ah
+  and   ch, 2
+  shr   ch, 1  (* ch := sign *)
+  fstsw [bp][-2]
+  fwait
+  mov   ax, [bp][-2]
+  mov   al, ah
+  and   al, 3      (* select the C3, C1, and C0 status bits*)
+  shl   ah, 1
+  shl   ah, 1
+  rcl   al, 1      (* arrange them in the ls 3 bits of BX*)
+  add   al, 0FCH
+  rcl   al, 1      (* al now contains the octant number*)
+  cmp   cl, 2      (* are we doing Cosine ?*)
+  jne   trig_notCosine
+  add   al, cl     (* Cos (x) = Sin (x + 2 octants)*)
+  mov   ch, 0      (* Cosine has even symmetry around 0*)
+trig_notCosine:
+  and   al, 7
+  test  al, 1
+  jz    trig_evens
+  fsubp st(1), st(0)  (* overwrites pi/4 in st(1), pops.*)
+  jmp   trig_ptan
+trig_evens:
+  fstp  st(1), st(0)
+trig_ptan:
+  fptan st(0)
+  cmp   cl, 4
+  je    trig_tangent
+  test  al, 3
+  jpe   trig_sineOctant
+trig_cosOctant:
+  fxch  st(0), st(1)
+trig_sineOctant:
+  fmul  st(0), st(0)
+  fstp  st(7), st(0)
+  fld   st(0), st(0)
+  fmul  st(0), st(0)
+  fadd  st(0), st(7)
+  fsqrt st(0)
+  shr   al, 1
+  shr   al, 1
+  xor   al, ch
+  jz    trig_sineDiv
+  fchs  st(0)
+trig_sineDiv:
+  fdivp st(1), st(0)
+  jmp   trig_end
+trig_tangent:
+  mov   ah, al
+  shr   ah, 1
+  and   ah, 1
+  xor   ah, ch
+  jz    trig_tanSigned
+  fchs  st(0)
+trig_tanSigned:
+  test  al, 3
+  jpe   trig_ratio
+  fdivrp st(1),st(0)
+  jmp   trig_end
+trig_ratio:
+  fdivp st(1), st(0)
+trig_end:
+  pop   ax
+  pop   cx
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+extrn __lib_error
+extrn @coremath_tbyte_Pi_By_2
+
+public _atan2:
+public _atan2l:
+  push  bp
+  mov   bp, sp
+  sub   sp, 4
+atan2Common:
+  call  atan20
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+atan20:
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  je    atan21
+  fchs  st(0)
+  call  atan21
+  fchs  st(0)
+  ret   0
+
+atan21:
+  fld   st(0), st(6)
+  ftst  st(0)
+  fstsw [bp][-4]
+  fwait
+  test  byte [bp][-3],1
+  je    atan22
+  fchs  st(0)
+  call  atan22
+  fldpi st(0)
+  fsubrp st(1),st(0)
+  ret   0
+
+atan22:
+  test  byte [bp][-3],40H
+  jnz   maybe_zero_zero
+not_zero_zero:
+  fcom  st(0), st(1)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  jz    atan23
+  fxch  st(0), st(1)
+  fpatan st(1), st(0)
+  fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1),st(0)
+  ret   0
+
+atan23:
+  fpatan st(1),st(0)
+  ret   0
+
+maybe_zero_zero:
+  test  byte [bp][-1],40H
+  jz    not_zero_zero
+  fstp  st(0), st(0)
+  push  si
+  mov   si, atan2_err_data
+  call  __lib_error
+  pop   si
+  ret   0
+
+atan2_err_data: dw $err_domain, $err_domain; db f_two, "atan2", 0
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn  $atan0
+
+public _atan:
+public _atanl:
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+atanCommon:
+  call  $atan0
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+(*%E StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_tbyte_Pi_By_2
+public $atan0:
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  je    atan1
+  fchs  st(0)
+  call  atan1
+  fchs  st(0)
+  ret   0
+
+atan1:
+  fld1  st(0)
+  fcom  st(0), st(1)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  jnz   atan2
+  fpatan st(1), st(0)
+  ret   0
+
+atan2:
+  fxch  st(0), st(1)
+  fpatan st(1),st(0)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1),st(0)
+  ret   0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+extrn $err_minus_infinity
+extrn __lib_error
+public _log :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+logCommon:
+  ftst  st(0)
+  fstsw [bp][-2]
+  test  byte [bp][-1], 41H
+  jnz   log_error
+  fldln2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log_exit:
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+log_error:
+  push  si
+  mov   si, log_err_data
+  call  __lib_error
+  pop   si
+  jmp   log_exit
+
+log_err_data: dw $err_domain, $err_minus_infinity; db 0, "log", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+extrn $err_huge_minus_infinity
+extrn __lib_error
+public _logl :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+logCommon:
+  ftst  st(0)
+  fstsw [bp][-2]
+  test  byte [bp][-1], 41H
+  jnz   log_error
+  fldln2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log_exit:
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+log_error:
+  push  si
+  mov   si, log_err_data
+  call  __lib_error
+  pop   si
+  jmp   log_exit
+
+log_err_data: dw $err_domain, $err_huge_minus_infinity; db f_long, "logl", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+extrn $err_minus_infinity
+extrn __lib_error
+public _log10 :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+log10Common:
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   log10_error
+  fldlg2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log10_exit:
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+log10_error:
+  push  si
+  mov   si, log10_err_data
+  call  __lib_error
+  pop   si
+  jmp   log10_exit
+
+log10_err_data: dw $err_domain, $err_minus_infinity; db 0, "log10", 0
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+extrn $err_huge_minus_infinity
+extrn __lib_error
+public _log10l :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+log10Common:
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   log10_error
+  fldlg2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log10_exit:
+  mov   sp, bp
+  pop   bp
+  db    Ret0@
+
+log10_error:
+  push  si
+  mov   si, log10_err_data
+  call  __lib_error
+  pop   si
+  jmp   log10_exit
+
+log10_err_data: dw $err_domain, $err_huge_minus_infinity; db f_long, "log10l", 0
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_domain
+public _sqrt :
+public _sqrtl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sqrttable
+  mov   word ss:[InMathLib][2], bp
+sqrtCommon:
+(* Return the square root of x, which must be greater than zero. *)
+  fsqrt st(0)   (*invalid op possible*)
+  fwait
+sqrt_exit:
+  mov   word ss:[InMathLib], 0
+  mov   sp,bp
+  pop   bp
+  db    Ret0@
+
+sqrttable:
+  dw sqrt_exit, $err_domain, $err_domain; db 0, "sqrt", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+  (* compute 2^st(0) , result is represented as st(0) * 2^st(4) *)
+
+extrn @coremath_int_four
+
+public $pow2 :
+  fld1  st(0)
+  fxch  st(0), st(1)
+  fst   st(5), st(0)
+  frndint st(0)
+  fsub  st(0), st(1)
+  fxch  st(0), st(5)
+  fsub  st(0), st(5)        (* we now know that st(0) is in range [0..2) *)
+  fidiv word st(0), cs:[@coremath_int_four] (* now in range [0..0.5] *)
+  f2xm1 st(0)
+  faddp st(1), st(0)
+  fmul  st(0), st(0)
+  fmul  st(0), st(0)
+  ret   0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_underflow
+extrn $err_plus_infinity
+extrn $pow2
+public _exp :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], exptable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 10
+expCommon:
+  fst   st(5), st(0)            (* save parameter for error processing *)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0)    (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4)            (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fst   qword [bp][-10],st(0)   (* to provoke error if too big for double *)
+  fstp  st(1),st(0)
+exp_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+exptable:
+  dw exp_exit, $err_underflow, $err_plus_infinity; db f_st5, "exp", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_underflow
+extrn $err_huge_plus_infinity
+extrn $pow2
+public _expl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], expltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+expCommon:
+  fst   st(5), st(0)            (* save parameter for error processing *)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1),st(0)
+exp_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+expltable:
+  dw exp_exit, $err_underflow, $err_huge_plus_infinity; db f_st5+f_long, "expl", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $pow2
+
+public _tanh :
+public _tanhl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], tanhtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+tanhCommon:
+  fst   st(5), st(0)            (* save for error processing *)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)                 (* st(0) = e**arg1 *)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *) (* st(0) = e**arg1,st(1) = e**-arg1 *)
+  fst   st(7), st(0)                 (* st(7) = e**arg1 *)
+  fadd  st(0), st(1)                 (* st(0) = (e**arg1)+(e**-arg1) *)
+  fxch  st(0), st(1)                 (* st(0) = e**-arg1 *)
+  fsub  st(0), st(7)                 (* st(0) = (e**-arg1)-(e**arg1) *)
+  fdivrp st(1), st(0)
+  (* st(0) = (e**-arg1)-(e**arg1)/(e**arg1)+(e**-arg1) *)
+tanh_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+tanhtable:
+  dw tanh_exit, tanh_minus_one,tanh_one; db f_st5, "tanh", 0
+
+tanh_one:
+  sub   ax, ax
+  fld1  st(0)
+  ret   0
+
+tanh_minus_one:
+  call  tanh_one
+  fchs  st(0)
+  ret   0
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn $pow2
+extrn $err_minus_infinity
+extrn $err_plus_infinity
+extrn @coremath_int_two
+public _sinh :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sinhtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 10
+sinhCommon:
+  fst   st(5), st(0)            (* save for error processing *)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fchs  st(0)
+  fdiv  st(0), st(1)  (* - Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+  fst   qword [bp][-10], st(0)    (* To check not overflowed double *)
+  fwait
+sinh_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+sinhtable:
+  dw sinh_exit, $err_minus_infinity, $err_plus_infinity; db f_st5, "sinh", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn $pow2
+extrn $err_huge_minus_infinity
+extrn $err_huge_plus_infinity
+extrn @coremath_int_two
+public _sinhl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sinhltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+sinhCommon:
+  fst   st(5), st(0)            (* save for error processing *)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fchs  st(0)
+  fdiv  st(0), st(1)  (* - Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+sinh_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+sinhltable:
+  dw sinh_exit, $err_huge_minus_infinity, $err_huge_plus_infinity; db f_st5, "sinhl", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_plus_infinity
+extrn $pow2
+extrn @coremath_int_two
+public _cosh :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], coshtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 10
+coshCommon:
+  fst   st(5), st(0)            (* save for error processing *)
+  fabs  st(0)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+  fst   qword [bp][-10], st(0)    (* to check result is in double range *)
+  fwait
+cosh_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+coshtable:
+  dw cosh_exit, $err_plus_infinity, $err_plus_infinity; db f_st5, "cosh", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_huge_plus_infinity
+extrn $pow2
+extrn @coremath_int_two
+public _coshl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], coshltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+coshCommon:
+  fst   st(5), st(0)            (* save for error processing *)
+  fabs  st(0)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   st(0), st(4) (* retrieve integral part *)
+  fxch  st(1), st(0)
+  fscale st(0), st(1)
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+cosh_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+coshltable:
+  dw  cosh_exit, $err_huge_plus_infinity, $err_huge_plus_infinity; db f_st5, "coshl", 0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $atan0
+extrn $check_abs_one
+extrn @coremath_tbyte_Pi_By_2
+public _asin:
+public _asinl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], asintable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+asinCommon:
+  fst   st(5), st(0)
+  fmul  st(0), st(0)        (* arg1**2 *)
+  fld1  st(0)
+  fsubrp st(1),st(0)        (* arg1**2-1 *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fsqrt st(0)               (* sqrt (arg1**2-1) *)
+  test  byte [bp][-1],40H   (* is result 0 *)
+  jz    Not0                (* no *)
+  fcom  st(0),st(5)         (* was arg1 neg ? *)
+  fstsw [bp][-2]
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]  (* $1 *)
+  fstp  st(1),st(0)         (* $0 *)
+  pop   ax                  (* flags of cmp 0,arg1 *)
+  sahf
+  jb    asin_exit           (* arg1 was positive. return pi/2 *)
+  fchs  st(0)
+  jmp   asin_exit           (* arg1 was negative. return -pi/2 *)
+Not0:
+  fdivr st(0),st(5)         (* arg1/(sqrt(arg1**2-1)) *)
+  fwait
+  call  $atan0
+asin_exit:
+  mov   sp,bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+asintable:
+  dw asin_exit, err_asin_neg, err_asin_pos; db f_st5, "asin", 0
+
+err_asin_pos:
+  call  $check_abs_one
+  fld1  st(0)
+  fstp  st(1),st(0)
+  fchs  st(0)
+  fldpi st(0)
+  fscale st(0),st(1)
+  sub   ax, ax
+  ret   0
+
+err_asin_neg:
+  call  err_asin_pos
+  fchs  st(0)
+  ret   0
+
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $atan0
+extrn $check_abs_one
+extrn @coremath_tbyte_Pi_By_2
+public _acos :
+public _acosl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], acostable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 2
+acosCommon:
+  ftst  st(0)             (* is arg1 0 or -0 ? *)
+  fstsw [bp][-2]          (* store SW *)
+  fst   st(5), st(0)
+  test  byte [bp][-1],40H (* test for zero flag *)
+  jnz    PiBy2            (* arg1 is 0,so return pi/2 *)
+  fmul  st(0), st(0)
+  fld1  st(0)
+  fsubrp st(1),st(0)
+  fsqrt st(0)
+  fdivr st(0),st(5)
+  fwait
+  call  $atan0
+PiBy2:
+  fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1), st(0)
+acos_exit:
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+  db    Ret0@
+
+acostable:
+  dw acos_exit, err_acos_neg, err_acos_pos; db f_st5, "acos", 0
+
+err_acos_pos:
+  call  $check_abs_one
+  fldz  st(0)
+  sub   ax, ax
+  ret   0
+
+err_acos_neg:
+  call  $check_abs_one
+  fldpi st(0)
+  sub   ax, ax
+  ret   0
+
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public __bcd_to_int :              (* si = bcd, di = int mantissa *)
+
+  ret 0
+(*%E NOT StdFloat *)
+(*************************************************************************)
+(*%F StdFloat *)
+section
+segment _DATA(DATA,28H)
+segment  SIG_TEXT(CODE,28H)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __SH_sword
+extrn __exc_addr
+extrn  __lib_error
+
+public __math_excep:
+  (* called from floating point exception handler *)
+  (*
+     8087 status word on stack, behind FAR return address to
+     signal handler.
+     This function must reside in the same segment as the math
+     library functions which use InMathLib
+     [bp][0]  == saved bp
+     [bp][2]  == return ip to signal handler
+     [bp][4]  == return cs to signal handler
+     [bp][6]  == 8087 status word
+     [bp][8]  == return ip to point of exception
+     [bp][10] == return cs to point of exception
+     [bp][12] == flags for iret
+  *)
+
+  push bp
+  mov bp,sp
+  sub sp,2
+  cmp word ss:[InMathLib], 0
+  je user_error
+
+  (* An exception has occurred in a math library function *)
+
+  jmp pop_8087
+pop_8087_loop:
+  fstp st(0), st(0)
+pop_8087:
+  fstsw [bp][-2]
+  fwait
+  and word [bp][-2], 3800H
+  cmp word [bp][-2], 0800H
+  jnz pop_8087_loop
+
+  (* The address of the handler table is in ss:[InMathLib] *)
+  push si
+  push ax
+  push bx
+  mov si,ss:[InMathLib]
+  mov word ss:[InMathLib], 0
+  mov ax, cs:[si]             (* resume address *)
+  inc si
+  inc si
+  mov [bp][2],ax              (* adjust local return address *)
+  mov bx,ss:[InMathLib][2]    (* get the BP at the point of error *)
+  mov [bp],bx                 (* and make sure we restore to it *)
+  call __lib_error
+  pop bx
+  pop ax
+  pop si
+  mov sp,bp
+  pop bp
+  ret 10   (* return NEAR to resume point (we know it's in same code segment)
+              discard signal hadler cs, 8087 status word, and 6 byte iret info *)
+
+user_error:
+  push ax
+  push ds
+(*%T _WINDOWS *)
+  mov  ax, ss
+(*%E *)
+(*%F _WINDOWS *)
+  mov  ax, _DATA
+(*%E *)
+  mov  ds, ax
+  mov  ax, [bp][6]           (* status word *)
+  mov  [__SH_sword], ax
+  mov  ax, [bp][8]           (* error offset *)
+  mov  [__exc_addr], ax
+  mov  ax, [bp][10]          (* error segment *)
+  mov  [__exc_addr][2], ax
+  pop  ds
+  pop  ax
+  mov  sp, bp
+  pop  bp
+  ret  far 2         (* return FAR to signal handler, discarding status word *)
+(*%E NOT StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,48H)
+
+extrn _matherr
+extrn __seterrno
+extrn @coremath_HUGE
+extrn @coremath_MIN
+
+(* __report_math_error is used for error reporting from math error functions.
+   It is called from __lib_error where the table mechanism for error recovery
+   is used, or may be called directly from a function detecting an error
+   condition.
+
+   On entry, st(0) == intended return value
+             st(1) == arg1
+             st(2) == arg2
+             cs:bx points to function name, terminated by linefeed character
+             ax == exception type.
+
+   On exit, st(0) == return value
+
+   If a user-defined matherr has been installed, it is called, otherwise
+   errno is set and we return to the caller.
+
+   struct exception { int    type;
+                      char  *name;
+                      double arg1;
+                      double arg2;
+                      double retval; }
+*)
+
+public __report_math_error:
+    push  bp
+    mov   bp,sp
+    push  di
+    push  si
+    push  cx
+(*%T SameDS *)
+    push  ds
+(*%E *)
+    mov   cx,ax               (* cx == exception type *)
+(*%T _fcall *)
+(*%F SameDS *)
+    mov   ax, seg _matherr
+    mov   ds, ax
+(*%E *)
+    les   ax, [_matherr]
+    mov   si, es
+    or	  si, ax
+(*%E *)
+(*%F _fcall *)
+    cmp  word [_matherr], 0
+(*%E *)
+    je   nomatherr
+
+    (* A user-defined error handler has been installed. Call it *)
+    (* First, copy the name into the stack segment *)
+    push cs
+    pop  es
+    mov  di,bx
+    sub  al,al
+    push cx
+    mov  cx,-1
+    repne; scasb
+    not  cx
+    inc  cx
+    and  cx,-2
+    mov  si,cx
+    pop  cx
+    sub  sp,si
+    mov  si,sp       (* si = ^name *)
+    mov  di,si
+lp: mov  al,es:[bx]
+    mov  ss:[di],al
+    inc  bx
+    inc  di
+    or   al,al
+    jnz  lp
+
+     (* Now create the structure on the stack *)
+     sub   sp,34       (* space for 3 doubles, one tbyte *)
+     mov   bx,sp
+     fld   st(0),st(0)
+     fstp  tbyte ss:[bx][24], st(0)
+     call forcedouble
+     fstp  qword ss:[bx][16], st(0)
+     call forcedouble
+     fstp  qword ss:[bx][0], st(0)
+     call forcedouble
+     fstp  qword ss:[bx][8], st(0)
+(*%T FarPtr *)
+     push  ss
+(*%E *)
+     push  si          (* ^name *)
+     push  cx          (* type *)
+     mov   ax,sp       (* pointer to exception structure *)
+(*%F RegParam *) (*%T FarPtr *)
+     mov   bx,ss       (* segment part of the above *)
+(*%E *) (*%E *)
+     push  cx                   (* save exception type *)
+(*%F RegParam *)
+  (*%T FarPtr *)
+     push  ss
+  (*%E *)
+     push  ax
+(*%E *)
+(*%T _fcall *)
+     call  dword [_matherr]
+(*%E *)
+(*%F _fcall *)
+     call  word [_matherr]
+(*%E *)
+(*%F RegParam *)
+  (*%T FarPtr *)
+     add  sp,4
+  (*%E *)
+  (*%F FarPtr *)
+     add  sp,2
+  (*%E*)
+(*%E *)
+     pop   cx                   (* recover the exception type *)
+     test  ax,ax
+     mov   bx,sp
+     jnz   newretval            (* matherr supplied a new retval *)
+     (* Reload the saved return value *)
+(*%T FarPtr *)
+     fld   tbyte st(0),ss:[bx][30]
+(*%E *)
+(*%F FarPtr *)
+     fld   tbyte st(0),ss:[bx][28]
+(*%E *)
+     jmp   doerrno
+
+newretval:
+(*%T FarPtr *)
+     fld   qword st(0),ss:[bx][22]
+(*%E *)
+(*%F FarPtr *)
+     fld   qword st(0),ss:[bx][20]
+(*%E *)
+     jmp   done
+
+nomatherr:
+     fstp  st(1), st(0)
+     fstp  st(1), st(0)            (* discard arguments, keeping result *)
+
+doerrno:
+     mov   ax, EDOM
+     cmp   cx,_DOMAIN              (* type == _DOMAIN *)
+     je    wasdomain
+     mov   ax, ERANGE
+wasdomain:
+(*%T _fcall *)
+     call  far __seterrno
+(*%E *)
+(*%F _fcall *)
+     call  __seterrno
+(*%E *)
+done:
+(*%F SameDS *)
+     lea   sp,[bp][-8]
+     pop   ds
+(*%E *)
+(*%T SameDS *)
+     lea   sp,[bp][-6]
+(*%E *)
+     pop   cx
+     pop   si
+     pop   di
+     mov   sp,bp
+     pop   bp
+     ret   0
+
+forcedouble:
+   (* force st(0) into the range that fits in a double *)
+     push  ax
+     push  bx
+     mov   bx,sp
+     fcom  qword st(0),cs:[@coremath_HUGE]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     jb    NotPosH
+     fstp  st(0),st(0)
+     fld   qword st(0),cs:[@coremath_HUGE]
+     jmp   fddone
+NotPosH:
+     fcom  qword st(0),cs:[@coremath_MIN]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     ja    fddone
+(* now st(0) must be < coremath_min *)
+     fchs  st(0)
+     fcom  qword st(0),cs:[@coremath_HUGE]
+     push  ax
+     fstsw ss:[bx][-2]
+     fwait
+     pop   ax
+     sahf
+     jb    NotNegH
+     fstp  st(0),st(0)
+     fld   qword st(0),cs:[@coremath_HUGE]
+     fchs  st(0)
+     jmp   fddone
+NotNegH:
+     fcom  qword st(0),cs:[@coremath_MIN]
+     push  ax
+     fstsw ss:[bx][-2]
+     fchs  st(0)
+     pop   ax
+     sahf
+     ja    fddone
+     fstp  st(0),st(0)
+     fldz  st(0)
+fddone:
+     pop   bx
+     pop   ax
+     ret   0
+
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __report_math_error
+
+(* __lib_error is used by the math library functions to report range, domain
+   and underflow errors etcetera. It may be called via two routes:
+
+   1. An exception occurring inside a math library function will cause
+      __math_excep to call this function. __math_excep reads the address
+      of a table from ss:InMathLib. This table contains a (short) resume
+      address and then a table in the format below. The address of the
+      table (excluding the resume address) is passed to __lib_error in si.
+
+   2. math library functions pre-emptively detecting an error case without
+      causing an exception may call __lib_error directly. In this case,
+      si must point to a table as described below, and bx must contain
+      a pointer to the stack frame (i.e., a copy of bp).
+
+   The table processed by __lib_error is in the following format:
+
+    [si][0]  short address of procedure to yield return value when
+             arg1 is negative
+    [si][2]  ditto when arg1 is positive
+    [si][4]  flags byte.
+             If [si][4] & f_two != 0, there is a second argument
+             If [si][4] & f_long != 0, the arguments are long double
+    [si][6]  null terminated string containing name of function with error.
+
+    The procedures pointed to by [si][0] and [si][2] push the required return
+    value into st(0), and return the error type in ax.
+*)
+
+public __lib_error:
+  push bp
+  mov  bp, sp
+  sub  sp,2
+  push ax
+  push cx
+  push dx
+  test byte cs:[si][4], f_two       (* find out arg count *)
+  jnz  has_two
+
+  (* function has a single argument *)
+  fldz st(0)                        (* arg2 == 0  *)
+  test byte cs:[si][4], f_long      (* long double args? *)
+  jnz  long_arg1
+  fld  qword st(0), ss:[bx][2][CodePtrSize]
+  jmp  gotargs
+long_arg1:
+  fld  tbyte st(0), ss:[bx][2][CodePtrSize]
+  jmp  gotargs
+
+has_two:
+  test byte cs:[si][4], f_long      (* long double args? *)
+  jnz  long_arg2
+(*%T RegParam *)
+  fld  qword st(0), ss:[bx][2][CodePtrSize]
+  fld  qword st(0), ss:[bx][2][CodePtrSize][8]
+(*%E *)
+(*%F RegParam *)
+  fld  qword st(0), ss:[bx][2][CodePtrSize][8]
+  fld  qword st(0), ss:[bx][2][CodePtrSize]
+(*%E *)
+  jmp  gotargs
+long_arg2:
+(*%T RegParam *)
+  fld  tbyte st(0), ss:[bx][2][CodePtrSize]
+  fld  tbyte st(0), ss:[bx][2][CodePtrSize][10]
+(*%E *)
+(*%F RegParam *)
+  fld  tbyte st(0), ss:[bx][2][CodePtrSize][10]
+  fld  tbyte st(0), ss:[bx][2][CodePtrSize]
+(*%E *)
+
+(* Now st(0)== arg1, st(1)==arg2 *)
+
+gotargs:
+  ftst st(0)
+  fstsw [bp][-2]
+  fwait
+  test byte [bp][-1], 1       (* Check if arg1 was +ve *)
+  mov  ax, cs:[si][2]         (* negative entry from table *)
+  jz   me_positive
+  mov  ax, cs:[si][0]         (* positive entry from table *)
+me_positive:
+  call ax                     (* Call function to yield retval, pushed into st(0) *)
+  or   ax, ax                 (* is it an error? *)
+  jz   me_ok
+  lea  bx, [si][5]            (* st(0)==retval, st(1)==arg1, st(2)==arg2, bx=name *)
+  call __report_math_error
+  jmp  exit
+me_ok:
+  (* Not an error - discard st(1) and st(2) *)
+  fstp st(1), st(0)
+  fstp st(1), st(0)
+exit:
+  pop  dx
+  pop  cx
+  pop  ax
+  mov  sp, bp
+  pop  bp
+  ret  0
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_int_one
+extrn $err_domain
+public $check_abs_one:
+  fld   st(0),st(0)
+  fabs  st(0)
+  ficomp word st(0), cs:[@coremath_int_one]
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 40H
+  jz    ab1_err
+  ret   0
+
+ab1_err:
+  add   sp, 2
+  jmp   near $err_domain
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __fac
+extrn @coremath_HUGE
+extrn @coremath_nearest
+extrn __report_math_error
+
+public _ldexp:
+  push   bp
+  mov    bp,sp
+  sub    sp,10
+  fld    qword st(0), [bp][frame]
+(*%F RegParam *)
+  mov    ax, [bp][frame][8]
+  fild   word st(0), [bp][frame][8]
+(*%E *)
+(*%T RegParam *)
+  or     ax,ax
+  jz     ldexp_exit             (* scale by 0 doesn't work in windows emulator *)
+  mov    [bp][-2],ax
+  fild   word st(0), [bp][-2]
+(*%E *)
+  fstcw  [bp][-2]               (* save CW *)
+  fldcw  cs:[@coremath_nearest] (* mask exceptions *)
+  fclex
+  fxch   st(0), st(1)
+  fscale st(0), st(1)
+  fst    qword [bp][-10], st(0) (* ensure result fits in double variable *)
+  fstsw  [bp][-4]
+  fclex
+  fldcw  [bp][-2]
+  test   byte [bp][-4], 1FH
+  jnz    ldexp_error
+  fstp   st(1),st(0)
+ldexp_exit:
+(*%F NearPtr *)
+  mov    dx, seg __fac
+  mov    es, dx
+  fstp   qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp   qword [__fac], st(0)
+(*%E *)
+  mov    ax, __fac
+  fwait
+  mov    sp,bp
+  pop    bp
+(*%T RegParam *)
+ (*%T NearCall*)
+  ret    near PopParam*8
+ (*%E*)
+ (*%F NearCall*)
+  ret    far PopParam*8
+ (*%E*)
+(*%E *)
+(*%F RegParam *)
+  db     Ret0@
+(*%E*)
+
+ldexp_error:
+  (* the scale has generated an exception of some sort *)
+  (* ax == st(0) == arg2, arg1 on stack *)
+  fld    qword st(0), [bp][frame]
+  fstp   st(1),st(0)
+  test   ax,ax
+  js     underflow
+  mov    ax, _OVERFLOW
+  ftst   st(0)                  (* check sign of arg1 *)
+  fstsw  [bp][-2]
+  fld    qword st(0), cs:[@coremath_HUGE]
+  test   byte [bp][-1],1
+  jz     report
+  fchs   st(0)
+  jmp    report
+underflow:
+  fldz   st(0)
+  mov    ax, _UNDERFLOW
+report:
+  (* st(0) == retval, st(1) == arg1, st(2) == arg2, ax == error type *)
+  mov    bx, ldexp_name
+  call   __report_math_error
+  jmp    ldexp_exit
+
+ldexp_name:
+  db "ldexp", 0
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __fac
+extrn @coremath_LHUGE
+extrn @coremath_nearest
+extrn __report_math_error
+
+public _ldexpl:
+  push   bp
+  mov    bp,sp
+  sub    sp,4
+  fld    tbyte st(0), [bp][frame]
+(*%F RegParam *)
+  mov    ax, [bp][frame][10]
+  fild   word st(0), [bp][frame][10]
+(*%E *)
+(*%T RegParam *)
+  or     ax,ax
+  jz     ldexpl_exit            (* scale by 0 doesn't work in windows emulator *)
+  mov    [bp][-2],ax
+  fild   word st(0), [bp][-2]
+(*%E *)
+  fstcw  [bp][-2]               (* save CW in #1 *)
+  fldcw  cs:[@coremath_nearest] (* mask exceptions *)
+  fclex
+  fxch   st(0), st(1)
+  fscale st(0), st(1)
+  fstsw  [bp][-4]
+  fclex
+  fldcw  [bp][-2]
+  test   byte [bp][-4], 1FH
+  jnz    ldexpl_error
+(*%T _WINDOWS *)
+  fxam   st(0)                  (* Windows emulator doesn't signal oflow properly *)
+  fstsw  [bp][-4]
+  fwait
+  test   byte [bp][-3], 1
+  jnz    ldexpl_error
+(*%E *)
+  fstp   st(1), st(0)
+ldexpl_exit:
+(*%F NearPtr *)
+  mov    dx, seg __fac
+  mov    es, dx
+  fstp   tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp   tbyte [__fac], st(0)
+(*%E *)
+  mov    ax, __fac
+  fwait
+  mov    sp,bp
+  pop    bp
+(*%T RegParam *)
+ (*%T NearCall*)
+  ret    near PopParam*10
+ (*%E*)
+ (*%F NearCall*)
+   ret   far PopParam*10
+ (*%E*)
+(*%E *)
+(*%F RegParam *)
+   db     Ret0@
+(*%E*)
+
+ldexpl_error:
+  (* the scale has generated an exception of some sort *)
+  (* ax == st(0) == result of scale, st(1) == arg2, arg1 on stack *)
+  fld    tbyte st(0), [bp][frame]
+  fstp   st(1), st(0)
+  test   ax,ax
+  js     underflow
+  mov    ax, _OVERFLOW
+  ftst   st(0)                  (* check sign of arg1 *)
+  fstsw  [bp][-2]
+  fld    tbyte st(0), cs:[@coremath_LHUGE]
+  test   byte [bp][-1],1
+  jz     report
+  fchs   st(0)
+  jmp    report
+underflow:
+  fldz   st(0)
+  mov    ax, _UNDERFLOW
+report:
+  (* st(0) == retval, st(1) == arg1, st(2) == arg2, ax == error type *)
+  mov    bx, ldexpl_name
+  call   __report_math_error
+  jmp    ldexpl_exit
+
+ldexpl_name:
+  db "ldexpl", 0
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __fac
+
+public _hypot:
+  push  bp
+  mov   bp, sp
+(*%T StkParam *)
+  fld   qword st(0), [bp][frame]
+  fmul  st(0), st(0)
+  fld   qword st(0), [bp][frame][8]
+(*%E StkParam *)
+(*%T RegParam *)
+  fld   qword st(0), [bp][frame][8]
+  fmul  st(0), st(0)
+  fld   qword st(0), [bp][frame]
+(*%E RegParam *)
+  fmul  st(0), st(0)
+  faddp st(1), st(0)
+  fsqrt st(0)
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*16
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*16
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+
+public _hypotl:
+  push  bp
+  mov   bp, sp
+(*%T StkParam *)
+  fld   tbyte st(0), [bp][frame]
+  fmul  st(0), st(0)
+  fld   tbyte st(0), [bp][frame][10]
+(*%E StkParam *)
+(*%T RegParam *)
+  fld   tbyte st(0), [bp][frame][10]
+  fmul  st(0), st(0)
+  fld   tbyte st(0), [bp][frame]
+(*%E RegParam *)
+  fmul  st(0), st(0)
+  faddp st(1), st(0)
+  fsqrt st(0)
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*20
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*20
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+
+public __round:
+  push  bp
+  mov   bp, sp
+  fld   tbyte st(0), [bp][frame]
+  frndint st(0)
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  pop   bp
+(*%F NearCall *)
+  ret   far 0
+(*%E *)
+(*%T NearCall *)
+  ret   0
+(*%E *)
+
+(*%E StdFloat *)
+
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+  (* compute 2^st(0) , result is represented as st(0) * 2^st(4) *)
+
+extrn @coremath_int_four
+
+public $pow2 :
+  fld1  st(0)
+  fxch  st(0), st(1)
+  fst   qword [bp][-12], st(0)
+  frndint st(0)
+  fsub  st(0), st(1)
+  fld   qword st(0), [bp][-12]
+  fxch  st(0), st(1)
+  fstp  qword [bp][-12], st(0)
+  fsub  qword st(0), [bp][-12]  (* we now know that st(0) is in range [0..2) *)
+  fidiv word st(0), cs:[@coremath_int_four] (* now in range [0..0.5] *)
+  f2xm1 st(0)
+  faddp st(1), st(0)
+  fmul  st(0), st(0)
+  fmul  st(0), st(0)
+  ret   0
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_tbyte_Pi_By_4
+
+public __do_sct :
+    fxam  st(0)    (* '87 works while we enter routine*)
+    fstsw [bp][-2]
+    fwait
+    mov   ah, [bp][-1]
+    fabs  st(0)
+    fldpi st(0)
+    fadd  st(0),st(0)      (* st(0) = 2*pi *)
+    mov   ch, ah
+    and   ch, 2
+    shr   ch, 1            (* ch := sign *)
+    fxch  st(0),st(1)
+Lp: fprem st(0)            (* reduce abs(arg1) by 2*pi *)
+    fstsw [bp][-2]
+    fwait
+    test  byte [bp][-1],4
+    jnz   Lp
+(*%T _WINDOWS *)
+    fst   st(1),st(0)    (* st(0)=st(1)=abs(arg1) reduced by 2*pi *)
+    fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_4]
+    fxch  st(0),st(1)    (* st(0)=st(2) = arg1. st(1) = pi/4 *)
+    fprem st(0)          (* st(0)=abs(arg1) reduced by pi/4 *)
+    fsub  st(2),st(0)    (* st(2)= octant*pi/4 *)
+    fxch  st(0),st(2)    (* st(2)=abs(arg1) reduced by pi/4.st(0)=octant*pi/4 *)
+    fdiv  st(0),st(1)    (* st(0)=octant *)
+    fldlg2 st(0)         (* st(0) = 0.3 --gives round to nearest *)
+    faddp st(1),st(0)    (* st(0) = octant+a smidgeon *)
+    fistp word [bp][-2],st(0) (* store octant in [bp][-2] *)
+    fxch  st(0),st(1)    (* st(0)=abs(arg1) reduced by pi/4.st(1)=pi/4 *)
+    mov   al,[bp][-2]    (* al = octant *)
+(*%E _WINDOWS *)
+(*%F _WINDOWS *)
+    fstp  st(1),st(0)
+    fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_4]
+    fxch  st(0),st(1)
+    fprem st(0)
+    fstsw [bp][-2]
+    fwait
+    mov   ax, [bp][-2]
+    mov   al, ah
+    and   al, 3      (* select the C3, C1, and C0 status bits*)
+    shl   ah, 1
+    shl   ah, 1
+    rcl   al, 1      (* arrange them in the ls 3 bits of AL as c1,c0,c3*)
+    add   al, 0FCH
+    rcl   al, 1      (* al now contains the octant number*)
+(*%E NOT _WINDOWS *)
+  cmp   cl, 2      (* are we doing Cosine ?*)
+  jne   trig_notCosine
+  add   al, cl     (* Cos (x) = Sin (x + 2 octants)*)
+  mov   ch, 0      (* Cosine has even symmetry around 0*)
+trig_notCosine:
+  and   al, 7
+  test  al, 1
+  jz    trig_evens
+  fsubp st(1), st(0)  (* overwrites pi/4 in st(1), pops.*)
+  jmp   trig_ptan
+trig_evens:
+  fstp  st(1), st(0)
+trig_ptan:
+  fptan st(0)                (* st(1) / st(0) == tan(x) *)
+  cmp   cl, 4
+  je    trig_tangent
+  test  al, 3
+  jpe   trig_sineOctant
+trig_cosOctant:
+  fxch  st(0), st(1)
+trig_sineOctant:
+  fmul  st(0), st(0)
+  fstp  tbyte [bp][-12], st(0)
+  fld   st(0), st(0)
+  fmul  st(0), st(0)
+  fld   tbyte st(0), [bp][-12]
+  faddp st(1), st(0)
+  fsqrt st(0)
+  shr   al, 1
+  shr   al, 1
+  xor   al, ch
+  jz    trig_sineDiv
+  fchs  st(0)
+trig_sineDiv:
+  fdivp st(1), st(0)
+  jmp   trig_end
+trig_tangent:
+  mov   ah, al
+  shr   ah, 1
+  and   ah, 1
+  xor   ah, ch
+  jz    trig_tanSigned
+  fchs  st(0)
+trig_tanSigned:
+  test  al, 3
+  jpe   trig_ratio
+  fdivrp st(1),st(0)
+  jmp   trig_end
+trig_ratio:
+  fdivp st(1), st(0)
+trig_end:
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn __do_sct
+
+public _sinl :
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  xor   cl, cl
+  jmp   trigl
+public _cosl:
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  mov   cl, 2
+  jmp   trigl
+public _tanl :
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  mov   cl, 4
+trigl:
+(*%T RegParam *)(*%T NearPtr *) push dx (*%E NearPtr *)(*%E RegParam *)
+  sub   sp, 12
+  mov   dx, cx
+  fld   tbyte st(0), [bp][frame]
+  call  __do_sct
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  add   sp,12
+(*%T RegParam *)(*%T NearPtr *) pop dx (*%E NearPtr *)(*%E RegParam *)
+(*%T RegParam *)  pop cx (*%E RegParam *)
+  fwait
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn __do_sct
+
+public _sin :
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  xor   cl, cl
+  jmp   trig
+public _cos:
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  mov   cl, 2
+  jmp   trig
+public _tan :
+  push  bp
+  mov   bp, sp
+(*%T RegParam *)  push  cx (*%E RegParam *)
+  mov   cl, 4
+trig:
+(*%T RegParam *)(*%T NearPtr *) push dx (*%E NearPtr *)(*%E RegParam *)
+  sub   sp, 12
+  fld   qword st(0), [bp][frame]
+  call  __do_sct
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  add   sp,12
+(*%T RegParam *)(*%T NearPtr *) pop dx (*%E NearPtr *)(*%E RegParam *)
+(*%T RegParam *)  pop cx (*%E RegParam *)
+  fwait
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_tbyte_Pi_By_2
+extrn __fac
+extrn __lib_error
+extrn $err_domain
+
+public _atan2l:
+  push  bp
+  mov   bp, sp
+  sub   sp, 4
+(*%T StkParam *)
+  fld   tbyte st(0), [bp][frame][10]
+  fld   tbyte st(0), [bp][frame]
+(*%E StkParam *)
+(*%T RegParam *)
+  fld   tbyte st(0), [bp][frame]
+  fld   tbyte st(0), [bp][frame][10]
+(*%E RegParam *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  je    atan20
+  fchs  st(0)
+  call  atan21
+  fchs  st(0)
+  jmp over
+atan20:
+  call  atan21
+over:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*20
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*20
+(*%E*)
+
+atan21:
+  fxch  st(0), st(1)
+  ftst  st(0)
+  fstsw [bp][-4]
+  fwait
+  test  byte [bp][-3],1
+  je    atan22
+  fchs  st(0)
+  call  atan22
+  fldpi st(0)
+  fsubrp st(1),st(0)
+  ret   0
+
+atan22:
+  test  byte [bp][-3],40H
+  jnz   maybe_zero_zero
+not_zero_zero:
+  fcom  st(0), st(1)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  jz    atan23
+  fxch  st(0), st(1)
+  fpatan st(1), st(0)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1),st(0)
+  ret   0
+
+atan23:
+  fpatan st(1),st(0)
+  ret   0
+
+maybe_zero_zero:
+  test  byte [bp][-1],40H
+  jz    not_zero_zero
+  fstp  st(0), st(0)
+  push  si
+  mov   si, atan2_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  ret   0
+
+atan2_err_data: dw $err_domain, $err_domain; db f_two+f_long, "atan2l", 0
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   @coremath_tbyte_Pi_By_2
+extrn __fac
+extrn __lib_error
+extrn $err_domain
+
+public _atan2:
+  push  bp
+  mov   bp, sp
+  sub   sp, 4
+(*%T StkParam *)
+  fld   qword st(0), [bp][frame][8];
+  fld   qword st(0), [bp][frame];
+(*%E StkParam *)
+(*%T RegParam *)
+  fld   qword st(0), [bp][frame]
+  fld   qword st(0), [bp][frame][8]
+(*%E RegParam *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  je    atan20
+  fchs  st(0)
+  call  atan21
+  fchs  st(0)
+  jmp over
+atan20:
+  call  atan21
+over:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*16
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*16
+(*%E*)
+
+
+atan21:
+  fxch  st(0), st(1)
+  ftst  st(0)
+  fstsw [bp][-4]
+  fwait
+  test  byte [bp][-3],1
+  je    atan22
+  fchs  st(0)
+  call  atan22
+  fldpi st(0)
+  fsubrp st(1),st(0)
+  ret   0
+
+atan22:
+  test  byte [bp][-3],40H
+  jnz   maybe_zero_zero
+not_zero_zero:
+  fcom  st(0), st(1)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  jz    atan23
+  fxch  st(0), st(1)
+  fpatan st(1), st(0)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1),st(0)
+  ret   0
+
+atan23:
+  fpatan st(1),st(0)
+  ret   0
+
+maybe_zero_zero:
+  test  byte [bp][-1],40H
+  jz    not_zero_zero
+  fstp  st(0), st(0)
+  push  si
+  mov   si, atan2_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  ret   0
+
+atan2_err_data: dw $err_domain, $err_domain; db f_two, "atan2", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn  $atan0
+
+public _atanl:
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   tbyte st(0), [bp][frame];
+  call  $atan0
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret far PopParam*10
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn   $atan0
+
+public _atan:
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   qword st(0), [bp][frame];
+  call  $atan0
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_tbyte_Pi_By_2
+public $atan0:
+  (* Note - this procedure must not have a stack frame *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  je    atan1
+  fchs  st(0)
+  call  atan1
+  fchs  st(0)
+  ret   0
+
+atan1:
+  fld1  st(0)
+  fcom  st(0), st(1)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1],1
+  jnz   atan2
+  fpatan st(1), st(0)
+  ret   0
+
+atan2:
+  fxch  st(0), st(1)
+  fpatan st(1),st(0)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1),st(0)
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __lib_error
+extrn $err_domain
+extrn $err_huge_minus_infinity
+extrn __fac
+
+public _logl :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   tbyte st(0), [bp][frame]
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   logl_error
+  fldln2 st(0)
+  fxch  st(0),st(1)
+  fyl2x st(1),st(0)
+logl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+logl_error:
+  fstp  st(0), st(0)         (* return fp stack to empty state *)
+  push  si
+  mov   si, logl_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  jmp   logl_exit
+
+logl_err_data: dw $err_domain, $err_huge_minus_infinity; db f_long, "logl", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn __lib_error
+extrn $err_domain
+extrn $err_minus_infinity
+public _log :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   qword st(0), [bp][frame]
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   log_error
+  fldln2 st(0)
+  fxch  st(0),st(1)
+  fyl2x st(1),st(0)
+log_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+log_error:
+  fstp  st(0), st(0)         (* return fp stack to empty state *)
+  push  si
+  mov   si, log_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  jmp   log_exit
+
+log_err_data: dw $err_domain, $err_minus_infinity; db 0, "log", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __lib_error
+extrn $err_domain
+extrn $err_huge_minus_infinity
+extrn __fac
+
+public _log10l :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   tbyte st(0), [bp][frame]
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   log10l_error
+  fldlg2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log10l_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+log10l_error:
+  fstp  st(0), st(0)         (* return fp stack to empty state *)
+  push  si
+  mov   si, log10l_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  jmp   log10l_exit
+
+log10l_err_data: dw $err_domain, $err_huge_minus_infinity; db f_long, "log10l", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn __lib_error
+extrn $err_domain
+extrn $err_minus_infinity
+
+public _log10 :
+  push  bp
+  mov   bp, sp
+  sub   sp, 2
+  fld   qword st(0), [bp][frame]
+  ftst  st(0)
+  fstsw [bp][-2]
+  fwait
+  test  byte [bp][-1], 41H
+  jnz   log10_error
+  fldlg2 st(0)
+  fxch  st(0), st(1)
+  fyl2x st(1), st(0)
+log10_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+log10_error:
+  fstp  st(0), st(0)         (* return fp stack to empty state *)
+  push  si
+  mov   si, log10_err_data
+  mov   bx, bp
+  call  __lib_error
+  pop   si
+  jmp   log10_exit
+
+log10_err_data: dw $err_domain, $err_minus_infinity; db 0, "log10", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn   $err_domain
+
+public _sqrtl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sqrtltable
+  mov   word ss:[InMathLib][2], bp
+  fld   tbyte st(0), [bp][frame]
+(* Return the square root of x, which must be greater than zero. *)
+  fsqrt st(0)   (*invalid op possible*)
+  fwait
+sqrtl_exit:
+  mov   word ss:[InMathLib], 0
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp,bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+sqrtltable:
+  dw sqrtl_exit, $err_domain, $err_domain; db f_long, "sqrtl", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn   $err_domain
+
+public _sqrt :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sqrttable
+  mov   word ss:[InMathLib][2], bp
+  fld   qword st(0), [bp][frame]
+(* Return the square root of x, which must be greater than zero. *)
+  fsqrt st(0)   (*invalid op possible*)
+  fwait
+sqrt_exit:
+  mov   word ss:[InMathLib], 0
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp,bp
+  pop   bp
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+sqrttable:
+  dw sqrt_exit, $err_domain, $err_domain; db 0, "sqrt", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $pow2
+extrn __fac
+extrn $err_underflow
+extrn $err_huge_plus_infinity
+
+public _expl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], expltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12]      (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1),st(0)
+expl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+expltable:
+  dw expl_exit, $err_underflow, $err_huge_plus_infinity; db f_st5+f_long, "expl", 0
+
+(*%E StdFloat *)
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn $pow2
+extrn $err_underflow
+extrn $err_plus_infinity
+
+public _exp :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], exptable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12]      (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1),st(0)
+exp_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+exptable:
+  dw exp_exit, $err_underflow, $err_plus_infinity; db f_st5, "exp", 0
+
+(*%E StdFloat *)
+(****************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $pow2
+extrn __fac
+
+public _tanhl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], tanhltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  fst   qword [bp][-12], st(0)
+  fadd  st(0), st(1)
+  fxch  st(0), st(1)
+  fsub  qword st(0), [bp][-12]
+  fdivrp st(1), st(0)
+tanhl_exit:
+(*%F NearPtr *)                   (* for error processing *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+tanhltable:
+  dw tanhl_exit,tanhl_minus_one,tanhl_one ; db f_st5+f_long, "tanhl", 0
+
+tanhl_one:
+  sub   ax, ax
+  fld1  st(0)
+  ret   0
+
+tanhl_minus_one:
+  call  tanhl_one
+  fchs  st(0)
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $pow2
+extrn __fac
+
+public _tanh :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], tanhtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  fst   qword [bp][-12], st(0)
+  fadd  st(0), st(1)
+  fxch  st(0), st(1)
+  fsub  qword st(0), [bp][-12]
+  fdivrp st(1), st(0)
+tanh_exit:
+(*%F NearPtr *)                   (* for error processing *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+tanhtable:
+  dw tanh_exit,tanh_minus_one,tanh_one; db f_st5, "tanh", 0
+
+tanh_one:
+  sub   ax, ax
+  fld1  st(0)
+  ret   0
+
+tanh_minus_one:
+  call  tanh_one
+  fchs  st(0)
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   $pow2
+extrn   $err_huge_plus_infinity
+extrn   $err_huge_minus_infinity
+extrn __fac
+extrn @coremath_int_two
+public _sinhl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sinhltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fchs  st(0)
+  fdiv  st(0), st(1)  (* - Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+sinhl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+sinhltable:
+  dw sinhl_exit, $err_huge_minus_infinity, $err_huge_plus_infinity; db f_st5+f_long, "sinhl", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   $pow2
+extrn   $err_plus_infinity
+extrn   $err_minus_infinity
+extrn __fac
+extrn @coremath_int_two
+public _sinh :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], sinhtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fchs  st(0)
+  fdiv  st(0), st(1)  (* - Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+sinh_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+sinhtable:
+  dw sinh_exit, $err_minus_infinity, $err_plus_infinity; db f_st5, "sinh", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn   $err_huge_plus_infinity
+extrn __fac
+extrn @coremath_int_two
+extrn   $pow2
+public _coshl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], coshltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame];
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fabs  st(0)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+coshl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+coshltable:
+  dw coshl_exit, $err_huge_plus_infinity, $err_huge_plus_infinity; db f_st5+f_long, "coshl", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   $err_plus_infinity
+extrn __fac
+extrn   @coremath_int_two
+extrn   $pow2
+public _cosh :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], coshtable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0), [bp][frame];
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fwait
+  fabs  st(0)
+  fldl2e st(0)
+  fmulp st(1), st(0)
+  fist  word [bp][-2], st(0) (* to check that it is not too large *)
+  fwait
+  call  $pow2
+  fld   qword st(0), [bp][-12] (* retrieve integral part *)
+(*%T _WINDOWS *)
+  ftst  st(0)                       (* work around windows emulator bug *)
+  fstsw [bp][-2]
+(*%E *)
+  fxch  st(1), st(0)
+(*%T _WINDOWS *)
+  test  byte [bp][-1], 40H
+  jnz   skipscale
+(*%E *)
+  fscale st(0), st(1)
+skipscale:
+  fstp  st(1), st(0)
+  fld1  st(0)
+  fdiv  st(0), st(1)  (* Exp (-x) *)
+  faddp st(1), st(0)
+  fidiv word st(0), cs:[@coremath_int_two ]
+cosh_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+coshtable:
+  dw cosh_exit, $err_plus_infinity, $err_plus_infinity; db f_st5, "cosh", 0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   $check_abs_one
+extrn __fac
+extrn   $atan0
+extrn   @coremath_tbyte_Pi_By_2
+public _asinl:
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], asinltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame]
+(*%F SameDS *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fst   qword [bp][-12], st(0)
+  fmul  st(0), st(0)        (* arg1**2 *)
+  fld1  st(0)
+  fsubrp st(1),st(0)        (* arg1**2-1 *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fsqrt st(0)               (* sqrt (arg1**2-1) *)
+  test  byte [bp][-1],40H   (* is result 0 *)
+  jz    Not0                (* no *)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]  (* $2 *)
+  fstp  st(1),st(0)         (* $1 *)
+  test  byte [bp][frame][9],80H  (* was arg1 neg ? *)
+  jz    asinl_exit          (* arg1 was positive. return pi/2 *)
+  fchs  st(0)
+  jmp   asinl_exit          (* arg1 was negative. return -pi/2 *)
+Not0:
+  fdivr qword st(0), [bp][-12]
+  fwait
+  call  $atan0
+asinl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+asinltable:
+  dw asinl_exit, err_asinl_neg, err_asinl_pos; db f_st5+f_long, "asinl", 0
+
+err_asinl_pos:
+  call  $check_abs_one
+  fld1  st(0)
+  fstp  st(1), st(0)
+  fchs  st(0)
+  fldpi st(0)
+  fscale st(0),st(1)
+  sub   ax, ax
+  ret   0
+
+err_asinl_neg:
+  call  err_asinl_pos
+  fchs  st(0)
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn   $check_abs_one
+extrn __fac
+extrn   $atan0
+extrn   @coremath_tbyte_Pi_By_2
+public _asin:
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], asintable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0),[bp][frame]
+(*%F SameDS *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  fst   qword [bp][-12], st(0)
+  fmul  st(0), st(0)        (* arg1**2 *)
+  fld1  st(0)
+  fsubrp st(1),st(0)        (* arg1**2-1 *)
+  ftst  st(0)
+  fstsw [bp][-2]
+  fsqrt st(0)               (* sqrt (arg1**2-1) *)
+  test  byte [bp][-1],40H   (* is result 0 *)
+  jz    Not0                (* no *)
+  fld   tbyte st(0),cs:[@coremath_tbyte_Pi_By_2]  (* $2 *)
+  fstp  st(1),st(0)         (* $1 *)
+  test  byte [bp][frame][7],80H  (* was arg1 neg ? *)
+  jz    asin_exit          (* arg1 was positive. return pi/2 *)
+  fchs  st(0)
+  jmp   asin_exit          (* arg1 was negative. return -pi/2 *)
+Not0:
+  fdivr qword st(0), [bp][-12]
+  fwait
+  call  $atan0
+asin_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  fwait
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+asintable:
+  dw asin_exit, err_asin_neg, err_asin_pos; db f_st5, "asin", 0
+
+err_asin_pos:
+  call  $check_abs_one
+  fld1  st(0)
+  fstp  st(1), st(0)
+  fchs  st(0)
+  fldpi st(0)
+  fscale st(0),st(1)
+  sub   ax, ax
+  ret   0
+
+err_asin_neg:
+  call  err_asin_pos
+  fchs  st(0)
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn   @coremath_tbyte_Pi_By_2
+extrn   $check_abs_one
+extrn   $atan0
+
+public _acosl :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], acosltable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   tbyte st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  ftst  st(0)                   (* is st(0) 0 or -0 ? *)
+  fstsw [bp][-2]
+  fst   qword [bp][-12], st(0)
+  test  byte [bp][-1],40H            (* test for zero flag *)
+  jnz   DoPiBy2                 (* if arg1 was 0,return pi/2 *)
+  fmul  st(0), st(0)
+  fld1  st(0)
+  fsubrp st(1),st(0)
+  fsqrt st(0)
+  fdivr qword st(0), [bp][-12]
+  fwait
+  call  $atan0
+DoPiBy2:
+  fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1), st(0)
+acosl_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  tbyte es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  tbyte [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*10
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*10
+(*%E*)
+
+acosltable:
+  dw acosl_exit, err_acosl_neg, err_acosl_pos; db f_long+f_st5, "acosl", 0
+
+err_acosl_pos:
+  call  $check_abs_one
+  fldz  st(0)
+  sub   ax, ax
+  ret   0
+
+err_acosl_neg:
+  call  $check_abs_one
+  fldpi st(0)
+  sub   ax, ax
+  ret   0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+extrn __fac
+extrn   @coremath_tbyte_Pi_By_2
+extrn   $atan0
+extrn   $check_abs_one
+
+public _acos :
+  push  bp
+  mov   bp, sp
+  mov   word ss:[InMathLib], acostable
+  mov   word ss:[InMathLib][2], bp
+  sub   sp, 12
+  fld   qword st(0), [bp][frame]
+(*%F SameDS *)                   (* for error processing *)
+  mov   ax, seg __fac
+  mov   es, ax
+  fst   qword es:[__fac], st(0)
+(*%E *)
+(*%T SameDS *)
+  fst   qword [__fac], st(0)
+(*%E *)
+  ftst  st(0)                   (* is st(0) 0 or -0 ? *)
+  fstsw [bp][-2]
+  fst   qword [bp][-12], st(0)
+  test  byte [bp][-1],40H       (* test for zero flag *)
+  jnz   DoPiBy2                 (* if arg1 was 0,return pi/2 *)
+  fmul  st(0), st(0)
+  fld1  st(0)
+  fsubrp st(1),st(0)
+  fsqrt st(0)
+  fdivr qword st(0), [bp][-12]
+  fwait
+  call  $atan0
+DoPiBy2:
+  fld   tbyte st(0), cs:[@coremath_tbyte_Pi_By_2]
+  fsubrp st(1), st(0)
+acos_exit:
+(*%F NearPtr *)
+  mov   dx, seg __fac
+  mov   es, dx
+  fstp  qword es:[__fac], st(0)
+(*%E *)
+(*%T NearPtr *)
+  fstp  qword [__fac], st(0)
+(*%E *)
+  mov   ax, __fac
+  mov   sp, bp
+  pop   bp
+  mov   word ss:[InMathLib], 0
+(*%T NearCall*)
+  ret   near PopParam*8
+(*%E*)
+(*%F NearCall*)
+  ret   far PopParam*8
+(*%E*)
+
+acostable:
+  dw acos_exit, err_acos_neg, err_acos_pos; db f_st5, "acos", 0
+
+err_acos_pos:
+  call  $check_abs_one
+  fldz  st(0)
+  sub   ax, ax
+  ret   0
+
+err_acos_neg:
+  call  $check_abs_one
+  fldpi st(0)
+  sub   ax, ax
+  ret  0
+
+(*%E StdFloat *)
+
+(*************************************************************************)
+(*%T StdFloat *)
+(*%F _WINDOWS *)
+section
+segment _DATA(DATA,28H)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __lib_error
+extrn __SH_sword
+extrn __exc_addr
+
+public __math_excep:
+  (* called from floating point exception handler *)
+  (*
+     8087 status word on stack, behind FAR return address to
+     signal handler.
+     This function must reside in the same segment as the math
+     library functions which use InMathLib
+     [bp][0]  == saved bp
+     [bp][2]  == return ip to signal handler
+     [bp][4]  == return cs to signal handler
+     [bp][6]  == 8087 status word
+     [bp][8]  == return ip to point of exception
+     [bp][10] == return cs to point of exception
+     [bp][12] == flags for iret
+  *)
+
+
+  push bp
+  mov bp,sp
+  sub sp,2
+  cmp word ss:[InMathLib], 0
+  je user_error
+
+(* An error has occurred in a library function. Put the stack into a
+   canonical state *)
+  jmp pop_8087
+pop_8087_loop:
+  fstp st(0), st(0)
+pop_8087:
+  fstsw [bp][-2]
+  fwait
+  test word [bp][-2], 3800H
+  jnz  pop_8087_loop
+
+  (* The address of the handler table is in ss:[InMathLib] *)
+  push si
+  push ax
+  push bx
+  mov si,ss:[InMathLib]
+  mov word ss:[InMathLib], 0
+  mov ax, cs:[si]             (* resume address *)
+  inc si
+  inc si
+  mov [bp][2],ax              (* adjust local return address *)
+  mov bx,ss:[InMathLib][2]    (* get the BP at the point of error *)
+  mov [bp],bx                 (* and make sure we restore to it *)
+  call __lib_error
+  pop bx
+  pop ax
+  pop si
+  mov sp,bp
+  pop bp
+  ret 10   (* return NEAR to resume point (we know it's in same code segment)
+              discard signal handler cs, 8087 status word, and 6 byte iret info *)
+
+user_error:
+  push ax
+  push ds
+  mov  ax, _DATA
+  mov  ds, ax
+  mov  ax, [bp][6]
+  mov  [__SH_sword], ax
+  mov  ax, [bp][8]
+  mov  [__exc_addr], ax
+  mov  ax, [bp][10]
+  mov  [__exc_addr][2], ax
+  pop  ds
+  pop  ax
+  mov sp, bp
+  pop bp
+  ret  far 2         (* return FAR to signal handler, discarding status word *)
+
+(*%E _WINDOWS *)
+(*%E StdFloat *)
+(**************************************************************************)
+(*%T StdFloat *)
+(*%T _WINDOWS *)
+section
+segment _DATA(DATA,28H)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn __lib_error
+extrn __SH_sword
+extrn __exc_addr
+
+public __math_excep:
+  (* called from floating point exception handler *)
+  (*
+     8087 status word on stack, behind FAR return address to
+     signal handler.
+     This function must reside in the same segment as the math
+     library functions which use InMathLib
+     [bp][0]  == saved bp
+     [bp][2]  == return ip to signal handler
+     [bp][4]  == return cs to signal handler
+     [bp][6]  == 8087 status word
+     [bp][8]  == return ip to windows emulator
+     [bp][10] == return cs to windows emulator
+  *)
+  (*
+     Windows version - emulator may or may not have placed junk on the stack,
+     so use the saved info to work out where we are.
+  *)
+
+  push bp
+  mov bp,sp
+  sub sp,2
+  cmp word ss:[InMathLib], 0
+  je user_error
+
+(* An error has occurred in a library function. Put the stack into a
+   canonical state *)
+
+  jmp pop_8087
+pop_8087_loop:
+  fstp st(0), st(0)
+pop_8087:
+  fxam  st(0)
+  fstsw [bp][-2]
+  fwait
+  and byte [bp][-1], 41H
+  cmp byte [bp][-1], 41H
+  jnz pop_8087_loop
+
+  (* The address of the handler table is in ss:[InMathLib] *)
+  push si
+  push ax
+  push bx
+  mov si,ss:[InMathLib]
+  mov word ss:[InMathLib], 0
+  mov ax, cs:[si]             (* resume address *)
+  inc si
+  inc si
+  mov [bp][2],ax              (* adjust local return address *)
+  mov bx,ss:[InMathLib][2]    (* get the BP at the point of error *)
+  mov [bp],bx                 (* and make sure we restore to it *)
+  call __lib_error
+  pop bx
+  pop ax
+  pop si
+  mov sp,bp
+  pop bp                      (* == BP at point of error *)
+  ret 8   (* return NEAR to resume point (we know it's in same code segment)
+             discard signal handler cs, 8087 status word, and return address
+             to Windows. Anything else left on stack by Windows emulator
+             is removed at the resume address by the mov sp,bp
+             it will perform *)
+
+user_error:
+  push ax
+  push ds
+  mov  ax, ss
+  mov  ds, ax
+  mov  ax, [bp][6]
+  mov  [__SH_sword], ax
+  sub  ax, ax             (* No hope of locating error source under windows *)
+  mov  [__exc_addr], ax
+  mov  [__exc_addr][2], ax
+  pop  ds
+  pop  ax
+  mov sp, bp
+  pop bp
+  ret  far 2         (* return FAR to signal handler, discarding status word *)
+
+(*%E _WINDOWS *)
+(*%E StdFloat *)
+section
+(*****************************************************************************)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public $err_domain:
+  fldz st(0)
+  mov  ax, _DOMAIN
+  ret  0
+(************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public $err_underflow:
+  fldz st(0)
+  mov  ax, _UNDERFLOW
+  ret  0
+(************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public $err_plus_infinity:
+(*%T SameDS *)
+  extrn _HUGE
+  fld  qword st(0), [_HUGE]
+  mov  ax, _OVERFLOW
+  ret  0
+(*%E SameDS *)
+(*%F SameDS *)
+  extrn @coremath_HUGE
+  fld  qword st(0), cs:[@coremath_HUGE]
+  mov  ax, _OVERFLOW
+  ret  0
+(*%E NOT SameDS *)
+
+(***********************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_plus_infinity
+public $err_minus_infinity:
+  call $err_plus_infinity
+  fchs st(0)
+  ret  0
+
+(************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public $err_huge_plus_infinity:
+(*%T SameDS *)
+extrn _LHUGE
+  fld  tbyte st(0), [_LHUGE]
+  mov  ax, _OVERFLOW
+  ret  0
+(*%E SameDS *)
+(*%F SameDS *)
+extrn  @coremath_LHUGE
+  fld  tbyte st(0),cs:[@coremath_LHUGE]
+  mov  ax, _OVERFLOW
+  ret  0
+(*%E NOT SameDS *)
+
+(***********************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn $err_huge_plus_infinity
+public $err_huge_minus_infinity:
+  call $err_huge_plus_infinity
+  fchs st(0)
+  ret  0
+
+(***** Common Procedures *************************************************)
+(******************** __bcd  ******************************************
+void __bcd(LONGDOUBLE num,tbyte *return_area)
+COVENTIONS: all
+ROUNDING: to nearest
+OVERFLOW:  returns signed Maximum
+UNDERFLOW: returns +0
+converts the long double num to a standard packed tbyte bcd at
+ address ss:return_area.
+***********************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+num =  CodePtrSize+2
+(*%F _WINDOWS *)
+extrn   @coremath_nearest
+(*%E NOT _WINDOWS *)
+public __bcd:
+(*%T StkParam *)(*%F _WINDOWS *)
+  push  bp
+  mov   bp,sp
+  push  ax                       (* to store cw *)
+  fstcw [bp][-2]                 (* store cw *)
+  fld   tbyte st(0),[bp][num]    (* load num *)
+  fldcw cs:[@coremath_nearest]   (* set cw to "round to nearest" *)
+  mov   bx,[bp][12][CodePtrSize] (* ss:[bx] = return_area *)
+  frndint st(0)                  (* 80287 does not use rounding controls on fbstp *)
+  fbstp tbyte ss:[bx],st(0)      (* store num as packed bcd in return_area *)
+  fldcw [bp][-2]                 (* restore cw *)
+  fwait
+  mov   sp,bp                    (* destroy stack frame *)
+  pop   bp
+  db    Ret0@
+(*%E StkParam *)(*%E NOT _WINDOWS *)
+(*%F StdFloat *)
+  push  bp
+  mov   bp,sp
+  push  ax                       (* to store cw *)
+  fstcw [bp][-2]                 (* store cw *)
+  fldcw cs:[@coremath_nearest]    (* set cw to "round to nearest" *)
+  fld   tbyte st(0),st(0)        (* load num *)
+  xchg  bx,ax                    (* ss:[bx] = return_area *)
+  frndint st(0)                  (* 80287 does not use rounding controls on fbstp *)
+  fbstp tbyte ss:[bx],st(0)      (* store num as packed bcd in return_area *)
+  fldcw [bp][-2]                 (* restore cw *)
+  xchg  bx,ax                    (* restore bx  *)
+  fwait
+  mov   sp,bp                    (* destroy stack frame *)
+  pop   bp
+  db    Ret0@
+(*%E StdFloat *)
+(*%T _WINDOWS *)
+extrn __FloatLoadCW
+extrn __FloatStoreCW
+(*%T RegParam *)
+          push  bp             (* #1 save registers *)
+          mov   bp,sp
+          push  si             (* #2 *)
+          push  di             (* #3 *)
+          push  bx             (* #4 *)
+          push  cx             (* #5 *)
+          push  dx             (* #6 *)
+          mov   di,ax          (* ss:[di] = return area *)
+(*%E RegParam *)
+(*%T StkParam *)
+          push  bp             (* #1 save registers *)
+          mov   bp,sp
+          push  si             (* #2 *)
+          push  di             (* #3 *)
+          mov   di,[bp][12][CodePtrSize](* ss:[di] = return area *)
+(*%E StkParam *)
+          push  ss
+          pop   es
+          call  far __FloatStoreCW (* store cur control word in ax *)
+          push  ax             (* push cur control word *)
+          and   ax,~0C00H      (* round to nearest or even *)
+          call  far __FloatLoadCW (* rounding control now set *)
+          mov   ax,[bp][8][num] (* load exponent & sign *)
+          mov   dl,80H         (* sign mask *)
+          and   dl,ah          (* sign in dl *)
+          xor   ah,dl          (* remove from ax *)
+          mov   [bp][9][num],ah(* make long double positive *)
+          mov   es:[di][9],dl  (* store sign in bcd *)
+          cmp   ax,3FFFH+60    (* overflow ?  coarse test *)
+          jae   OverFlow       (* dbl>2**60.definite overflow *)
+          fld   tbyte st(0),[bp][num](* load long double *)
+          fistp qword [bp][num],st(0)(* return quad intiger *)
+          fwait
+          mov   si,[bp][num]   (* si =least sig word *)
+          cmp   ax,3FFFH       (* if long double<1.... *)
+          cmc
+          sbb   ax,ax      (* clear ax *)
+          or    ax,si      (* long double<1 & least sig=0 ? *)
+          jz    Zilch      (* YES so return 0 *)
+                           (* ##1 divide quad int by 10000 *)
+          mov   dx,[bp][6][num] (* most sig word *)
+          mov   ax,[bp][4][num] (* 2'nd most sig word *)
+          mov   cx,10000   (* divisor *)
+          div   cx         (* ##1.1 *)
+          mov   bx,ax      (* bx = R1.1 *)
+          mov   ax,[bp][2][num] (* 3'rd most sig word *)
+          div   cx         (* ##1.2 *)
+          xchg  ax,si      (* si = R1.2 .ax = 4th sig *)
+          div   cx         (* ##1.3 *)
+          push  dx         (* push Rem.1 *)
+          xchg  ax,bx      (* ax = R1.1 bx= R1.3 *)
+                           (* ##2 2'nd divide by 10000 *)
+          cwd              (* zero extend R1.1 *)
+          div   cx         (* ##2.1 *)
+          xchg  ax,si      (* ax = R1.2.si = R2.1 *)
+          div   cx         (* ##2.2 *)
+          xchg  ax,bx      (* ax = R1.3.bx = R2.2 *)
+          div   cx         (* ##2.3 *)
+          push  dx         (* push Rem.2 *)
+          xchg  ax,bx      (* bx = R2.3. ax = R2.2 *)
+                           (* ## 3'rd divide by 10000 *)
+          mov   dx,si      (* dx = R2.1,ax = R2.2 *)
+          div   cx         (* ##3.1 *)
+          xchg  ax,bx      (* ax = R2.3,bx = R3.1 *)
+          div   cx         (* ##3.2 *)
+          push  dx         (* push Rem.3 *)
+                           (* ## 4'th divide by 10000 *)
+          mov   dx,bx      (* dx = R3.1,ax = R3.2 *)
+          div   cx         (* ##4.1 *)
+          mov   cx,25604   (* ch =100,cl=4 *)
+          cmp   al,ch      (* fine overflow test *)
+          jb    NotOver    (* test passed *)
+          add   sp,6       (* destroy 3 pushes *)
+OverFlow: mov   ax,9999H   (* return signed max *)
+          stosb            (* 9 packed bytes set *)
+          jmp   Over2      (* don't set sign byte *)
+Zilch:    stosw            (* zilch clears all byte's including sign *)
+Over2:    stosw
+          stosw
+          stosw
+          stosw
+          jmp   Done
+
+NotOver:  push  dx         (* push Rem.4 *)
+          aam              (* ah top digit,al = 2'nd *)
+          shl   ah,cl      (* pack *)
+          add   al,ah
+          add   di,8       (* di -> top packed byte *)
+          std              (* packed words stored in reverse order *)
+          stosb            (* store top packed byte *)
+          dec   di         (* di -> 4'th packed word *)
+          mov   si,4       (* 4 iterations of store loop *)
+
+StoreLp:  pop   ax         (* pop next 4 digits *)
+          div   ch         (* al = X34, ah =X12 *)
+          mov   dl,ah      (* dl = X12 *)
+          aam              (* ah = X4,al = X3 *)
+          xchg  ax,dx      (* al = X12,dh =X4,dl = X3 *)
+          aam              (* al = X1,ah = X2 *)
+          xchg  ah,dl      (* al=X1,ah =X3,dl=X2,dh=X4 *)
+          shl   dx,cl      (* dx<<4 *)
+          add   ax,dx      (* ax = 4 packed bcd digits *)
+          stosw            (* store digits *)
+          dec   si
+          jnz   StoreLp    (* next 4 digits *)
+
+          cld              (* reset direction flag *)
+Done:     pop   ax         (* ax = original CW *)
+          call  far __FloatLoadCW (* restore CW *)
+(*%T StkParam *)
+          pop   di         (* #3 restore registers *)
+          pop   si         (* #2 *)
+          pop   bp         (* #1 *)
+          db    Ret0@
+(*%E StkParam *)
+(*%T RegParam *)
+          pop   dx         (* #6 restore registers *)
+          pop   cx         (* #5 *)
+          pop   bx         (* #4 *)
+          pop   di         (* #3 *)
+          pop   si         (* #2 *)
+          pop   bp         (* #1 *)
+          db    RetX@;dw 10
+(*%E RegParam *)
+(*%E _WINDOWS *)
+
+(************************* _acvt() ************************************
+LONGDOUBLE  _acvt(int flag, char *mbuf, int exp, int len);
+ converts the ascii string *mbuf of len digits to a long double,
+   and multiplys it by 10**exp.
+the following asumptions are not checked:
+            len is asumed to be 18 or less.
+            all digits are asumed to be valid askii decimal with no '.'
+*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_int_ten
+extrn @coremath_int_one
+extrn __seterrno
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%T SameDS *)
+extrn _HUGE
+extrn _LHUGE
+(*%E SameDS *)
+(*%F SameDS *)
+extrn @coremath_HUGE
+extrn @coremath_LHUGE
+(*%E NOT SameDS *)
+(*%T _WINDOWS *)
+extrn __FloatLoadCW
+extrn __FloatStoreCW
+(*%E _WINDOWS *)
+(*%F _WINDOWS *)
+extrn @coremath_nearest
+(*%E NOT _WINDOWS *)
+ _MNEG   =  1   (* True -> result should be negative *)
+ _STD    =  8   (* True -> set errno if overflow *)
+ _ACVTL  =  16  (* False -> max return is HUGE, not LHUGE *)
+public __acvt:
+(*%F _WINDOWS *)
+         push bp                (* #0 *)
+         mov  bp,sp
+         push ax                (* #1 for CW *)
+         fstcw [bp][-2]         (* save old CW *)
+(*%T RegParam *)(*%T FarPtr *)
+         mov  es,cx                    (* es:[bx] = mbuff *)
+         mov  cx,[bp][2][CodePtrSize]  (* cx = len. dx = exp *)
+(*%E RegParam *)(*%E FarPtr *)
+(*%T RegParam *)(*%T NearPtr *)
+         xchg  cx,dx     (* cx = len. dx = exp *)
+(*%E RegParam *)(*%E NearPtr *)
+(*%T StkParam *)(*%T FarPtr *)
+         mov   ax,[bp][2][CodePtrSize]  (* flags *)
+         les   bx,[bp][4][CodePtrSize]  (* mbuff *)
+         mov   dx,[bp][8][CodePtrSize]  (* exp  *)
+         mov   cx,[bp][10][CodePtrSize] (* len *)
+(*%E StkParam *)(*%E FarPtr *)
+(*%T StkParam *)(*%T NearPtr *)
+         mov   ax,[bp][2][CodePtrSize] (* flags *)
+         mov   bx,[bp][4][CodePtrSize] (* mbuff *)
+         mov   dx,[bp][6][CodePtrSize] (* exp  *)
+         mov   cx,[bp][8][CodePtrSize] (* len *)
+(*%E StkParam *)(*%E NearPtr *)
+         xor   bp,bp
+         push  bp       (* #2 create cleared tbyte for packed bcd *)
+         push  bp       (* #3 *)
+         push  bp       (* #4 *)
+         push  bp       (* #5 *)
+         push  bp       (* #6 *)
+         fldcw cs:[@coremath_nearest] (* round to nearest, mask exceptions *)
+         mov   bp,sp    (* ss:[bp]->bcd_store *)
+         push  ax       (* #7 save flags *)
+         add   bx,cx    (* bx-> end of mbuf *)
+         jmp   PkEnt
+
+Pack:    dec   bx       (* next 2 digits *)
+         dec   bx
+(*%T FarPtr *) db es@   (*%E es seg for mbuff *)
+         mov   ax,[bx]  (* load digits from mbuff *)
+         and   ah,0FH   (* convert lower digit to decimal from askii *)
+         add   al,al    (* upper_digit<<4 . also converts to decimal *)
+         add   al,al
+         add   al,al
+         add   al,al
+         add   al,ah    (* pack digits into al *)
+         mov   [bp],al  (* store packed byte in bcd_store *)
+         inc   bp       (* next byte of bcd_store *)
+PkEnt:   sub   cx,2     (* sub 2 from count *)
+         jae   Pack     (* 2 or more characters remain *)
+         jnp   NoOdd         (* cx= -2 so no odd character *)
+(*%T FarPtr *) db es@        (*%E es: for mbuff *)
+         mov   al,[bx][-1]   (* pack last digit *)
+         and   al,0FH
+         mov   [bp],al
+NoOdd:   mov   bp,sp         (* bp = stack frame *)
+         add   bp,14         (* compensate for 7 pushes *)
+         fbld  tbyte st(0),[bp][-12](* $1 load packed digits *)
+         pop   bx            (* #7 flags *)
+         or    dx,dx         (* test exponent *)
+(*%T RegParam *) fstp  st(1),st(0) (*%E $0 *)
+         jz    Sign          (* no power- return digits *)
+         fild  word st(0),cs:[@coremath_int_ten] (*$1or2 load 10 *)
+         jns   Ploop
+         neg   dx
+         fidivr word st(0),cs:[@coremath_int_one]  (* st(0) = 1/10 *)
+         jmp   Ploop
+
+Htest:   fstsw [bp][-12]          (* store SW *)
+         fwait
+         pop   ax                 (* #6 ax = SW *)
+         test  al,8               (* has an overflow been recorded ? *)
+         jz    Sign               (* No Error result<LHUGE *)
+(*%T SameDS *) fld  tbyte st(0),[_LHUGE] (*%E $1or2 return LHUGE *)
+(*%F SameDS *) fld  tbyte st(0),cs:[@coremath_LHUGE] (*%E *)
+         jmp   Error
+                                  (* accumulate powers of 10 or 1/10 in st(1) *)
+Ploop2:  fmul  st(1),st(0)        (* mul st(1) by 10**2**N *)
+Ploop1:  fmul  st(0),st(0)        (* N++ *)
+Ploop:   shr   dx,1
+         ja    Ploop1
+         jnz   Ploop2
+         fmulp st(1),st(0)        (* $0or1  last power *)
+         test  bl,_ACVTL          (* is max HUGE or LHUGE ? *)
+         jnz   Htest
+(*%T SameDS *) fcom  qword st(0),[_HUGE] (*%E cmp result,HUGE *)
+(*%F SameDS *) fcom  qword st(0),cs:[@coremath_HUGE] (*%E *)
+         fstsw [bp][-12]          (* store result  of test *)
+         fwait
+         pop   ax                 (* #6 ax = cmp result,HUGE *)
+         sahf                     (* flags = cmp result,HUGE *)
+         jb    Sign               (* No Error result<HUGE *)
+(*%T SameDS *) fld  qword st(0),[_HUGE] (*%E $1or2 return HUGE *)
+(*%F SameDS *) fld  qword st(0),cs:[@coremath_HUGE] (*%E *)
+Error:   fstp  st(1),st(0)        (* $0or1 destroy old return *)
+         test  bl,_STD            (* set errno ? *)
+         jz    Sign               (* atof does not set errno *)
+         mov   ax,_OVERFLOW       (* set errno to _OVERFLOW *)
+(*%T NearCall *) call  __seterrno (*%E NearCall *)
+(*%T FarCall *)  call  far __seterrno (*%E FarCall *)
+Sign:    test  bl,_MNEG            (* test for sign flag *)
+         jz    Done                (* result is positive *)
+         fchs  st(0)               (* result is negative *)
+Done:    fclex                     (* clear any exception *)
+         fldcw [bp][-2]            (* restore original CW *)
+(*%T NearPtr *)(*%T RegParam *)
+         fwait                     (* wait for fldcw to finish *)
+         mov   sp,bp               (* #1 destroy pushed CW,& remaining bcd *)
+         pop   bp                  (* #0 *)
+         db    Ret0@
+(*%E NearPtr *)(*%E RegParam *)
+(*%T FarPtr *)(*%T RegParam *)
+         fwait                     (* wait for fldcw to finish *)
+         mov   sp,bp               (* #1 destroy pushed CW,& remaining bcd *)
+         pop   bp                  (* #0 *)
+         db    RetX@ ;dw 2
+(*%E FarPtr *)(*%E RegParam *)
+(*%T NearPtr *)(*%T StdFloat *)
+         mov   ax,__fac            (* return tbyte in __fac *)
+         fstp  tbyte [__fac],st(0)
+         mov   sp,bp               (* #1 destroy pushed CW,& remaining bcd *)
+         fwait                     (* wait for tbyte store to end *)
+         pop   bp                  (* #0 *)
+         db    Ret0@
+(*%E NearPtr *)(*%E StdFloat *)
+(*%T FarPtr *)(*%T SameDS *)(*%T StdFloat *)
+         mov   ax,__fac            (* return tbyte in __fac *)
+         mov   dx,ds
+         fstp  tbyte [__fac],st(0)
+         mov   sp,bp               (* #1 destroy pushed CW,& remaining bcd *)
+         fwait                     (* wait for tbyte store to end *)
+         pop   bp                  (* #0 *)
+         db    RetX@ ;dw 2
+(*%E FarPtr *)(*%E SameDS *)(*%E StdFloat *)
+(*%T FarPtr *)(*%F SameDS *)(*%T StdFloat *)
+         mov   ax,__fac            (* return tbyte in __fac *)
+         mov   dx,seg __fac
+         mov   es,dx
+         fstp  tbyte es:[__fac],st(0)
+         mov   sp,bp               (* #1 destroy pushed CW,& remaining bcd *)
+         fwait                     (* wait for tbyte store to end *)
+         pop   bp                  (* #0 *)
+         db    RetX@ ;dw 2
+(*%E FarPtr *)(*%E NOT SameDS *)(*%E StdFloat *)
+
+(*%E NOT _WINDOWS *)
+(******************* _WINDOWS _acvt **********************************)
+(*%T _WINDOWS *)
+(*%T RegParam *)
+         push bp                (* #0 *)
+         push si                (* #1 *)
+         push di                (* #2 *)
+         mov  di,ax             (* save flags *)
+         call far __FloatStoreCW
+         push ax                (* #3 save old cw *)
+         mov    ax,133FH        (* round to nearest,affine,excepts masked *)
+         call   far __FloatLoadCW
+(*%T FarPtr *)
+         push dx                (* #4 push exp *)
+         mov  si,bx             (* es:[si] = mbuf *)
+         mov  es,cx
+         mov  bp,sp
+         mov  cx,[bp][10][CodePtrSize]  (* cx = len *)
+(*%E FarPtr *)
+(*%T NearPtr *)
+         mov  si,bx             (* ds:[si] = mbuf *)
+         push cx                (* #4 push exp *)
+         mov  cx,dx             (* cx = len *)
+(*%E NearPtr *)
+         push di                (* #5 flags *)
+(*%E RegParam *)
+(*%T StkParam *)
+         push  bp                (* #0 *)
+         mov   bp,sp
+         push  si                (* #1 *)
+         push  di                (* #2 *)
+         call  far __FloatStoreCW
+         push  ax                (* #3 save old cw *)
+         mov   ax,133FH        (* round to nearest,affine,excepts masked *)
+         call  far __FloatLoadCW
+         push  [bp][4][CodePtrSize][DataPtrSize] (* #4 push exp *)
+         push  [bp][2][CodePtrSize]    (* #5 flags *)
+         mov   cx,[bp][6][CodePtrSize][DataPtrSize] (* cx = len *)
+(*%T FarPtr *)
+         les  si,[bp][4][CodePtrSize] (* es:[si] = mbuf *)
+(*%E FarPtr *)
+(*%T NearPtr *)
+         mov  si,[bp][4][CodePtrSize] (* ds:[si] = mbuf *)
+(*%E NearPtr *)
+(*%E StkParam *)
+
+         xor  dx,dx             (* clear Qint *)
+         xor  bx,bx
+         xor  di,di
+         xor  bp,bp
+         jcxz NoNum
+         jmp  Qent
+                         (* convert string to qword intiger in bp,di,bx,dx *)
+QLoop:   push bp           (* store Qint*1 *)
+         push di
+         mov  ax,dx
+         push bx
+         add  dx,dx        (* Qint = Qint*2 *)
+         adc  bx,bx
+         adc  di,di
+         adc  bp,bp
+         add  dx,dx        (* Qint = Qint*4 *)
+         adc  bx,bx
+         adc  di,di
+         adc  bp,bp
+         add  dx,ax        (* Qint = Qint*4 + Qint*1 *)
+         pop  ax
+         adc  bx,ax
+         pop  ax
+         adc  di,ax
+         pop  ax
+         adc  bp,ax
+         add  dx,dx        (* Qint = Qint*5*2 *)
+         adc  bx,bx
+         adc  di,di
+         adc  bp,bp
+(*%T NearPtr *)
+Qent:    lodsb             (* load next character *)
+(*%E NearPtr *)
+(*%F NearPtr *)
+Qent:    db   es@;lodsb    (* load next character, with es: override *)
+(*%E NearPtr *)
+         and  ax,0FH       (* convert askii char to int *)
+         add  dx,ax        (* add Qint,next digit *)
+         mov  al,ah        (* clear ax *)
+         adc  bx,ax
+         adc  di,ax
+         adc  bp,ax
+         loop QLoop
+                            (* Qint = bp,di,bx,dx *)
+NoNum:   pop   cx           (* #5 pop flags *)
+         pop   si           (* #4 pop exp *)
+         push  bp           (* #4 push Qint *)
+         push  di           (* #5 *)
+         push  bx           (* #6 *)
+         push  dx           (* #7 *)
+         mov   bp,sp        (* set bp to Qint *)
+         fild  qword st(0),[bp] (* $1 load  Qint *)
+         or    si,si        (* test exponent *)
+         jz    Sign         (* no power - return digits *)
+         fild  word st(0),cs:[@coremath_int_ten]   (* $2 load 10 *)
+         jns   Ploop
+         neg   si
+         fidivr word st(0),cs:[@coremath_int_one]  (* st(0) = 1/10 *)
+         jmp   Ploop
+
+Htest:   fstsw [bp]               (* store condition of chip *)
+         fwait                    (* wait for result *)
+         test  byte [bp],8        (* has an overflow been recorded ? *)
+         jz    Sign               (* No Error result<HUGE *)
+         fld   tbyte st(0),[_LHUGE]
+         jmp   Error
+                                  (* accumulate powers of 10 or 1/10 in st(1) *)
+Ploop2:  fmul  st(1),st(0)        (* mul st(1) by 10**2**N *)
+Ploop1:  fmul  st(0),st(0)        (* N++ *)
+Ploop:   shr   si,1
+         ja    Ploop1
+         jnz   Ploop2
+         fmulp st(1),st(0)        (* $1  last power *)
+         test  cl,_ACVTL          (* is max HUGE or LHUGE ? *)
+         jnz   Htest
+         fcom  qword st(0),[_HUGE]
+         fstsw [bp]               (* store result  of test *)
+         fwait                    (* wait for result *)
+         test  byte [bp][1],1     (* flags = cmp result,HUGE *)
+         jnz   Sign               (* No Error result<HUGE *)
+         fld   qword st(0),[_HUGE](* $2 Return Huge *)
+Error:   fstp  st(1),st(0)        (* $1 *)
+         test  cl,_STD            (* set errno ? *)
+         fclex                    (* clear any exception *)
+         jz    Sign               (* atof does not set errno *)
+         mov   ax,_OVERFLOW       (* set errno to _OVERFLOW *)
+(*%T NearCall *) call  __seterrno (*%E NearCall *)
+(*%T FarCall *)  call  far __seterrno (*%E FarCall *)
+Sign:    test  cl,_MNEG            (* test for sign flag *)
+         jz    Done                (* result is positive *)
+         fchs  st(0)               (* result is negative *)
+Done:    add   sp,8                (* #7-4 destroy pushed qword intiger *)
+         pop   ax                  (* #3 original CW *)
+         call  far __FloatLoadCW   (* restore original CW *)
+         mov   ax,__fac            (* return tbyte in __fac *)
+         fstp  tbyte [__fac],st(0) (* $0 *)
+         pop   di                  (* #2 restore registers *)
+         pop   si                  (* #1 *)
+         pop   bp                  (* #0 *)
+         fwait
+(*%T NearPtr *)
+         db    Ret0@
+(*%E NearPtr *)
+(*%T FarPtr *)(*%T RegParam *)
+         mov   dx,ds               (* return tbyte seg in __fac *)
+         db    RetX@ ;dw 2
+(*%E FarPtr *)(*%E RegParam *)
+(*%T FarPtr *)(*%T StkParam *)
+         mov   dx,ds               (* return tbyte seg in __fac *)
+         db    Ret0@
+(*%E FarPtr *)(*%E StkParam *)
+(*%E _WINDOWS *)
+(************************ pow() ******************************************
+double pow(double X,double Y)
+LONGDOUBLE powl(LONGDOUBLE X,LONGDOUBLE Y)
+return: X to the power Y
+Error: handled by matherr()
+Limits: if (X==0 && Y>0) or (X<0 && Y isn't an integer) pow calls matherr,
+        with error = DOMAIN,& result = 0.
+***************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+PowName: db "pow",0                        (* name for exception handler *)
+extrn $err_plus_infinity
+extrn $err_huge_plus_infinity
+extrn $err_minus_infinity
+extrn $err_huge_minus_infinity
+extrn $err_domain
+extrn $err_underflow
+extrn __report_math_error
+extrn @coremath_int_one
+extrn @coremath_int_two
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%F _WINDOWS *)
+extrn @coremath_nearest
+(*%E NOT _WINDOWS *)
+(*%T _WINDOWS *)
+extrn __FloatStoreCW
+extrn __FloatStoreSW
+extrn __FloatLoadCW
+(*%E _WINDOWS *)
+(*%T RegParam *)
+(*%T NearPtr *) x=-6 (*%E NearPtr *)
+(*%T FarPtr *) x=-4  (*%E FarPtr *)
+Arg1Dbl = 2+CodePtrSize+8
+Arg1Tbt = 2+CodePtrSize+10
+Arg2Dbl = 2+CodePtrSize
+Arg2Tbt = 2+CodePtrSize
+(*%E RegParam *)
+(*%T StkParam *)
+x=0
+Arg1Dbl = 2+CodePtrSize
+Arg1Tbt = 2+CodePtrSize
+Arg2Dbl = 2+CodePtrSize+8
+Arg2Tbt = 2+CodePtrSize+10
+(*%E StkParam *)
+(*%F StdFloat ********************************************)
+public _powl:
+       push  bp                   (* #0 save bp *)
+       mov   bp,sp
+       push  cx                   (* #1 save cx *)
+       xor   cx,cx                (* powl flag: set cx = 0 *)
+       jmp   Ent
+public _pow:
+       push   bp                  (* #0 save bp *)
+       mov    bp,sp
+       push   cx                  (* #1 save cx *)
+       mov    ch,-1               (* pow flag: set cx =! 0 *)
+Ent:   push   ax                  (* #2 save ax *)
+       ftst   st(0)               (* test X *)
+       push   ax                  (* #3 to store CW *)
+       push   ax                  (* #4 for test X *)
+       fstsw  word [bp][-8]       (* store result of test *)
+       fstcw  [bp][-6]            (* store control word *)
+       fst    st(5),st(0)         (* save X in st(5) for error handler *)
+       pop    ax                  (* #4 ax = cmp X,0 *)
+       sahf                       (* flags =cmp X,0 *)
+       fld    st(0),st(6)         (* $1 Y = st(0) *)
+       push   bx                  (* #4 save bx *)
+       mov    ah,-1               (* set ZF flag in ax *)
+       fldcw  cs:[@coremath_nearest](* round to nearest,affine,excepts masked *)
+       push   ax                  (* #5 assume result is positive *)
+       jz     X0                  (* X is Zero *)
+       ja     Xpos                (* X is positive non-Zero *)
+
+Xneg:  frndint st(0)              (* X is neg. Y rounded to int *)
+       fcom   st(0),st(7)         (* cmp Y,rounded Y *)
+       fstsw  [bp][-10]           (* store result of test *)
+       fidiv  word st(0),cs:[@coremath_int_two]
+       pop    ax                  (* #5 ax = cmp Y,chopped Y *)
+       sahf                       (* flags = cmp Y,chopped Y *)
+       jne    Domain              (* Y isn't an integer *)
+       frndint st(0)              (* round 1/2Y - altered if Y was odd *)
+       fadd   st(0),st(0)
+       fcomp  st(0),st(7)         (* $0 Y = st(0) if Y is even *)
+       push   ax                  (* #5 to store result sign *)
+       fstsw  [bp][-10]           (* ZF = 1 if pos result *)
+       fabs   st(0)               (* st(0) = abs(X) *)
+       fld    st(0),st(6)         (* $1 st(0) = Y, st(1) = X *)
+
+Xpos:  fxch   st(0),st(1)         (*    st(0) = X,st(1) = Y *)
+       fyl2x  st(1),st(0)         (* $0 st(0) = log2 result *)
+       sub    sp,10               (*#6-10 for tempory tbyte *)
+       fld    st(0),st(0)         (* $1 *)
+       fstp   tbyte [bp][-20],st(0) (* $0 log2 result *)
+       fld    st(0),st(0)         (* $1 st(1) = log2 result *)
+       add    sp,6                (* destroy 3 least sig words of tbyte *)
+       frndint st(0)              (* st(0) = integer part of log2 result *)
+       pop    bx                  (* #7 most sig mantisa word of log2 result*)
+       fxch   st(0),st(1)         (* st(1) = integer part of log2 result *)
+       pop    ax                  (* #6 ax = biased exponent of log2 result *)
+       fsub   st(0),st(1)         (* st(0) = fractional part of log2 result *)
+       push   ax                  (* #6 to test fractional exponent *)
+       ftst   st(0)               (* is fractional part neg ? *)
+       fstsw  [bp][-12]           (* store result of test *)
+       fabs   st(0)               (* st(0) = abs(fraction) *)
+       f2xm1  st(0)               (* st(0) = (2 to power abs(fraction))-1 *)
+       jcxz   Lexp                (* test for over/under tbyte result *)
+       cmp    ax,4009H            (* 04009,8000 = max posible valid exponent *)
+       jge    Over                (* tbyte>400H.overflow *)
+       jb     NoErr               (* positive - no error *)
+       cmp    ax,0C008H           (* 0C008,FFC0 = min posible valid exponent *)
+       ja     Under               (* tbyte<-3FFH.underfow *)
+       jb     NoErr               (* tbyte>-3FFH.in range *)
+       cmp    bx,0FFC0H           (* 2'nd underflow test *)
+       jb     NoErr
+Under: pop    ax                  (* #6 ax= sign of fractional exponent *)
+       pop    ax                  (* #5 destroy result's sign *)
+       mov    ax,$err_underflow
+       jmp    Error
+
+X0:    fcomp  st(0),st(1)         (* $0 cmp Y,0. st(0)=0 *)
+       fstsw  [bp][-10]           (* store result of test *)
+       fwait
+       pop    ax                  (* #5  ax = cmp Y,0 *)
+       sahf                       (* flags = cmp Y,0 *)
+       ja     Done                (* Y>0.return 0 *)
+       fld    st(0),st(0)         (* $1 *)
+Domain:mov    ax,$err_domain      (* else domain error *)
+Error: mov    bx,PowName
+       fstp   st(1),st(0)         (* $0 *)
+       call   ax                  (* st(0) = default return,ax =error num *)
+       fstp   st(1),st(0)         (* $0 *)
+       call   __report_math_error (* call error handler *)
+       jmp    Done
+
+Over:  pop    ax                  (* #6 fractional exponent sign *)
+       pop    ax                  (* #5 result sign ? *)
+       sahf                       (* sign *)
+       jnz    NegOv               (* return -HUGE *)
+       mov    ax,$err_plus_infinity
+       jmp    Error
+
+NegOv: mov    ax,$err_minus_infinity
+       jmp    Error
+
+LOver: pop    ax                  (* #6 fractional exponent sign *)
+       pop    ax                  (* #5 result sign ? *)
+       sahf
+       jnz    LNegOv              (* return -LHUGE *)
+       mov    ax,$err_huge_plus_infinity
+       jmp    Error
+
+LNegOv:mov    ax,$err_huge_minus_infinity
+       jmp    Error
+
+Lexp:  cmp    ax,400DH            (* 0400D,8000 = max posible valid exponent *)
+       jge    LOver               (* tbyte>4000H.overflow *)
+       ja     NoErr               (* positive exp *)
+       cmp    ax,0C00CH           (* 0C00C,FFFC = min posible valid exponent *)
+       jb     NoErr               (* tbyte>-3FFFH.in range *)
+       ja     Under               (* tbyte<-3FFFH.underfow *)
+       cmp    bx,0FFFCH           (* 2'nd underflow test *)
+       jae    Under               (* tbyte<-3FFFH.underfow *)
+NoErr: pop    ax                  (* #6 ax= sign of fractional exponent *)
+       fiadd  word st(0),cs:[@coremath_int_one]
+       sahf                       (* flags = sign of fractional exponent *)
+       jae    Pos                 (* st(0) = 2 to power fraction *)
+       fidivr word st(0),cs:[@coremath_int_one] (* st(0) = 2 to power fraction *)
+Pos:   fscale st(0),st(1)         (* scale st(0) by integer power *)
+       fstp   st(1),st(0)         (* $0 *)
+       pop    ax                  (* #5  sign of result ? *)
+       sahf
+       jz     Done                (* result is positive *)
+       fchs   st(0)               (* negative result *)
+Done:  fclex                      (* clear exceptions *)
+       fldcw  [bp][-6]            (* load original cw *)
+       pop    bx                  (* #4 restore bx *)
+       fwait                      (* when loaded.. *)
+       pop    ax                  (* #3 destroy original CW *)
+       pop    ax                  (* #2 restore registers *)
+       pop    cx                  (* #1 *)
+       pop    bp                  (* #0 *)
+       db     Ret0@
+(*%E NOT StdFloat *********************************************)
+(*%T StdFloat *************************************************)
+
+public _powl:
+       push  bp
+       mov   bp,sp
+(*%T RegParam *)
+       push  bx
+       push  cx
+(*%T NearPtr *) push dx (*%E NearPtr *)
+(*%E RegParam *)
+       xor   cx,cx                (* powl flag: set cx = 0 *)
+       fld   tbyte  st(0),[bp][Arg1Tbt] (* $1 load X *)
+       push  ax                   (* #1 for test X *)
+       ftst  st(0)                (* test X *)
+       fstsw [bp][-2][x]
+       fld   tbyte  st(0),[bp][Arg2Tbt] (* $2 load Y *)
+       jmp   Ent
+public _pow:
+       push  bp
+       mov   bp,sp
+(*%T RegParam *)
+       push  bx
+       push  cx
+(*%T NearPtr *) push dx (*%E NearPtr *)
+(*%E RegParam *)
+       mov   ch,-1                (* pow flag: cx != 0 *)
+       fld   qword  st(0),[bp][Arg1Dbl] (* $1 load X *)
+       push  ax                   (* for test X *)
+       ftst  st(0)                (* test X *)
+       fstsw [bp][-2][x]
+       fld   qword  st(0),[bp][Arg2Dbl] (* $2 load Y *)
+Ent:   pop   ax                   (* #1 ax = Test X *)
+(*%F _WINDOWS *)
+       push   ax                  (* #1 to save cw *)
+       fstcw  [bp][-2][x]         (* save cw *)
+       fldcw  cs:[@coremath_nearest](* round to nearest,affine,excepts masked *)
+(*%E NOT _WINDOWS *)
+(*%T _WINDOWS *)
+       mov    bx,ax               (* save test X *)
+       call   far __FloatStoreCW  (* store control word *)
+       push   ax                  (* #1 original CW *)
+       mov    ax,133FH            (* round to nearest,affine,excepts masked *)
+       call   far __FloatLoadCW
+       mov    ax,bx               (* ax = Test X *)
+(*%E _WINDOWS *)
+       sahf                       (* flags =cmp X,0 *)
+       ja     Xpos                (* X is positive non-Zero *)
+       push   ax                  (* #2 to store cmp Y,rounded Y *)
+       jz     X0                  (* X is Zero *)
+
+Xneg:  fld    st(0),st(0)         (* $3 save Y in st(1) *)
+       frndint st(0)              (* X is neg. Y rounded to int *)
+       fcom   st(0),st(1)         (* cmp Y,rounded Y *)
+       fstsw  [bp][-4][x]         (* store result of test *)
+       fidiv  word st(0),cs:[@coremath_int_two]
+       pop    ax
+       frndint st(0)
+       fadd   st(0),st(0)
+       fcomp  st(0),st(1)         (* $2 Y = st(0) flags->ZF=0 if Y is even *)
+       sahf                       (* flags = cmp Y,choped Y *)
+       jnz    Domain              (* Y is not an integer *)
+       push   ax                  (* #2 to store result's sign *)
+       fstsw  [bp][-4][x]         (* store result of test *)
+       fxch   st(0),st(1)         (* st(1) = Y *)
+       fabs   st(0)               (* st(0) = abs(X) *)
+       not    byte [bp][-3][x]    (* #2 zf=1 if odd *)
+       jmp    Xneg2
+
+Xpos:  push   ax                  (* #2 ZF in ax = 1 if neg result *)
+       fxch   st(0),st(1)         (*    st(0) = X,st(1) = Y *)
+Xneg2: fyl2x  st(1),st(0)         (* $1 st(0) = log2 result *)
+       fld    st(0),st(0)         (* $2 st(1) = log2 result *)
+       sub    sp,10               (*#3-7 for tempory tbyte *)
+       fld    st(0),st(0)         (* $3 *)
+       fstp   tbyte [bp][-14][x],st(0) (* $2 log2 result *)
+       frndint st(0)              (* st(0) = integer part of log2 result *)
+       add    sp,6                (* destoy 3 least sig words of tbyte *)
+       fxch   st(0),st(1)         (* st(1) = integer part of log2 result *)
+       pop    bx                  (* #4 most sig word of mantisa *)
+       fsub   st(0),st(1)         (* st(0) = factional part of log2 result *)
+       pop    dx                  (* #3 dx = biased exponent of log2 result *)
+       ftst   st(0)               (* is fractional part neg ? *)
+       push   ax                  (* #3 to test sign of fraction *)
+       fstsw  [bp][-6][x]         (* store result of test *)
+       fabs   st(0)               (* st(0) = abs(fraction) *)
+       pop    ax                  (* #3 ax = result of test *)
+       f2xm1  st(0)               (* st(0) = (2 to power abs(fraction))-1 *)
+       jcxz   Lexp                (* test for over/under tbyte result *)
+       cmp    dx,4009H            (* 04009,8000 = max posible valid exponent *)
+       jge    Over                (* tbyte>400H.overflow *)
+       jb     NoErr               (* positive exponent *)
+       cmp    dx,0C008H           (* 0C008,FFC0 = min posible valid exponent *)
+       jb     NoErr               (* tbyte>-3FFH.in range *)
+       ja     Under               (* tbyte<-3FFH.underfow *)
+       cmp    bx,0FFC0H           (* 2'nd underflow test *)
+       jb     NoErr
+Under: pop    ax                  (* #2 destroy result's sign *)
+       mov    ax,$err_underflow
+       jmp    Error
+
+X0:    fcomp   st(0),st(1)        (* $1 cmp Y,0. st(0)=0 *)
+       fstsw  [bp][-4][x]         (* store result of test *)
+       fwait
+       pop    ax
+       sahf
+       ja     Done1               (* Y>0.return 0 NOTE $1 *)
+       fld    st(0),st(0)         (* $2 *)
+Domain:mov    ax,$err_domain      (* else domain error *)
+Error: mov    bx,PowName          (* ss:[bx]->"pow" *)
+       fstp   st(0),st(0)         (* $1 *)
+       fstp   st(0),st(0)         (* $0 *)
+       jcxz   Terr
+       fld    qword st(0),[bp][Arg2Dbl]
+       fld    qword st(0),[bp][Arg1Dbl]
+       jmp    Qerr
+Terr:  fld    tbyte st(0),[bp][Arg2Tbt]
+       fld    tbyte st(0),[bp][Arg1Tbt]
+Qerr:  call   ax                  (* st(0) =ret val,ax = exception type *)
+       call   __report_math_error
+Done1: jmp    Done
+
+Over:  pop    ax                  (* #2 result sign ? *)
+       sahf                       (* sign *)
+       jz     NegOv               (* return -HUGE *)
+       mov    ax,$err_plus_infinity
+       jmp    Error
+
+NegOv: mov    ax,$err_minus_infinity
+       jmp    Error
+
+LOver: pop    ax                  (* #2 result sign ? *)
+       sahf
+       jz     LNegOv              (* return -LHUGE *)
+       mov    ax,$err_huge_plus_infinity
+       jmp    Error
+
+LNegOv:mov    ax,$err_huge_minus_infinity
+       jmp    Error
+
+Lexp:  cmp    dx,400DH            (* 0400D,8000 = max posible valid exponent *)
+       jge    LOver               (* tbyte>4000H.overflow *)
+       ja     NoErr               (* positive - no error *)
+       cmp    dx,0C00CH           (* 0C00C,FFC0 = min posible valid exponent *)
+       jb     NoErr               (* tbyte>-3FFFH.in range *)
+       ja     Under               (* tbyte<-3FFFH.underfow *)
+       cmp    bx,0FFFCH           (* 2'nd underflow test *)
+       jae    Under               (* tbyte<-3FFFH.underfow *)
+NoErr: fiadd  word st(0),cs:[@coremath_int_one]
+       sahf                       (* flags = cmp st(0),0 *)
+       jae    Pos                 (* st(0) = 2 to power fraction *)
+       fidivr word st(0),cs:[@coremath_int_one] (* st(0) = 2 to power fraction *)
+Pos:
+(*%T _WINDOWS *)
+       fxch  st(1), st(0)
+       ftst  st(0)                (* work around windows emulator bug *)
+       call  far __FloatStoreSW
+       fxch  st(1), st(0)
+       sahf
+       jz    skipscale
+(*%E *)
+       fscale st(0),st(1)         (* scale st(0) by integer power *)
+skipscale:
+       fstp   st(1),st(0)         (* $1 *)
+       pop    ax                  (* #2  sign of result ? *)
+       sahf
+       jnz    Done                (* result is positive *)
+       fchs   st(0)               (* negative result *)
+Done:  fclex                      (* clear exceptions *)
+(*%T _WINDOWS *)
+       pop    ax                  (* #1 original CW *)
+       call   far __FloatLoadCW   (* restore CW *)
+(*%E _WINDOWS *)
+(*%F _WINDOWS *)
+       fldcw  [bp][-2][x]         (* restore original CW *)
+       pop    ax                  (* #1 original CW *)
+(*%E NOT _WINDOWS *)
+(*** TAIL for StdFloat pow **********************************)
+(*%T StkParam *)(*%T NearPtr *)
+       jcxz   Huge
+       fstp   qword [__fac], st(0)
+       jmp    Done2
+Huge:  fstp   tbyte [__fac], st(0)
+Done2: pop    bp                 (* restore bp *)
+       mov    ax, __fac
+       fwait
+       db     Ret0@
+(*%E StkParam *)(*%E NearPtr *)
+(*%T StkParam *)(*%T FarPtr *)(*%F _fdata *)
+       jcxz   Huge
+       fstp   qword [__fac], st(0)
+       jmp    Done2
+Huge:  fstp   tbyte [__fac], st(0)
+Done2: pop    bp                 (* restore bp *)
+       mov    ax, __fac
+       mov    dx,ds
+       fwait
+       db     Ret0@
+(*%E StkParam *)(*%E FarPtr *)(*%E NOT _fdata *)
+(*%T StkParam *)(*%T FarPtr *)(*%T _fdata *)
+       mov    dx,seg __fac
+       mov    es,dx
+       jcxz   Huge
+       fstp   qword es:[__fac], st(0)
+       jmp    Done2
+Huge:  fstp   tbyte es:[__fac], st(0)
+Done2: pop    bp                 (* restore bp *)
+       mov    ax, __fac
+       fwait
+       db     Ret0@
+(*%E StkParam *)(*%E FarPtr *)(*%E  _fdata *)
+(*%T RegParam *)(*%T NearPtr *)
+       mov    ax, __fac
+       jcxz   Huge
+       fstp   qword [__fac],st(0)
+       pop    dx
+       pop    cx
+       pop    bx
+       fwait
+       pop    bp
+       db     RetX@;dw 16
+Huge:  fstp   tbyte [__fac],st(0)
+       pop    dx
+       pop    cx
+       pop    bx
+       fwait
+       pop    bp
+       db     RetX@;dw 20
+(*%E RegParam *)(*%E NearPtr *)
+(*%T RegParam *)(*%T FarPtr *)
+       mov    ax, __fac
+       mov    dx,ds
+       jcxz   Huge
+       fstp   qword [__fac], st(0)
+       pop    cx
+       pop    bx
+       fwait
+       pop    bp
+       db     RetX@;dw 16
+Huge:  fstp   tbyte [__fac], st(0)
+       pop    cx
+       pop    bx
+       fwait
+       pop    bp
+       db     RetX@;dw 20
+(*%E RegParam *)(*%E FarPtr *)
+(*%E StdFloat End of StdFloat pow *********************)
+
+(* __pow_int ************************************************************
+internal function.
+LONGDOUBLE __pow_int(LONGDOUBLE X,int Y)
+conventions: all
+returns X to the power Y
+Error Handling: NONE
+*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+extrn @coremath_int_one
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+public __pow_int:
+         push  bp
+         mov   bp,sp
+(*%T StdFloat *)
+         fld   tbyte st(0),[bp][2][CodePtrSize] (*$1 num *)
+(*%E StdFloat *)
+(*%T StkParam *)
+         mov   ax,[bp][12][CodePtrSize] (* integral power *)
+(*%E StkParam *)
+         or    ax,ax         (* power ? *)
+         jg    PosExp        (* positive non-zero *)
+         jz    Pow0          (* power is 0,return 1 *)
+         neg   ax            (* power was negative *)
+         fidivr word st(0),cs:[@coremath_int_one]
+PosExp:  dec   ax
+         jz    Done
+         fld   st(0),st(0)
+         jmp   Ploop
+
+Pow0:    fld1  st(0)         (* store 1 in st(0) *)
+         fstp  st(1),st(0)
+         jmp   Done
+
+Ploop2:  fmul  st(1),st(0)   (* mul st(1) by 10**2**N *)
+Ploop1:  fmul  st(0),st(0)   (* N++ *)
+Ploop:   shr   ax,1
+         ja    Ploop1
+         jnz   Ploop2
+         fmulp st(1),st(0)   (* last power,result in st(0) *)
+(*%T StdFloat *)(*%T _fdata *)
+Done:    mov  ax, __fac
+         mov  dx, seg __fac
+         mov  es, dx
+         fstp tbyte es:[__fac], st(0)
+         fwait
+(*%E StdFloat *)(*%E _fdata *)
+(*%T StdFloat *)(*%T FarPtr *)(*%T SameDS *)
+Done:    mov  ax, __fac
+         mov  dx,ds
+         fstp tbyte [__fac], st(0)
+         fwait
+(*%E StdFloat *)(*%E FarPtr *)(*%E SameDS *)
+(*%T StdFloat *)(*%T NearPtr *)
+Done:    mov  ax, __fac
+         fstp tbyte [__fac], st(0)
+         fwait
+(*%E StdFloat *)(*%E NearPtr *)
+(*%T StkParam *)
+         pop   bp
+         db    Ret0@
+(*%E StkParam *)
+(*%T RegParam *)(*%T _WINDOWS *)
+         pop   bp
+         db    RetX@;dw 10
+(*%E RegParam *)(*%E _WINDOWS *)
+(*%T RegParam *)(*%F _WINDOWS *)
+Done:    pop   bp
+         db    Ret0@
+(*%E RegParam *)(*%E NOT _WINDOWS *)
+
+(*************************************************************************)
+
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+
+public __clear87 :
+
+  push  bp
+  mov   bp, sp
+  push  ax
+  fstsw [bp][-2]
+  fclex
+  pop   ax
+  pop   bp
+  db    Ret0@
+(*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(* returns status word in ax *)
+
+public __status87 :
+  push  bp
+  mov   bp, sp
+  push  ax
+  fstsw [bp][-2]
+  fwait
+  pop   ax
+  pop   bp
+  db    Ret0@
+
+(*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T _WINDOWS *)
+extrn __FloatStoreCW
+extrn __FloatLoadCW
+(*%E _WINDOWS *)
+public  __control87 :
+(*%F _WINDOWS *)
+(*%T RegParam *)
+      push   bp                  (* save bp *)
+      mov    bp,sp
+(*%E RegParam *)
+(*%T StkParam *)
+      push   bp
+      mov    bp,sp
+      mov    ax,[bp][2][CodePtrSize] (* ax = new *)
+      mov    bx,[bp][4][CodePtrSize] (* bx = mask *)
+(*%E StkParam *)
+      push   ax                  (* for storeing CW *)
+      fstcw  [bp][-2]
+      and    ax,bx               (* ax = new & mask *)
+      not    bx                  (* bx = ~mask *)
+      fwait                      (* wait for old CW to be stored *)
+      xchg   ax,[bp][-2]         (* ax = old CW, [bp][-2] = new & mask *)
+      and    bx,ax               (* bx = old CW & ~mask *)
+      or     [bp][-2],bx         (* [bp][-2] =(old CW & ~mask) | (new & mask) *)
+      fldcw  [bp][-2]            (* load new CW *)
+      fwait                      (* wait for CW to load *)
+      pop    bx                  (* destoy CW on stack *)
+      pop    bp                  (* restore bp *)
+      db     Ret0@               (* return old CW *)
+(*%E _WINDOWS *)
+(*%T _WINDOWS *)
+(*%T RegParam *)
+      push   cx
+      mov    cx,ax               (* cx = new *)
+(*%E RegParam *)
+(*%T StkParam *)
+      push   bp
+      mov    bp,sp
+      mov    cx,[bp][2][CodePtrSize] (* cx = new *)
+      mov    bx,[bp][4][CodePtrSize] (* bx = mask *)
+(*%E StkParam *)
+      and    cx,bx               (* cx = new & mask *)
+      not    bx                  (* bx = ~mask      *)
+      call   far __FloatStoreCW  (* ax = old CW     *)
+      and    bx,ax               (* bx = old CW & ~mask *)
+      or     bx,cx               (* bx = (old CW & ~mask) | (new & mask) *)
+      xchg   ax,bx               (* ax = new CW, bx = old CW *)
+      call   far __FloatLoadCW
+      mov    ax,bx               (* return old CW *)
+(*%T RegParam *)
+      pop    cx                  (* restore cx *)
+      db     Ret0@               (* return old CW *)
+(*%E RegParam *)
+(*%T StkParam *)
+      pop    bp                  (* restore bp *)
+      db     Ret0@               (* return old CW *)
+(*%E StkParam *)
+(*%E _WINDOWS *)
+(***********************************************************************
+double floor(double num)
+LONGEDOUBLE floorl(LONGDOUBLE num)
+returns num rounded down to the nearest intiger
+Error handling: NONE
+************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%F _WINDOWS *)
+extrn @coremath_floor
+(*%E NOT _WINDOWS *)
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%T _WINDOWS *)
+extrn __FloatStoreCW
+extrn __FloatLoadCW
+(*%E _WINDOWS *)
+(*%F StdFloat *)
+public _floor:
+public _floorl:
+      push    bp
+      mov     bp,sp
+      push    ax                   (* space  for old CW *)
+      fstcw   [bp][-2]             (* save old CW       *)
+      fldcw   cs:[@coremath_floor]  (* round down,affine,exceptions masked *)
+      frndint st(0)                (* round down to intiger *)
+      fldcw   [bp][-2]             (* restore old CW *)
+      fwait
+      mov     sp,bp                (* destroy old CW on stack *)
+      pop     bp
+      db      Ret0@
+(*%E NOT StdFloat *)
+(*%T StdFloat *)
+public _floor:
+      push    bp
+      mov     bp,sp
+      fld     qword st(0),[bp][2][CodePtrSize] (* load double *)
+(*%F _WINDOWS *)
+      push    ax                    (* space for old CW *)
+      fstcw   [bp][-2]              (* save old CW       *)
+      fldcw   cs:[@coremath_floor]  (* round down,affine,exceptions masked *)
+      frndint st(0)                 (* round down to intiger *)
+      fldcw   [bp][-2]              (* restore old CW *)
+(*%E NOT _WINDOWS *)
+(*%T _WINDOWS *)
+      call    far __FloatStoreCW
+      push    ax                (* save old cw *)
+      mov     ax,173FH          (* round down,affine,exceptions masked *)
+      call    far __FloatLoadCW (* load ax into cw *)
+      frndint st(0)             (* round down to intiger *)
+      pop     ax                (* old cw *)
+      call    far __FloatLoadCW (* restore old cw *)
+(*%E _WINDOWS *)
+      mov    ax,__fac           (* return result in __fac *)
+(*%T FarPtr *)(*%T SameDS *)
+      mov    dx,ds
+      fstp   qword [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T NearPtr *)
+      fstp   qword [__fac],st(0)
+(*%E NearPtr *)
+(*%F SameDS *)
+      mov    dx,seg __fac
+      mov    es,dx
+      fstp   qword  es:[__fac],st(0)
+(*%E NOT SameDS *)
+(*%F _WINDOWS *)
+      mov    sp,bp     (* desroy CW on stack *)
+(*%E NOT _WINDOWS *)
+      fwait            (* wait for return to be stored *)
+      pop    bp
+(*%T RegParam *)
+      db     RetX@;dw 8
+(*%E RegParam *)
+(*%T StkParam *)
+      db     Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(****** LONGDOUBLE version. StdFloat only *)
+(*%T StdFloat *)
+public _floorl:
+      push    bp
+      mov     bp,sp
+      fld     tbyte st(0),[bp][2][CodePtrSize] (* load double *)
+(*%F _WINDOWS *)
+      push    ax                   (* space  for old CW *)
+      fstcw   [bp][-2]             (* save old CW       *)
+      fldcw   cs:[@coremath_floor]  (* round down,affine,exceptions masked *)
+      frndint st(0)                (* round down to intiger *)
+      fldcw   [bp][-2]             (* restore old CW *)
+(*%E _WINDOWS *)
+(*%T _WINDOWS *)
+      call    far __FloatStoreCW
+      push    ax                (* save old cw *)
+      mov     ax,173FH          (* round down,affine,exceptions masked *)
+      call    far __FloatLoadCW (* load ax into cw *)
+      frndint st(0)             (* round down to intiger *)
+      pop     ax                (* old cw *)
+      call    far __FloatLoadCW (* restore old cw *)
+(*%E _WINDOWS *)
+      mov    ax,__fac           (* return result in __fac *)
+(*%T FarPtr *)(*%T SameDS *)
+      mov    dx,ds
+      fstp   tbyte [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T NearPtr *)
+      fstp   tbyte [__fac],st(0)
+(*%E NearPtr *)
+(*%F SameDS *)
+      mov    dx,seg __fac
+      mov    es,dx
+      fstp   tbyte es:[__fac],st(0)
+(*%E NOT SameDS *)
+(*%F _WINDOWS *)
+      mov    sp,bp     (* destroy CW on stack *)
+(*%E NOT _WINDOWS *)
+      fwait            (* wait for return to be stored *)
+      pop    bp
+(*%T RegParam *)
+      db     RetX@;dw 10
+(*%E RegParam *)
+(*%T StkParam *)
+      db     Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+(***********************************************************************
+double ceil( double num )
+LONGEDOUBLE ceill( LONGDOUBLE num)
+returns num rounded up to the nearest intiger
+Error handling: NONE
+************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%F _WINDOWS *)
+extrn @coremath_ceil
+(*%E NOT _WINDOWS *)
+(*%T _WINDOWS *)
+extrn __FloatStoreCW
+extrn __FloatLoadCW
+(*%E _WINDOWS *)
+(*%F StdFloat *)
+public _ceil:
+public _ceill:
+      push    bp
+      mov     bp,sp
+      push    ax                   (* space  for old CW *)
+      fstcw   [bp][-2]             (* save old CW       *)
+      fldcw   cs:[@coremath_ceil]   (* round up,affine,exceptions masked *)
+      frndint st(0)                (* round up to intiger *)
+      fldcw   [bp][-2]             (* restore old CW *)
+      fwait
+      mov     sp,bp                (* destroy old CW on stack *)
+      pop     bp
+      db      Ret0@
+(*%E NOT StdFloat *)
+(*%T StdFloat *)
+public _ceil:
+      push    bp
+      mov     bp,sp
+      fld     qword st(0),[bp][2][CodePtrSize] (* $1 load double *)
+(*%F _WINDOWS *)
+      push    ax                   (* space  for old CW *)
+      fstcw   [bp][-2]             (* save old CW       *)
+      fldcw   cs:[@coremath_ceil]   (* round up,affine,exceptions masked *)
+      frndint st(0)                (* round up to intiger *)
+      fldcw   [bp][-2]             (* restore old CW *)
+(*%E _WINDOWS *)
+(*%T _WINDOWS *)
+      call    far __FloatStoreCW
+      push    ax                (* save old cw *)
+      mov     ax,1B3FH          (* round up,affine,exceptions masked *)
+      call    far __FloatLoadCW (* load ax into cw *)
+      frndint st(0)             (* round up to intiger *)
+      pop     ax                (* old cw *)
+      call    far __FloatLoadCW (* restore old cw *)
+(*%E _WINDOWS *)
+      mov    ax,__fac           (* return result in __fac *)
+(*%T FarPtr *)(*%T SameDS *)
+      mov    dx,ds
+      fstp   qword [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T NearPtr *)
+      fstp   qword [__fac],st(0)
+(*%E NearPtr *)
+(*%F SameDS *)
+      mov    dx,seg __fac
+      mov    es,dx
+      fstp   qword es:[__fac],st(0)
+(*%E NOT SameDS *)
+(*%F _WINDOWS *)
+      mov    sp,bp     (* desroy CW on stack *)
+(*%E NOT _WINDOWS *)
+      fwait            (* wait for return to be stored *)
+      pop    bp
+(*%T RegParam *)
+      db     RetX@;dw 8
+(*%E RegParam *)
+(*%T StkParam *)
+      db     Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(****** LONGDOUBLE version. StdFloat only *)
+(*%T StdFloat *)
+public _ceill:
+      push    bp
+      mov     bp,sp
+      fld     tbyte st(0),[bp][2][CodePtrSize] (* load double *)
+(*%F _WINDOWS *)
+      push    ax                   (* space  for old CW *)
+      fstcw   [bp][-2]             (* save old CW       *)
+      fldcw   cs:[@coremath_ceil]   (* round up,affine,exceptions masked *)
+      frndint st(0)                (* round up to intiger *)
+      fldcw   [bp][-2]             (* restore old CW *)
+(*%E NOT _WINDOWS *)
+(*%T _WINDOWS *)
+      call    far __FloatStoreCW
+      push    ax                (* save old cw *)
+      mov     ax,1B3FH          (* round up,affine,exceptions masked *)
+      call    far __FloatLoadCW (* load ax into cw *)
+      frndint st(0)             (* round up to intiger *)
+      pop     ax                (* old cw *)
+      call    far __FloatLoadCW (* restore old cw *)
+(*%E _WINDOWS *)
+      mov    ax,__fac           (* return result in __fac *)
+(*%T FarPtr *)(*%T SameDS *)
+      mov    dx,ds
+      fstp   tbyte [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T NearPtr *)
+      fstp   tbyte [__fac],st(0)
+(*%E NearPtr *)
+(*%F SameDS *)
+      mov    dx,seg __fac
+      mov    es,dx
+      fstp   tbyte es:[__fac],st(0)
+(*%E NOT SameDS *)
+(*%F _WINDOWS *)
+      mov    sp,bp     (* destroy CW on stack *)
+(*%E NOT _WINDOWS *)
+      fwait            (* wait for return to be stored *)
+      pop    bp
+(*%T RegParam *)
+      db     RetX@;dw 10
+(*%E RegParam *)
+(*%T StkParam *)
+      db     Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+(*************************************************************************
+double fabs(double num)
+LONGDOUBLE fabsl(LONGDOUBLE num)
+Return: the absolute value of num
+Error Handling: no error is possible
+**************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%F StdFloat *)(*%T _DLLOVL  *)
+public _fabsl:
+public _fabs:
+ push   bp
+ mov    bp,sp
+ fabs   st(0)
+ pop    bp
+ db     Ret0@
+(*%E NOT StdFloat *)(*%E _DLLOVL *)
+(*%F StdFloat *)(*%F _DLLOVL  *)
+public _fabsl:
+public _fabs:
+ fabs   st(0)
+ db     Ret0@
+(*%E NOT StdFloat *)(*%E NOT _DLLOVL *)
+(*%T StdFloat *)
+public _fabsl:
+  push  bp
+  mov   bp,sp
+(*%T SameDS *)
+(*%T FarPtr *)
+ mov    dx,ds                    (* return seg __fac *)
+(*%E FarPtr *)
+  mov   ax,[bp][CodePtrSize][2]  (* transfer tbyte to __fac *)
+  mov   [__fac],ax
+  mov   ax,[bp][CodePtrSize][4]
+  mov   [__fac][2],ax
+  mov   ax,[bp][CodePtrSize][6]
+  mov   [__fac][4],ax
+  mov   ax,[bp][CodePtrSize][8]
+  mov   [__fac][6],ax
+  mov   ax,[bp][CodePtrSize][10]
+  and   ax,7FFFH                 (* remove sign from exponent *)
+  mov   [__fac][8],ax
+(*%E SameDS *)
+(*%F SameDS *)
+  mov   dx,seg __fac             (* return seg __fac *)
+  mov   es,dx
+  mov   ax,[bp][CodePtrSize][2]  (* transfer tbyte to __fac *)
+  mov   es:[__fac],ax
+  mov   ax,[bp][CodePtrSize][4]
+  mov   es:[__fac][2],ax
+  mov   ax,[bp][CodePtrSize][6]
+  mov   es:[__fac][4],ax
+  mov   ax,[bp][CodePtrSize][8]
+  mov   es:[__fac][6],ax
+  mov   ax,[bp][CodePtrSize][10]
+  and   ax,7FFFH                 (* remove sign from exponent *)
+  mov   es:[__fac][8],ax
+(*%E SameDS *)
+  mov   ax,__fac                 (* return __fac *)
+  pop   bp                       (* restore bp *)
+(*%T RegParam *)
+  db    RetX@;dw 10
+(*%E RegParam *)
+(*%T StkParam *)
+  db    Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T StdFloat *)
+public _fabs:
+  push  bp
+  mov   bp,sp
+(*%T SameDS *)
+(*%T FarPtr *)
+ mov    dx,ds                    (* return seg __fac *)
+(*%E FarPtr *)
+  mov   ax,[bp][CodePtrSize][2]  (* transfer qword to __fac *)
+  mov   [__fac],ax
+  mov   ax,[bp][CodePtrSize][4]
+  mov   [__fac][2],ax
+  mov   ax,[bp][CodePtrSize][6]
+  mov   [__fac][4],ax
+  mov   ax,[bp][CodePtrSize][8]
+  and   ax,7FFFH                 (* remove sign from exponent *)
+  mov   [__fac][6],ax
+(*%E SameDS *)
+(*%F SameDS *)
+  mov   dx,seg __fac             (* return seg __fac *)
+  mov   es,dx
+  mov   ax,[bp][CodePtrSize][2]  (* transfer qword to __fac *)
+  mov   es:[__fac],ax
+  mov   ax,[bp][CodePtrSize][4]
+  mov   es:[__fac][2],ax
+  mov   ax,[bp][CodePtrSize][6]
+  mov   es:[__fac][4],ax
+  mov   ax,[bp][CodePtrSize][8]
+  and   ax,7FFFH                 (* remove sign from exponent *)
+  mov   es:[__fac][6],ax
+(*%E SameDS *)
+  mov   ax,__fac                 (* return __fac *)
+  pop   bp                       (* restore bp *)
+(*%T RegParam *)
+  db    RetX@;dw 8
+(*%E RegParam *)
+(*%T StkParam *)
+  db    Ret0@
+(*%E StkParam *)
+(*%E StdFloat *)
+(*************************************************************************
+double _fmod(double X,double Y)
+LONGDOUBLE _fmodl(LONGDOUBLE X,LONGDOUBLE Y)
+Return: X % Y or 0 if Y is 0
+Error: no error handling
+**************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T RegParam *)
+X = 2+CodePtrSize+8
+Y = 2+CodePtrSize
+LX = 2+CodePtrSize+10
+LY = 2+CodePtrSize
+(*%E RegParam *)
+(*%T StkParam *)
+X = 2+CodePtrSize
+Y = 2+CodePtrSize+8
+LX = 2+CodePtrSize
+LY = 2+CodePtrSize+10
+(*%E StkParam *)
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+
+(*%F StdFloat *)
+public _fmod:
+public _fmodl:
+       push  bp
+       mov   bp, sp
+       fld   st(0), st(6)          (* $1 st(0) = Y,st(1) = X *)
+       push  ax                    (* space for SW *)
+       ftst  st(0)                 (* Y=0 ? *)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 40H
+       jnz   Done                  (* Y=0, so return 0 *)
+       fxch  st(0), st(1)          (* st(1) = Y,st(0) = X *)
+More:  fprem st(0)                 (* get partial remainder *)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 4      (* C2 = 0 if reduction is complete *)
+       jnz   More                  (* reduction is incomplete *)
+Done:  fstp  st(1), st(0)          (* $0 *)
+       mov   sp, bp                (* destroy space for SW *)
+       pop   bp
+       db    Ret0@
+(*%E NOT StdFloat *)
+(*%T StdFloat *)
+public _fmod:
+       push  bp
+       mov   bp,sp
+       fld   qword st(0),[bp][Y]   (* $1 st(0) = Y *)
+       push  ax                    (* space for SW *)
+       ftst  st(0)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 40H
+       jnz   Done                  (* Y=0, so return 0 *)
+       fld   qword st(0),[bp][X]   (* st(0) = X,st(1) = Y *)
+More:  fprem st(0)                 (* get partial remainder *)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 4      (* C2 = 0 if reduction is complete *)
+       jnz   More                  (* reduction is incomplete *)
+       fstp  st(1),st(0)           (* $1 *)
+Done:  pop   ax                    (* destroy space for CW *)
+(*%T NearPtr *)
+       mov   ax,__fac              (* return in __fac *)
+       fstp  qword [__fac],st(0)
+(*%E NearPtr *)
+(*%T FarPtr *)(*%T SameDS *)
+       mov   ax,__fac              (* return in __fac *)
+       mov   dx,ds
+       fstp  qword [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T FarPtr *)(*%F SameDS *)
+       mov   ax,__fac              (* return in __fac *)
+       mov   dx,seg __fac
+       mov   es,dx
+       fstp  qword es:[__fac],st(0)
+(*%E FarPtr *)(*%E NOT SameDS *)
+(*%T RegParam *)
+       fwait                       (* wait for return to store *)
+       pop   bp                    (* restore bp *)
+       db    RetX@;dw 16           (* return,with cleanup *)
+(*%E RegParam *)
+(*%T StkParam *)
+       fwait                       (* wait for return to store *)
+       pop   bp                    (* restore bp *)
+       db    Ret0@                 (* return,without cleanup *)
+(*%E StkParam *)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+public _fmodl:
+       push  bp
+       mov   bp,sp
+       fld   tbyte st(0),[bp][LY]  (* $1 st(0) = Y *)
+       push  ax                    (* space for SW *)
+       ftst  st(0)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 40H
+       jnz   LDone                 (* Y=0, so return 0 *)
+       fld   tbyte st(0),[bp][LX]  (* st(0) = X,st(1) = Y *)
+LMore: fprem st(0)                 (* get partial remainder *)
+       fstsw [bp][-2]
+       fwait
+       test  byte [bp][-1], 4      (* C2 = 0 if reduction is complete *)
+       jnz   LMore                 (* reduction is incomplete *)
+       fstp  st(1),st(0)           (* $1 *)
+LDone: pop   ax                    (* destroy space for CW *)
+(*%T NearPtr *)
+       mov   ax,__fac              (* return in __fac *)
+       fstp  tbyte [__fac],st(0)
+(*%E NearPtr *)
+(*%T FarPtr *)(*%T SameDS *)
+       mov   ax,__fac              (* return in __fac *)
+       mov   dx,ds
+       fstp  tbyte [__fac],st(0)
+(*%E FarPtr *)(*%E SameDS *)
+(*%T FarPtr *)(*%F SameDS *)
+       mov   ax,__fac              (* return in __fac *)
+       mov   dx,seg __fac
+       mov   es,dx
+       fstp  tbyte es:[__fac],st(0)
+(*%E FarPtr *)(*%E NOT SameDS *)
+(*%T RegParam *)
+       fwait                       (* wait for return to store *)
+       pop   bp                    (* restore bp *)
+       db    RetX@;dw 20           (* return,with cleanup *)
+(*%E RegParam *)
+(*%T StkParam *)
+       fwait                       (* wait for return to store *)
+       pop   bp                    (* restore bp *)
+       db    Ret0@                 (* return,without cleanup *)
+(*%E StkParam *)
+(*%E StdFloat *)
+(************************************************************************
+*************************************************************************)
+section
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T StdFloat *)
+extrn __fac
+(*%E StdFloat *)
+(*%F StdFloat *)
+extrn @coremath_int_two
+public _frexp :
+(*%E NOT StdFloat *)
+public _frexpl :
+        push  bp
+        mov   bp, sp
+(*%T StdFloat *)
+        fld   tbyte st(0),[bp][2][CodePtrSize] (* $1 val *)
+(*%E StdFloat *)
+(*%T FarPtr *)(*%T RegParam *)
+        mov   es, bx                   (* es:[bx] = *exp *)
+        mov   bx, ax
+(*%E FarPtr *)(*%E RegParam *)
+(*%T NearPtr *)(*%T RegParam *)
+        xchg  bx, ax                   (* ds:[bx] = *exp *)
+(*%E NearPtr*)(*%E RegParam *)
+(*%T FarPtr *)(*%T StkParam *)
+        les   bx,[bp][2][CodePtrSize][10] (* es:[bx] = *exp *)
+(*%E FarPtr *)(*%E StkParam *)
+(*%T FarPtr *)(*%T StkParam *)
+        mov   bx,[bp][2][CodePtrSize][10] (* ds:[bx] = *exp *)
+(*%E FarPtr *)(*%E StkParam *)
+        ftst  st(0)                  (* cmp val,0 *)
+        push  ax                     (* make room for CW *)
+        fstsw [bp][-2]               (* store CW *)
+(*%T FarPtr *)  mov   word es:[bx],0 (*%E assume 0 *)
+(*%T NearPtr *) mov   word [bx],0    (*%E assume 0 *)
+        fwait
+        pop   ax
+        sahf                         (* is val 0 ? *)
+        jz    Done                   (* yes        *)
+        fxtract st(0)                (* st(1) = val's exponent,st(0) = mantissa *)
+(*%T FarPtr *)(*%F StdFloat *)
+        fxch  st(0), st(1)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fidiv word st(0), cs:[@coremath_int_two ]  (* divide mantisa by 2 *)
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done:   pop   bp                     (* restore bp *)
+        db    Ret0@
+(*%E FarPtr *)(*%E NOT StdFloat *)
+(*%T NearPtr *)(*%F StdFloat *)
+        fxch  st(0), st(1)
+        fistp word [bx], st(0)       (* store val's exponent *)
+        fidiv word st(0), cs:[@coremath_int_two ]  (* divide mantisa by 2 *)
+        inc   word [bx]              (* exponent plus 1 *)
+Done:   xchg  bx,ax                  (* restore bx *)
+        pop   bp                     (* restore bp *)
+        db    Ret0@
+(*%E NearPtr *)(*%E NOT StdFloat *)
+(*%T NearPtr  *)(*%T StdFloat *)
+Done:   fstp  tbyte [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2                  (* result was 0 *)
+        dec   word [__fac][8]        (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2:  pop   bp                     (* restore bp *)
+(*%T RegParam *) xchg  bx,ax         (*%E restore bx *)
+        mov   ax,__fac               (* return offset __fac *)
+(*%T RegParam *) db RetX@; dw 10     (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E NearPtr  *)(*%E StdFloat *)
+(*%T FarPtr  *)(*%T SameDS *)(*%T StdFloat *)
+Done:   mov   ax,__fac               (* return offset __fac *)
+        mov   dx,ds                  (* return seg __fac *)
+        fstp  tbyte [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2                  (* result was 0 *)
+        dec   word [__fac][8]        (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2:  pop   bp                     (* restore bp *)
+(*%T RegParam *) db RetX@; dw 10     (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E FarPtr  *)(*%E SameDS *)(*%E StdFloat *)
+(*%T FarPtr  *)(*%F SameDS *)(*%T StdFloat *)
+Done:   push  ds                     (* save ds *)
+        mov   ax,__fac               (* return offset __fac *)
+        mov   dx,seg __fac           (* return seg __fac *)
+        mov   ds,dx
+        fstp  tbyte [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2                  (* result was 0 *)
+        dec   word [__fac][8]        (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2:  pop   ds                     (* restore ds *)
+        pop   bp                     (* restore bp *)
+(*%T RegParam *) db RetX@;  dw 10    (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E FarPtr  *)(*%E NOT SameDS *)(*%E StdFloat *)
+segment (*%F SameDS*)MATH_TEXT(*%E*)(*%T SameDS*)_TEXT(*%E*)(CODE,28H)
+(*%T StdFloat *)
+public _frexp :
+        push  bp
+        mov   bp, sp
+        fld   qword st(0),[bp][2][CodePtrSize] (* $1 val *)
+(*%T FarPtr *)(*%T RegParam *)
+        mov   es, bx                   (* es:[bx] = *exp *)
+        mov   bx, ax
+(*%E FarPtr *)(*%E RegParam *)
+(*%T NearPtr *)(*%T RegParam *)
+        xchg  bx, ax                   (* ds:[bx] = *exp *)
+(*%E NearPtr*)(*%E RegParam *)
+(*%T FarPtr *)(*%T StkParam *)
+        les   bx,[bp][2][CodePtrSize][8] (* es:[bx] = *exp *)
+(*%E FarPtr *)(*%E StkParam *)
+(*%T NearPtr *)(*%T StkParam *)
+        mov   bx,[bp][2][CodePtrSize][8] (* ds:[bx] = *exp *)
+(*%E NearPtr *)(*%E StkParam *)
+        ftst  st(0)                  (* cmp val,0 *)
+        push  ax                     (* make room for CW *)
+        fstsw [bp][-2]               (* store CW *)
+(*%T FarPtr *)  mov   word es:[bx],0 (*%E assume 0 *)
+(*%T NearPtr *) mov   word [bx],0    (*%E assume 0 *)
+        fwait
+        pop   ax
+        sahf                         (* is val 0 ? *)
+        jz    DoneL                  (* yes        *)
+        fxtract st(0)                (* st(1) = val's exponent,st(0) = mantissa *)
+(*%T NearPtr  *)
+DoneL:  fstp  qword [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2L                 (* result was 0 *)
+        sub   word [__fac][6],10H    (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2L: pop   bp                     (* restore bp *)
+(*%T RegParam *) xchg  bx,ax         (*%E restore bx *)
+        mov   ax,__fac               (* return offset __fac *)
+(*%T RegParam *) db RetX@;dw 8       (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E NearPtr  *)
+(*%T FarPtr  *)(*%T SameDS *)
+DoneL:  mov   ax,__fac               (* return offset __fac *)
+        mov   dx,ds                  (* return seg __fac *)
+        fstp  qword [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2L                 (* result was 0 *)
+        sub   word [__fac][6],10H    (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2L: pop   bp                     (* restore bp *)
+(*%T RegParam *) db RetX@; dw 8      (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E FarPtr  *)(*%E SameDS *)
+(*%T FarPtr  *)(*%F SameDS *)
+DoneL:  push  ds                     (* save ds *)
+        mov   ax,__fac               (* return offset __fac *)
+        mov   dx,seg __fac           (* return seg __fac *)
+        mov   ds,dx
+        fstp  qword [__fac],st(0)    (* store mantisa in __fac *)
+        jz    Done2L                 (* result was 0 *)
+        sub   word [__fac][6],10H    (* dec exponent of mantissa *)
+        fistp word es:[bx], st(0)    (* store val's exponent *)
+        fwait
+        inc   word es:[bx]           (* exponent plus 1 *)
+Done2L: pop   ds                     (* restore ds *)
+        pop   bp                     (* restore bp *)
+(*%T RegParam *) db RetX@; dw 8      (*%E clean up stack & return *)
+(*%T StkParam *) db Ret0@            (*%E Return *)
+(*%E FarPtr  *)(*%E NOT SameDS *)
+(*%E StdFloat *)
+end

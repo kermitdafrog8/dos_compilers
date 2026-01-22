@@ -1,0 +1,137 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  STORAGE.DEF - Modula-2 synamic memory allocation                        *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_copy => on,
+         o_a_size => on) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*%T _fdata *)
+(*# call(ds_entry=>null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+
+
+DEFINITION MODULE Storage;
+
+IMPORT SYSTEM;
+
+(*# save, data(near_ptr=> off) *)
+TYPE
+  FarHeapRecPtr = POINTER TO FarHeapRec;
+  FarHeapRec    = RECORD
+                     size : CARDINAL;
+                     next : FarHeapRecPtr;
+                  END;
+(*# restore *)
+
+(*# save, data(near_ptr=> on) *)
+TYPE
+  NearHeapRecPtr = POINTER TO NearHeapRec;
+  NearHeapRec    = RECORD
+                     size : CARDINAL;
+                     next : NearHeapRecPtr;
+                  END;
+(*# restore *)
+
+                            (* Main heap procedures *)
+
+PROCEDURE FarAllocate  (VAR a: FarADDRESS; size: CARDINAL);
+
+PROCEDURE FarDeallocate(VAR a: FarADDRESS; size: CARDINAL);
+
+PROCEDURE FarAvailable(size: CARDINAL ): BOOLEAN;
+
+PROCEDURE NearAllocate (VAR a: NearADDRESS; size: CARDINAL);
+
+PROCEDURE NearDeallocate(VAR a: NearADDRESS; size: CARDINAL);
+
+PROCEDURE NearAvailable(size: CARDINAL ): BOOLEAN;
+
+
+PROCEDURE FarMakeHeap(Source: CARDINAL; Size: CARDINAL): FarHeapRecPtr;
+
+PROCEDURE FarHeapAllocate(Source: FarHeapRecPtr; VAR A: FarADDRESS; Size: CARDINAL);
+
+PROCEDURE FarHeapAvail(Source: FarHeapRecPtr): CARDINAL;
+
+PROCEDURE FarHeapTotalAvail(Source: FarHeapRecPtr): CARDINAL;
+
+PROCEDURE FarHeapDeallocate(Source: FarHeapRecPtr; VAR A: FarADDRESS; Size: CARDINAL );
+
+PROCEDURE FarHeapChangeAlloc(Source: FarHeapRecPtr; A: FarADDRESS;
+                          OldSize, NewSize : CARDINAL): BOOLEAN;
+
+PROCEDURE FarHeapChangeSize(Source  : FarHeapRecPtr; VAR A: FarADDRESS;
+                         OldSize, NewSize : CARDINAL );
+
+
+PROCEDURE NearMakeHeap(Source: NearADDRESS; Size: CARDINAL): NearHeapRecPtr;
+
+PROCEDURE NearHeapAllocate(Source: NearHeapRecPtr; VAR A: NearADDRESS; Size: CARDINAL);
+
+PROCEDURE NearHeapAvail(Source: NearHeapRecPtr): CARDINAL;
+
+PROCEDURE NearHeapTotalAvail(Source: NearHeapRecPtr): CARDINAL;
+
+PROCEDURE NearHeapDeallocate(Source: NearHeapRecPtr; VAR A: NearADDRESS; Size: CARDINAL );
+
+PROCEDURE NearHeapChangeAlloc(Source: NearHeapRecPtr; A: NearADDRESS;
+                          OldSize, NewSize : CARDINAL): BOOLEAN;
+
+PROCEDURE NearHeapChangeSize(Source  : NearHeapRecPtr; VAR A: NearADDRESS;
+                         OldSize, NewSize : CARDINAL );
+
+
+PROCEDURE SegAllocate(Size: CARDINAL): CARDINAL;
+
+PROCEDURE SegDeallocate(Sel: CARDINAL; Size: CARDINAL);
+
+(*%T _fptr *)
+CONST
+    HeapRecPtr    ::= FarHeapRecPtr;
+    HeapRec       ::= FarHeapRec;
+    ALLOCATE        = FarAllocate;
+    DEALLOCATE      = FarDeallocate;
+    Available       = FarAvailable;
+    MakeHeap        = FarMakeHeap;
+    HeapAllocate    = FarHeapAllocate;
+    HeapAvail       = FarHeapAvail;
+    HeapTotalAvail  = FarHeapTotalAvail;
+    HeapDeallocate = FarHeapDeallocate;
+    HeapChangeAlloc = FarHeapChangeAlloc;
+    HeapChangeSize  = FarHeapChangeSize;
+(*%E *)
+
+(*%F _fptr *)
+CONST
+    HeapRecPtr    ::= NearHeapRecPtr;
+    HeapRec       ::= NearHeapRec;
+    ALLOCATE        = NearAllocate;
+    DEALLOCATE      = NearDeallocate;
+    Available       = NearAvailable;
+    MakeHeap        = NearMakeHeap;
+    HeapAllocate    = NearHeapAllocate;
+    HeapAvail       = NearHeapAvail;
+    HeapTotalAvail  = NearHeapTotalAvail;
+    HeapDeallocate = NearHeapDeallocate;
+    HeapChangeAlloc = NearHeapChangeAlloc;
+    HeapChangeSize  = NearHeapChangeSize;
+(*%E *)
+
+VAR
+  MainHeap: FarHeapRecPtr;
+  NearHeap: NearHeapRecPtr;
+  ClearOnAllocate : BOOLEAN;
+  Check: BOOLEAN;
+
+END Storage.
+

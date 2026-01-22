@@ -1,0 +1,24 @@
+DEFINITION MODULE os;
+
+(* PROCEDURES de dÇmarrage *)
+PROCEDURE COLD_BOOT;                   (* dÇmarrage Ö froid                  *)
+PROCEDURE WARM_BOOT;                   (* dÇmarrage Ö chaud                  *)
+
+(* PROCEDURES de console et imprimante *)
+PROCEDURE ERREUR_CONSOLE( x: SHORTCARD): CARDINAL;
+PROCEDURE CONS : BOOLEAN;              (* teste si caractäre est pràt        *)
+PROCEDURE CONIN : CHAR;                (* lit un caractäre sur la console    *)
+PROCEDURE CONOUT( c : CHAR);           (* Çcrit un caractäre sur la console  *)
+PROCEDURE LIST( c : CHAR);             (* envoi un caractäre sur l'imprimante*)
+
+(* PROCEDURES disques *)
+PROCEDURE HOME;                        (* tàte en position 0                 *)
+PROCEDURE ERREUR_DISQUE( x : SHORTCARD): CARDINAL;
+PROCEDURE RESET() : SHORTCARD;
+PROCEDURE LIT_SECTEUR ( piste,tete,secteur,nbre_secteurs,drive : SHORTCARD ;
+                          VAR buffer : ARRAY OF BYTE) : SHORTCARD ;
+PROCEDURE ECRIT_SECTEUR ( piste,tete,secteur,nbre_secteurs,drive : SHORTCARD ;
+                          VAR buffer : ARRAY OF BYTE) : SHORTCARD ;
+
+
+END os.

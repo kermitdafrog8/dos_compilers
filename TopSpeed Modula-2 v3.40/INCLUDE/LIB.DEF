@@ -1,0 +1,292 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  LIB.DEF - Modula-2 miscellaneous library functions                      *
+*                                                                          *
+*  COPYRIGHT (C) 1987..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+(* OS/2 MSDOS Version *)
+(*# call(o_a_copy => off) *)
+(*%F _fdata *)
+(*# call(seg_name => null) *)
+(*# data(seg_name => null) *)
+(*%E *)
+(*# module(implementation=>off) *)
+DEFINITION MODULE Lib;
+
+IMPORT SYSTEM;
+
+(* The following function determines whether objects are hierarchically related *)
+TYPE
+(*# save *)
+(*%T _fdata *)
+(*# data(near_ptr => off) *)
+(*%E *)
+(*%F _fdata *)
+(*# data(near_ptr => on) *)
+(*%E *)
+    MTablePtr = POINTER TO MHeader;
+(*# restore *)
+    MHeader = RECORD
+        Size: CARDINAL;
+        Parent: MTablePtr;
+    END;
+
+PROCEDURE IsOfClass(Child, Parent: MTablePtr): BOOLEAN;
+
+VAR
+  NilStr : ARRAY [0..0] OF CHAR;
+  RunTimeError: PROCEDURE(LONGCARD, CARDINAL, ARRAY OF CHAR);
+
+TYPE
+  CompareProc = PROCEDURE(CARDINAL, CARDINAL) : BOOLEAN;
+  SwapProc    = PROCEDURE(CARDINAL, CARDINAL);
+
+PROCEDURE QSort(N: CARDINAL; Less: CompareProc; Swap: SwapProc);
+PROCEDURE HSort(N: CARDINAL; Less: CompareProc; Swap: SwapProc);
+
+PROCEDURE RANDOM(Range: CARDINAL) : CARDINAL;
+PROCEDURE RAND() : REAL;
+PROCEDURE SEED(v:CARDINAL);
+PROCEDURE RANDOMIZE;
+
+PROCEDURE Execute (Name        : ARRAY OF CHAR; (* full name of program *)
+                   CommandLine : ARRAY OF CHAR; (* command line for program *)
+                   StoreAddr   : FarADDRESS;    (* storage to execute in, MSDOS only *)
+                   StoreLen    : CARDINAL       (* length of store paragraphs, MSDOS only *)
+                  ) : CARDINAL ;                (* DOS reply (0=OK) *)
+
+PROCEDURE OSErrorMessage ( N : CARDINAL ; VAR S : ARRAY OF CHAR );
+PROCEDURE OSFatalError   ( S : ARRAY OF CHAR ; N : CARDINAL ) ;
+
+PROCEDURE Speaker(FreqHz,TimeMs: CARDINAL);
+
+TYPE
+  ExecEnvType = ARRAY [0..31] OF ADDRESS;
+  ExecEnvPtr = POINTER TO ExecEnvType;
+VAR
+  ExecSearchPath: BOOLEAN;
+
+TYPE
+(*# save *)
+(*# data(near_ptr => off) *)
+  CommandType = POINTER TO ARRAY[0..126] OF CHAR;
+(*# restore *)
+
+PROCEDURE Environment(N: CARDINAL) : CommandType;
+PROCEDURE EnvironmentFind(name: ARRAY OF CHAR;
+                          VAR result: ARRAY OF CHAR );
+PROCEDURE ParamStr(VAR S: ARRAY OF CHAR; N: CARDINAL);
+PROCEDURE ParamCount() : CARDINAL;
+
+PROCEDURE Exec ( command : ARRAY OF CHAR ; Params: ARRAY OF CHAR; Env: ExecEnvPtr): CARDINAL;
+PROCEDURE ExecCmd ( command : ARRAY OF CHAR ): CARDINAL;
+
+PROCEDURE WrDosError ( ErrorNo : SHORTCARD ) ;
+PROCEDURE SysErrno(): CARDINAL;
+
+TYPE
+  DayType = (Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday) ;
+
+PROCEDURE GetDate ( VAR Year,Month,Day : CARDINAL ;
+                    VAR DayOfWeek : DayType ) ;
+PROCEDURE GetTime ( VAR Hrs,Mins,Secs,Hsecs : CARDINAL ) ;
+PROCEDURE SetDate ( Year,Month,Day : CARDINAL): BOOLEAN ;
+PROCEDURE SetTime ( Hrs,Mins,Secs,Hsecs : CARDINAL ): BOOLEAN ;
+
+PROCEDURE MakeAllPath(VAR Path: ARRAY OF CHAR; Drive, Dir, Name, Ext: ARRAY OF CHAR);
+PROCEDURE SplitAllPath(Path: ARRAY OF CHAR; VAR Drive: ARRAY OF CHAR;
+                    VAR Dir: ARRAY OF CHAR; VAR Name: ARRAY OF CHAR; VAR Ext: ARRAY OF CHAR);
+
+(*# save *)
+(*%T _DLL *)
+(*# call(seg_name=>LibDLL) *)
+(*%E *)
+PROCEDURE AddFarAddr(A: FarADDRESS; increment: CARDINAL) : FarADDRESS;
+PROCEDURE SubFarAddr(A: FarADDRESS; decrement: CARDINAL) : FarADDRESS;
+PROCEDURE IncFarAddr(VAR A: FarADDRESS; increment: CARDINAL);
+PROCEDURE DecFarAddr(VAR A: FarADDRESS; decrement: CARDINAL);
+(*# restore *)
+
+  TYPE
+    A2                  = ARRAY[0..1] OF BYTE;
+    A3                  = ARRAY[0..2] OF BYTE;
+    A4                  = ARRAY[0..3] OF BYTE;
+    _C8                 = ARRAY[0..7] OF BYTE;
+
+(*%T _fptr *)
+CONST
+    AddAddr = AddFarAddr;
+    SubAddr = SubFarAddr;
+    IncAddr = IncFarAddr;
+    DecAddr = DecFarAddr;
+(*%E *)
+
+(*# save,call(reg_saved=>(dx,si,di,ds,st1,st2))*)
+  INLINE PROCEDURE QueryDosVersion():CARDINAL = _C8(0B8H,000H,030H,0CDH,021H,086H,0C4H,SYSTEM.Ret);
+    (* Returns the DOS version number as a BCD number.  This makes       *)
+    (* numerical comparisons easy.  Example:                             *)
+    (*                                                                   *)
+    (*  IF Lib.QueryDosVersion() >= 300H THEN                            *)
+    (*                                                                   *)
+    (* would test whether the program is running under a version of DOS  *)
+    (* at or above 3.00.                                                 *)
+(*# restore *)
+
+(*# save, call( reg_param=>(ax,bx),
+                reg_saved=>(cx,dx,si,di,es,ds,st1,st2), inline=>on ) *)
+INLINE PROCEDURE AddNearAddr(A: NearADDRESS; increment: CARDINAL) : NearADDRESS=A3(03H, 0C3H, SYSTEM.Ret);
+
+(*# call( reg_param=>(ax,bx),
+          reg_saved=>(cx,dx,si,di,es,ds,st1,st2), inline=>on ) *)
+INLINE PROCEDURE SubNearAddr(A: NearADDRESS; decrement: CARDINAL) : NearADDRESS=A3(2BH, 0C3H, SYSTEM.Ret);
+
+(*%T _fptr *)
+(*# call( reg_param=>(bx,es,ax),
+          reg_saved=>(cx,dx,si,di,ds,st1,st2), inline=>on ) *)
+INLINE PROCEDURE IncNearAddr(VAR A: NearADDRESS; increment: CARDINAL)=A4(26H,01H, 07H, SYSTEM.Ret);
+
+(*# call( reg_param=>(bx,es,ax),
+          reg_saved=>(cx,dx,si,di,ds,st1,st2), inline=>on ) *)
+INLINE PROCEDURE DecNearAddr(VAR A: NearADDRESS; decrement: CARDINAL)=A4(26H,29H, 07H, SYSTEM.Ret);
+(*%E *)
+
+(*%F _fptr *)
+(*# call( reg_param=>(bx,ax),
+          reg_saved=>(cx,dx,si,di,ds,es,st1,st2), inline=>on ) *)
+INLINE PROCEDURE IncNearAddr(VAR A: NearADDRESS; increment: CARDINAL)=A3(01H, 07H, SYSTEM.Ret);
+
+(*# call( reg_param=>(bx,ax),
+          reg_saved=>(cx,dx,si,di,ds,es,st1,st2), inline=>on ) *)
+INLINE PROCEDURE DecNearAddr(VAR A: NearADDRESS; decrement: CARDINAL)=A3(29H, 07H, SYSTEM.Ret);
+(*%E *)
+(*# restore *)
+
+(*%F _fptr *)
+(*# save,
+    call( reg_param=>(ax,bx),
+          reg_saved=>(cx,dx,si,di,es,ds,st1,st2), inline=>on )
+*)
+INLINE PROCEDURE AddAddr(A: ADDRESS; increment: CARDINAL) : ADDRESS=A3(03H, 0C3H, SYSTEM.Ret);
+
+(*# call( reg_param=>(ax,bx),
+          reg_saved=>(cx,dx,si,di,es,ds,st1,st2), inline=>on ) *)
+INLINE PROCEDURE SubAddr(A: ADDRESS; decrement: CARDINAL) : ADDRESS=A3(2BH, 0C3H, SYSTEM.Ret);
+
+(*# call( reg_param=>(bx,ax),
+          reg_saved=>(cx,dx,si,di,ds,es,st1,st2), inline=>on ) *)
+INLINE PROCEDURE IncAddr(VAR A: ADDRESS; increment: CARDINAL)=A3(01H, 07H, SYSTEM.Ret);
+
+(*# call( reg_param=>(bx,ax),
+          reg_saved=>(cx,dx,si,di,ds,es,st1,st2), inline=>on ) *)
+INLINE PROCEDURE DecAddr(VAR A: ADDRESS; decrement: CARDINAL)=A3(29H, 07H, SYSTEM.Ret);
+(*# restore *)
+(*%E *)
+
+(*# save *)
+(*%T _fdata *)
+(*# call(seg_name=>SIG) *)
+(*%E *)
+PROCEDURE SetInProgramFlag(State: BOOLEAN);
+PROCEDURE GetInProgramFlag(): BOOLEAN;
+PROCEDURE EnableBreakCheck;
+PROCEDURE DisableBreakCheck;
+PROCEDURE Dos(VAR R: SYSTEM.Registers); (* INT 21H Function Call *)
+(*# restore *)
+
+PROCEDURE GetVector(Int:SHORTCARD):FarADDRESS;
+  (* Returns the 32 bit address of the requested interrupt handler       *)
+
+PROCEDURE SetVector(Int:SHORTCARD;Vector:FarADDRESS);
+  (* Sets the interrupt handler for the requested interrupt vector       *)
+
+PROCEDURE FatalError(S: ARRAY OF CHAR);
+
+(*# save *)
+(*%T _DLL *)
+(*# call(seg_name=>LibDLL) *)
+(*%E *)
+(*%F _fdata *)
+PROCEDURE NearMove    (Source,Dest:NearADDRESS;Count:CARDINAL);
+PROCEDURE NearFastMove(Source,Dest:NearADDRESS;Count:CARDINAL);
+PROCEDURE NearWordMove(Source,Dest:NearADDRESS;WordCount:CARDINAL);
+(*%E *)
+PROCEDURE Move    (Source,Dest:ADDRESS;Count:CARDINAL);
+PROCEDURE FastMove(Source,Dest:ADDRESS;Count:CARDINAL);
+PROCEDURE WordMove(Source,Dest:ADDRESS;WordCount:CARDINAL);
+
+PROCEDURE FarMove (Source,Dest:FarADDRESS;Count:CARDINAL);
+PROCEDURE FarFastMove(Source,Dest:FarADDRESS;Count:CARDINAL);
+PROCEDURE FarWordMove(Source,Dest:FarADDRESS;WordCount:CARDINAL);
+
+PROCEDURE Fill(Dest: ADDRESS; Count: CARDINAL; Value: BYTE);
+PROCEDURE FarFill(Dest: FarADDRESS; Count: CARDINAL; Value: BYTE);
+
+PROCEDURE WordFill(Dest: ADDRESS; WordCount: CARDINAL; Value: WORD);
+PROCEDURE FarWordFill(Dest: FarADDRESS; WordCount: CARDINAL; Value: WORD);
+
+PROCEDURE ScanR  (Dest: ADDRESS; Count: CARDINAL; Value: BYTE) : CARDINAL;
+PROCEDURE ScanL  (Dest: ADDRESS; Count: CARDINAL; Value: BYTE) : CARDINAL;
+PROCEDURE ScanNeR(Dest: ADDRESS; Count: CARDINAL; Value: BYTE) : CARDINAL;
+PROCEDURE ScanNeL(Dest: ADDRESS; Count: CARDINAL; Value: BYTE) : CARDINAL;
+
+PROCEDURE HashString(S: ARRAY OF CHAR; Range: CARDINAL) : CARDINAL;
+PROCEDURE Compare(Source,Dest: ADDRESS; Len: CARDINAL) : CARDINAL;
+
+PROCEDURE Terminate(P: PROC; VAR C: PROC);
+PROCEDURE SetReturnCode(code: SHORTCARD);
+
+
+TYPE
+  CpuKind = (cpu_Unknown,cpu_V20,cpu_V30,cpu_8088,cpu_8086,
+             cpu_80188,cpu_80186,
+             cpu_80286,cpu_80386);
+
+  FpuKind = (fpu_none,fpu_8087,fpu_80287,fpu_80387);
+
+  CpuRec = RECORD
+              cpu : CpuKind;
+              fpu : FpuKind;
+           END;
+
+PROCEDURE CpuId ( VAR r : CpuRec );
+
+(* MSDOS Only *)
+VAR
+  PSP         : CARDINAL;
+  CommandLine : CommandType;
+  BreakChecks : BOOLEAN;
+
+PROCEDURE UserBreak;
+PROCEDURE Sound(FreqHz: CARDINAL);
+PROCEDURE NoSound;
+PROCEDURE Intr(VAR R: SYSTEM.Registers; I: CARDINAL);
+PROCEDURE Delay(Time: CARDINAL);
+
+TYPE
+    TENBYTEREAL = ARRAY [0..9] OF BYTE;
+    LongLabelRec = RECORD
+        j_sp, j_ss, j_flag, j_cs, j_ip, j_bp, j_di, j_es, j_si, j_ds: CARDINAL;
+        st1, st2: TENBYTEREAL;
+    END;
+    LongLabel = ARRAY [0..0] OF LongLabelRec;
+
+(*# save *)
+(*# call(reg_saved=>(ds,es,si,di,st1,st2), set_jmp=>on) *)
+PROCEDURE SetJmp (VAR Lbl: LongLabel) : CARDINAL;
+(*# restore *)
+
+(*# save *)
+(*# call(reg_saved=>(ax,bx,cx,dx,ds,es,si,di,st0,st1,st2,st3,st4,st5,st6)) *)
+PROCEDURE LongJmp(VAR Lbl: LongLabel; result: CARDINAL);
+(*# restore *)
+
+(* Protected mode features *)
+PROCEDURE AddressOK      ( A : ADDRESS ) : BOOLEAN;
+PROCEDURE SelectorLimit  ( S : CARDINAL ) : CARDINAL;
+PROCEDURE ProtectedMode  () : BOOLEAN;
+(*# restore *)
+END Lib.
+

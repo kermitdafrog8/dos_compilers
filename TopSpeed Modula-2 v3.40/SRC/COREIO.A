@@ -1,0 +1,5794 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREIO.A - low level i/o                                                *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module coreio
+
+(***************************************************************************)
+segment _DATA(DATA,28H)
+public  __fmode         : dw O_TEXT    (* default transaltion mode *)
+
+segment _BSS(BSS, 28H)
+public  __fmask         :  org 2       (* default file permission mask *)
+
+segment _BSS(BSS, 28H)
+public  __ungotchar     : org 2        (* temporary storage for console I/O *)
+
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+public __DelayFactor    : org 2
+
+segment _DATA(DATA,28H)
+public __upperHex       : db 'A'       (* 'a' or 'A', chooses digit case *)
+(*%T _DLL *)
+public __exit1_vector   : org FarCodePtrSize
+(*%E *)
+
+segment _BSS(BSS, 28H)
+public __zero_code      : org 2
+public __scanwaiting    : org 2
+public __kbdhandle      : org 2
+
+segment _BSS(BSS, 28H)
+public __i_putch        : org CodePtrSize
+public __i_cgets        : org CodePtrSize
+
+segment _BSS(BSS,28H)
+public __p_init         : org 2
+
+section
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __p_init
+extrn __i_putch
+extrn __i_cgets
+extrn __d_putch
+extrn __d_cgets
+
+(*%T _DLLOVL *)
+PutchAdr: dd __d_putch
+CgetsAdr: dd __d_cgets
+(*%E *)
+
+(*%T RegParam *)
+char   = -2
+locals =  2
+(*%E *)
+(*%F RegParam *)
+char   = frame
+(*%E *)
+
+select _TEXT
+
+public _putch :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][char], ax
+(*%E *)
+(*%F SameDS *)
+    push  ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    cmp  byte [__p_init], 0
+    jne   putchInitDone
+(*%F _DLLOVL *)
+    mov  word [__i_putch], __d_putch
+    mov  word [__i_cgets], __d_cgets
+(*%F NearCall *)
+    mov  word [__i_putch][2], cs
+    mov  word [__i_cgets][2], cs
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    mov  ax, [PutchAdr]
+    mov  word [__i_putch], ax
+    mov  ax, [CgetsAdr]
+    mov  word [__i_cgets], ax
+    mov  ax, [PutchAdr][2]
+    mov  word [__i_putch][2], ax
+    mov  ax, [CgetsAdr][2]
+    mov  word [__i_cgets][2], ax
+(*%E *)
+    inc  byte [__p_init]
+putchInitDone:
+(*%F RegParam *)
+    push [bp][char]
+(*%E *)
+(*%T RegParam *)
+    mov  ax, [bp][char]
+(*%E *)
+(*%F NearCall *)
+    call dword [__i_putch]
+(*%E *)
+(*%T NearCall *)
+    call [__i_putch]
+(*%E *)
+(*%F RegParam *)
+    add sp, 2
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E  _WINDOWS *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+scr_init :dw 0
+scr_cols :dw 0
+bellChar :dw 7
+
+(* int  putch(int c) *)
+
+(*%F RegParam *)
+chk = frame
+(*%E *)
+(*%T RegParam *)
+chk = -2
+locals = 2
+(*%E *)
+
+select _TEXT
+
+public  __d_putch :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][chk], ax
+(*%E *)
+    push bx
+    push cx
+    push dx
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    cmp  word [scr_init], 0
+    jnz  initDone
+    mov  ah, 0FH
+    int  10H
+    mov  [scr_cols], ah
+    not  word [scr_init]
+initDone:
+    call getxy
+    mov  al, [bp][chk]
+    cmp  al, 8
+    je   backSpace
+    cmp  al, 0AH
+    je   newLine
+    cmp  al, 0DH
+    je   carriageReturn
+    cmp  al, 09H
+    je   tab
+    cmp  al, 07H
+    je   bell
+notEsc:
+    mov  ah, 0AH
+    mov  bh, 0
+    mov  cx, 1
+    int  10H
+putDone:
+    call incxy
+putExit:
+    mov  ax, [bp][chk]
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+bell:
+    mov  ah, 40H
+    mov  bx, 1
+    mov  cx, bx
+(*%F SameDS *)
+    push ds
+    mov  dx, _DATA
+    mov  ds, dx
+(*%E *)
+    mov  dx, bellChar
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    jmp  putExit
+backSpace:
+    call decxy
+    jmp  putExit
+newLine:
+    mov  dl, [scr_cols]
+    jmp  putDone
+carriageReturn:
+    mov  dl, 0
+    call setxy
+    jmp  putExit
+tab:
+    mov  cx, 4
+    mov  al, 20H
+tabLoop:
+    push cx
+    mov  ah, 0AH
+    mov  bh, 0
+    mov  cx, 1
+    int  10H
+    call incxy
+    pop  cx
+    loop tabLoop
+    jmp  putExit
+incxy :
+    inc  dl
+    cmp  dl, [scr_cols]
+    jb   xOK1
+    cmp  dh, 24
+    jae  scrollUp
+    mov  dl, 0
+    inc  dh
+xOK1:
+    call setxy
+    ret   0
+scrollUp:
+    push dx
+    mov  ax, 601H
+    mov  ch, 0
+    mov  cl, 0
+    mov  dh, 24
+    mov  dl, [scr_cols]
+    call scroll
+    pop  dx
+    sub  dl, dl
+    jmp  xOK1
+decxy :
+    dec  dl
+    cmp  dl, 0
+    jae  xOK
+    cmp  dh, 0
+    jbe  screenBegin
+    mov  dl, [scr_cols]
+    dec  dh
+xOK:
+    call setxy
+    ret   0
+screenBegin:
+    mov  dh, 0
+    mov  dl, 0
+    jmp  xOK
+scroll :
+    mov  bh, 7
+    int  10H
+    ret  0
+getxy :
+    mov  ah, 3H
+    mov  bh, 0
+    int  10H
+    ret  0
+setxy :
+    mov  ah, 2H
+    mov  bh, 0
+    int  10H
+    ret  0
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __zero_code
+extrn __ungotchar
+extrn @DosInterrupt
+
+(* int  getch(void)
+     Checks for any character returned by ungetch then calls DOS. *)
+
+public  _getch :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [__ungotchar]
+    or   al, al
+    jne  charWaiting
+    mov  ah, 8H
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+charWaiting:
+    mov  word [__ungotchar], 0
+    mov  word [__zero_code], 0
+    sub  ah, ah
+    or   ax, ax
+    jnz  charNotCode
+    mov  byte [__zero_code], 1
+charNotCode:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+
+extrn _getch
+extrn _putch
+
+(* int getche(void)
+     Checks for any charcater returned by ungetch then calls DOS. *)
+
+public _getche :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F NearCall *)
+    call far _getch
+(*%E *)
+(*%T NearCall *)
+    call _getch
+(*%E *)
+    push ax
+(*%F NearCall *)
+    call far _putch
+(*%E *)
+(*%T NearCall *)
+    call _putch
+(*%E *)
+    pop  ax
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __zero_code
+extrn __ungotchar
+
+(* int  kbhit(void)
+     Checks for any charcater waiting in keyboard buffer. *)
+
+public  _kbhit :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__zero_code]
+    or   ax, ax
+    jnz  keyWaiting
+    mov  ax, [__ungotchar]
+    or   ax, ax
+    jnz  keyWaiting
+    mov  ah, 1
+    int  16H
+    mov  al, 1
+    jnz  keyWaiting
+    sub  ax, ax                   (*  none ready, return 0 *)
+keyWaiting:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ungotchar
+
+(* char *cgets(char *str)
+     String is read from console and stroed starting at str[2].
+     s[0] is the max length of the string.
+     The actual length is stored at str[1].
+     Returns a pointer to the beginning of the actual string. *)
+
+CR  = 0DH
+LF  = 0AH
+
+(*%F RegParam *)
+str = frame
+(*%E *)
+(*%T RegParam *)
+str = -4
+locals =4
+(*%E *)
+
+public  __d_cgets :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][str], ax
+(*%F NearPtr *)
+    mov  [bp][str][2], bx
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    push bx
+    push cx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+(*%E *)
+    push di
+    push si
+    push ds
+    sub  cx, cx
+(*%F NearPtr *)
+    lds  si, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][str]
+(*%E *)
+    mov  dx, si
+(*%F NearPtr *)
+    mov  ax, _DATA            (* is there a character put back *)
+    mov  es, ax
+    cmp  word es:[__ungotchar], 0
+(*%E *)
+(*%T NearPtr *)
+    cmp  word [__ungotchar], 0
+(*%E *)
+    je   cgetsNoWaiting
+    not  cx
+    dec  byte ds:[si]
+cgetsNoWaiting:
+    mov  ah, 0AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jcxz cgetsNoUnget
+    mov  dx, es:[__ungotchar] (* insert put back character *)
+    mov  cl, [si][1]
+    sub  ch, ch
+    std
+(*%F NearPtr *)
+    les  di, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][str]
+(*%E *)
+    add  si, cx
+    add  di, cx
+    add  si, 1
+    add  di, 2
+rep ; movsb
+(*%F NearPtr *)
+    lds  si, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][str]
+(*%E *)
+    inc  byte [si][1]
+    mov  [si][2], dl
+    cld
+cgetsNoUnget:
+    mov  bl, [si][1]       (* terminate string *)
+    sub  bh, bh
+    add  bx, 2
+    mov  byte [si][bx], 0
+    mov  dx, ds            (* return address of string *)
+    mov  ax, si
+    add  ax, 2
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _WINDOWS*)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(******************************************************************************)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS,28H)
+
+(* void _initio()
+     Initialises level 1 and level 2 I/O. *)
+
+extrn __exit1
+extrn __exit1_vector
+
+select _BSS
+
+Buf0 : org BUFSIZ
+Buf1 : org BUFSIZ
+Buf4 : org BUFSIZ
+
+select _DATA
+
+extrn __iob
+extrn __openfd
+extrn __exit_io
+extrn __open_max
+extrn __FatalError
+extrn __FatalErrorPos
+
+HandleData    : dw 4000H, 4002H, 4002H, 4002H, 4002H
+StreamData    : dw 0405H, 0C06H, 0402H, 0443H, 0446H
+StreamBuffers : dw  Buf0,  Buf1,     0,     0,  Buf4
+
+public __iosetup : dw 0
+(*%F SameDS *)
+(*%F _DLL *)
+Exit1Adr: dd __exit1    (* In XLARGE and above, _exit1 is not in _TEXT *)
+(*%E *)
+(*%E *)
+
+select _TEXT
+
+do_initio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initio : dw MAGIC_NUM
+         db PR2
+         dd do_initio
+(*%E *)
+(*%T NearCall *)
+initio : dw MAGIC_NUM
+         db PR2
+         dw do_initio
+(*%E *)
+
+select _DATA
+public __doserrno :  dw  0, initio
+
+select  _TEXT
+
+public __initio :
+			     (* check for character devices on default paths *)
+(*%T _WINDOWS *)
+(*%F NearCall *)
+    inc  bp
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+
+(*%T SameDS *)
+    mov  word [__exit_io], __exit1
+(*%F NearCall *)
+    mov  word [__exit_io][2], cs
+(*%E *)
+(*%E *)
+(*%F SameDS *)
+ (*%F _DLL   *)
+    mov  ax, [Exit1Adr]
+    mov  word [__exit_io], ax
+    mov  ax, [Exit1Adr][2]
+    mov  word [__exit_io][2], ax
+ (*%E *)
+ (*%T _DLL *)
+    mov  ax, [__exit1_vector]
+    mov  word [__exit_io], ax
+    mov  ax, [__exit1_vector][2]
+    mov  word [__exit_io][2], ax
+ (*%E *)
+(*%E *)
+    cmp  word [__iosetup], 0
+    jne  ioDone
+    not  word [__iosetup]
+memDone:
+    sub  cx, cx
+    sub  bx, bx
+    mov  si, 0
+    mov  di, __iob
+ioLoop:
+    push bx
+    mov  bx, cx
+    mov  ax, 4400H		 (* IOCTL, get device information *)
+    int  21H
+    pop  bx
+    jc   noSet
+    cmp  cx, 5
+    jb   standardPath
+    or   word [si][__openfd], O_RDWR
+    jmp  setDevice
+standardPath:
+    mov  ax, [si][StreamData]
+    mov  [di][bx][_flag], ax
+    mov  [di][bx][_file], cx
+    mov  ax, [si][StreamBuffers]
+    or   ax, ax
+    jz   noBuf
+    mov  word [di][bx][_size], BUFSIZ
+    mov  [di][bx][_base], ax
+    mov  [di][bx][_ptr], ax
+(*%F NearPtr *)
+    mov  [di][bx][_base][2], ds
+    mov  [di][bx][_ptr][2], ds
+(*%E *)
+noBuf:
+    mov  ax, [si][HandleData]
+    mov  [si][__openfd], ax
+setDevice:
+    test dx, 80H                 (* test for file flags *)
+    je   noSet
+    or   word [si][__openfd], O_DEVICE
+    cmp  cx, 4
+    ja   noSet
+    or   word [di][bx][_flag], _F_DEV     (* is device *)
+noSet:
+    add  bx, _iobSize
+    add  si, 2
+    inc  cx
+    cmp  cx, [__open_max]
+    jne  ioLoop
+
+ioDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%T _WINDOWS *)
+    pop  bp
+    dec  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(****************************************************************************)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+segment _DATA(DATA,28H)
+segment _INIT(INIT_CODE,28H)
+
+select _DATA
+
+PPIport =     60H       (* 8255A-5 Programmable Peripheral Interface *)
+
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+
+extrn __DelayFactor
+
+Semaphor:              dw 0
+
+(* Little procedure to delay and amount dependant on value in AX
+   Note : Must only be one for caching reasons
+   To a.n.a.p we want run_time proportional to AX
+   Preserves all registers
+*)
+
+public __DelayLoop:
+       push       cx
+       push       dx
+       mov        dx,8
+DL2:   mov        cx,ax
+DL1:   loop       DL1
+       dec        dx
+       jnz        DL2
+       pop        dx
+       pop        cx
+       ret        0
+
+
+
+
+TimeTrap:
+  inc  word cs:[Semaphor]        (* used when establishing delay factor *)
+  iret
+
+do_initTimer : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initTimer : dw MAGIC_NUM
+            db PR4
+            dd do_initTimer
+(*%E *)
+(*%T NearCall *)
+initTimer : dw MAGIC_NUM
+            db PR4
+            dw do_initTimer
+(*%E *)
+
+select _DATA
+public __DelayTag :  dw  initTimer, 0
+
+(*%F SameDS *)
+select SIG_TEXT
+(*%E *)
+(*%T SameDS *)
+select _TEXT
+(*%E *)
+
+(*%T _DLLOVL *)
+  push bp
+  mov  bp, sp
+(*%E *)
+  xor ax,ax
+  push    dx
+  push    bx
+  push ds
+  mov ds,ax
+  push ds:[70H]
+  push ds:[72H]
+  mov  al,55 (* ax was zero *)
+  xor  dx,dx
+  xor  bx,bx
+  mov word cs:[Semaphor],dx
+  cli
+  mov word ds:[70H],TimeTrap
+  mov ds:[72H],cs
+  sti
+Estab1:
+  cmp word cs:[Semaphor],2
+  jne  Estab1
+Estab2:               (* Label even aligned *)
+  test bx,bx
+  cmp word cs:[Semaphor],3
+  jz   Estab5
+  call __DelayLoop
+  inc  bx
+  jmp  Estab2
+Estab5:
+  cli
+  pop ds:[72H]
+  pop ds:[70H]
+  sti
+  mov cs:[__DelayFactor],bx
+  pop ds
+  pop bx
+  pop dx
+
+  in al,PPIport+1
+  and al,0FCH
+  out PPIport+1,al
+(*%F NearCall *)
+(*%T _DLLOVL *)
+  pop  bp
+(*%E *)
+  ret  far 0
+(*%E *)
+(*%T NearCall *)
+  ret  0
+(*%E *)
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*%F _WINDOWS *)
+(******************************************************************************)
+segment _DATA(DATA,28H)
+(*%F SameDS *)
+segment SIG_TEXT(CODE,28H)
+(*%E *)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+
+extrn __DelayTag
+extrn __DelayFactor
+extrn __DelayLoop
+
+(*%F RegParam *)
+p_time = frame
+(*%E *)
+
+public _delay :
+(*%F RegParam *)
+    push bp
+    mov  bp, sp
+    mov  ax, [bp][p_time]
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+    push dx
+    push bx
+    mov  bx, ax
+    mov  ax, cs:[__DelayFactor]
+MoreDealy: (* Label even aligned *)
+    cmp word cs:[__DelayFactor],0
+    test bx,bx
+    jz   DelayEnd
+    call __DelayLoop
+    dec bx
+    jmp  MoreDealy
+DelayEnd:
+    pop bx
+    pop dx
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+dw __DelayTag
+
+(*%E _WINDOWS *)
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public __pascreate :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    sub  cx, cx
+    mov  ah, 3CH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  creattOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+creattOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public __pasopen :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push cx
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 3DH
+(*%F NearPtr *)
+    mov  al, cl
+(*%E *)
+(*%T NearPtr *)
+    mov  al, bl
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  openOK
+(*%F NearCall *)
+    call far __ioerr                             (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                             (* set errno *)
+(*%E *)
+    mov  ax, -1                              (* return -1 *)
+openOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T NearPtr *)
+    pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _BSS(BSS,28H)
+
+TempDTA: org DTA_SIZE
+
+select  _TEXT
+
+public __exists :
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    push ax
+    push dx
+(*%F NearPtr *)
+    mov  ax, _BSS
+    mov  ds, ax
+(*%E *)
+    mov  dx, TempDTA
+    mov  ah, 1AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    pop  dx
+    pop  ax
+(*%F NearPtr *)
+    mov  ds, ax
+(*%E *)
+    mov  ax, 4E00H
+    sub  cx, cx
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    mov  al, 0
+    jc   notThere
+    inc  al
+notThere:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+public __read :
+
+(* int _read(int handle, void *buffer, int num)
+     reads num bytes from file handle int buffer.
+     Returns number of bytes read or -1 for error. *)
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+(*%F NearPtr *)
+num     = 6+frame
+(*%E *)
+(*%T NearPtr *)
+num     = 4+frame
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push bx
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    mov  ah, 3FH
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  readOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+readOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  bp                                 (* number already in ax *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    mov  ds, cx
+    push dx
+    mov  dx, bx
+    mov  bx, ax
+    pop  cx
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, bx
+    mov  bx, ax
+(*%E *)
+    mov  ah, 3FH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  readOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+readOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+__appbuf : db 0
+
+extrn _lseek
+extrn __write
+extrn __ioerr
+extrn __openfd
+extrn __open_max
+
+select  _TEXT
+
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+(*%F NearPtr *)
+num     = 6+frame
+(*%E *)
+(*%T NearPtr *)
+num     = 4+frame
+(*%E *)
+
+temp       = -4
+writesize  = -6
+flag       = -7
+reset      = -8
+dgroup     = -10
+
+locals     =  10
+(*%E *)
+
+(*%T RegParam *)
+handle  = -12
+buffer  = -16
+num     = -18
+
+temp       = -4
+writesize  = -6
+flag       = -7
+reset      = -8
+dgroup     = -10
+
+locals     =  18
+(*%E *)
+
+WRITE_BUF_SIZE = 401H
+
+public _write :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%E *)
+    push di
+    push si
+    push ds
+(*%T RegParam *)
+    mov  [bp][handle], ax
+(*%F NearPtr *)
+    mov  [bp][buffer], bx
+    mov  [bp][buffer][2], cx
+    mov  [bp][num], dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][buffer], bx
+    mov  [bp][num], cx
+(*%E *)
+(*%E *)
+
+(*%F SameDS *)
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  [bp][dgroup], ds
+    mov  byte [bp][reset], 0
+    mov  bx, [bp][handle]
+(*%T _WINDOWS *)
+    cmp  bx, [__open_max]
+    jb   hrOK
+    mov  ax, EBADF
+    jmp  near writeError
+hrOK:
+(*%E *)
+    add  bx, bx
+    mov  cx, [__openfd][bx]
+(*%T _WINDOWS *)
+    or   cx, cx
+    jnz  descOK
+    mov  cx, O_RDWR|O_BINARY
+    mov  [__openfd][bx], cx
+descOK:
+(*%E *)
+(*%F _WINDOWS *)
+    jcxz near writeInvalid
+(*%E *)
+    test cx, O_RDWR+O_WRONLY            (* test for correct access mode *)
+    je   near writeAccess
+    cmp  word [bp][num], 0
+    je   near writeEOF                  (* don't write zero bytes *)
+    test cx, O_APPEND
+    je   dontAppend
+    mov  di, cx                         (* append to EOF if flag set *)
+    sub  ax, ax
+    mov  dx, SEEK_END
+    test cx, O_TEXT
+    jz   appNotText
+    dec  ax
+(*%F RegParam *)
+    push dx
+    push ax
+    push ax
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)
+    mov  cx, ax
+    mov  bx, ax
+    mov  ax, [bp][handle]
+(*%E *)
+(*%F NearCall *)
+    call far _lseek
+(*%E *)
+(*%T NearCall *)
+    call _lseek
+(*%E *)
+(*%F RegParam *)
+    add  sp, 8
+(*%E *)
+    cmp  dx, -1
+    je   nextSeek
+    cmp  ax, -1
+    je   nextSeek
+    mov  ah, 03FH
+    mov  bx, [bp][handle]
+    mov  cx, 1
+    mov  dx, __appbuf
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   near writeError
+    mov  ax, -1
+    mov  dx, SEEK_END
+    cmp  byte [__appbuf], CTLZ
+    je   ctlzPresent
+    inc  ax
+ctlzPresent:
+    jmp  appNotText
+nextSeek:
+(*%F RegParam *)
+    mov  dx, SEEK_END
+    sub  ax, ax
+appNotText:
+    push dx
+    push ax
+    push ax
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)
+    mov  dx, SEEK_END
+    sub  ax, ax
+appNotText:
+    mov  cx, ax
+    mov  bx, ax
+    mov  ax, [bp][handle]
+(*%E *)
+(*%F NearCall *)
+    call far _lseek
+(*%E *)
+(*%T NearCall *)
+    call _lseek
+(*%E *)
+(*%F RegParam *)
+    add  sp, 8
+(*%E *)
+appendDone:
+    mov  cx, di
+dontAppend:
+    test cx, O_TEXT
+    je   near writeBinary
+writeText:                              (* test mode *)
+    test cx, _O_EOF                     (* error if EOF flag set *)
+    jne  near writeEOF
+(*%T StackChecks *)
+    push bp
+    mov  bp, WRITE_BUF_SIZE+6
+(*%F NearCall *)
+    extrn F$StkChk
+    call far F$StkChk
+(*%E *)
+(*%T NearCall *)
+    extrn N$StkChk
+    call N$StkChk
+(*%E *)
+    pop  bp
+(*%E *)
+    mov  di, WRITE_BUF_SIZE
+    sub  sp, di
+    mov  [bp][temp][2], ss
+    mov  [bp][temp], sp
+    inc  word [bp][temp]
+    not  byte [bp][reset]
+gotbuf:
+    mov  cx, [bp][num]
+    shr  di, 1                          (* write size is half that of buffer *)
+    mov  [bp][writesize], di
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+writeMainLoop:                          (* main loop - translate and *)
+    mov  cx, [bp][num]                  (* write a block *)
+    jcxz allWritten
+    cmp  cx, [bp][writesize]            (* exit when all written *)
+    jb   cxRight
+    mov  cx, [bp][writesize]
+cxRight:
+    sub  [bp][num], cx
+    les  di, [bp][temp]
+    mov  ah, 0AH
+    mov  es:[di][-1], ah                (* Dummy at buffer-1 *)
+    mov  bh, CTLZ
+    mov  bl, 0DH
+                                        (* this next loop is the time *)
+writeTransLoop:                         (* one where transaltion takes place *)
+    lodsb
+    cmp  al, ah
+    je   doTrans                        (* no jump for no translate *)
+doneTrans:
+    stosb
+    cmp  al, bh
+    je   writeCtlz                      (* ctl Z - terminate output *)
+    dec  cx
+    jcxz writeBlock                     (* repeat loop body *)
+    lodsb
+    cmp  al, ah
+    je   doTrans
+    stosb
+    cmp  al, bh
+    je   writeCtlz
+    loop writeTransLoop
+    jmp  writeBlock
+doTrans:
+    cmp  es:[di][-1], bl                (* CR inserted here *)
+    je   doneTrans
+    mov  es:[di], bl
+    inc  di
+    jmp  doneTrans
+writeCtlz:
+    mov  byte [bp][flag], 1
+    jmp  writeWrite
+writeBlock:
+    mov  byte [bp][flag], 0             (* write transalted block *)
+writeWrite:
+    push cx
+    push ds
+    mov  ah, 40H
+    mov  bx, [bp][handle]
+    lds  dx, [bp][temp]
+    sub  di, dx
+    mov  cx, di
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    pop  ds
+    pop  cx
+    jc   writeError                     (* write error *)
+    cmp  ax, di
+    jne  writeFull                      (* media full *)
+writeOK:
+    cmp  byte [bp][flag], 0
+    je   writeMainLoop                  (* go back for another block *)
+allWritten:
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]               (* output done *)
+(*%E *)
+    mov  bx, [bp][handle]
+    shl  bx, 1
+    cmp  byte [bp][flag], 0
+    je   dontSet
+    test word [__openfd][bx], O_DEVICE  (* if !device and ctl Z set EOF flag *)
+    jne  dontSet
+    or   word [__openfd][bx], _O_EOF
+dontSet:
+    sub  si, [bp][buffer]
+    jmp  writeDone
+writeBinary:                            (* binary output done here *)
+    mov  ah, 40H
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   writeError
+    mov  si, ax
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]
+(*%E *)
+    shl  bx, 1
+writeDone:
+    or   word [__openfd][bx], O_CHANGED (* set file changed flag *)
+writeEnd:
+    cmp  byte [bp][reset], 0
+    je   writeNoStack
+    add  sp, WRITE_BUF_SIZE
+writeNoStack:
+    mov  ax, si                         (* return *)
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+writeError:                             (* error return *)
+    mov  si, -1
+    mov  bx, ax
+    jmp  writeSetErr
+writeEOF:                               (* EOF return *)
+    sub  si, si
+    jmp  writeEnd
+writeFull:                              (* media full *)
+    mov  bx, ENOSPC
+    mov  si, ax
+    jmp  writeSetErr
+writeAccess:                            (* invalid access mode *)
+    mov  si, -1
+    mov  bx, EACCESS
+    jmp  writeSetErr
+writeInvalid:                           (* bad file *)
+    mov  si, -1
+    mov  bx, EBADF
+    jmp  writeSetErr
+writeNomem:                             (* no memory for buffer *)
+    mov  bx, ENOMEM
+writeSetErr:                            (* set errno *)
+    mov  ax, bx
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    jmp  writeEnd
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __openfd
+extrn __open_max
+extrn __ioerr
+extrn @DosInterrupt
+
+(* int read(int handle,void *buf,unsigned num); *)
+
+(*%F RegParam *)
+handle                  = frame
+buffer                  = frame+2
+(*%T NearPtr *)
+num                     = frame+4
+(*%E *)
+(*%F NearPtr *)
+num                     = frame+6
+(*%E *)
+
+dgroup                  = -2
+locals                  =  2
+(*%E *)
+
+(*%T RegParam *)
+handle                  = -2
+buffer                  = -6
+num                     = -8
+dgroup                  = -10
+
+locals                  =  10
+(*%E *)
+
+public _read :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F SameDS *)
+    mov  di, _DATA
+    mov  ds, di
+(*%E *)
+    mov  [bp][dgroup], ds
+(*%T RegParam *)
+(*%T NearPtr *)
+    jcxz near $ReadEOF
+    mov  [bp][num], cx
+(*%E *)
+    mov  [bp][handle], ax
+    mov  [bp][buffer], bx
+(*%F NearPtr *)
+    mov  [bp][buffer][2], cx
+    mov  [bp][num], dx
+(*%E *)
+    mov  bx, ax
+(*%E RegParam *)
+(*%F RegParam *)
+    mov  bx, [bp][handle]
+(*%E *)
+(*%T _WINDOWS *)
+    cmp  bx, [__open_max]
+    jb   $ReadHrOK
+    mov  ax, EBADF
+    jmp  near $ReadError
+$ReadHrOK:
+(*%E *)
+    shl  bx, 1
+    mov  cx, [__openfd][bx]
+(*%T _WINDOWS *)
+    or   cx, cx
+    jnz  $ReadDescOK
+    mov  cx, O_RDWR|O_BINARY
+    mov  [__openfd][bx], cx
+$ReadDescOK:
+(*%E *)
+(*%F _WINDOWS *)
+    jcxz near $ReadInvalid
+(*%E *)
+    test cx, O_WRONLY
+    jne  near $ReadAccess              (* access mode invalid *)
+(*%F RegParam *)
+    cmp  word [bp][num], 0             (* read zero - do nothing *)
+    je   near $ReadEOF
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+    cmp  word [bp][num], 0             (* read zero - do nothing *)
+    je   near $ReadEOF
+(*%E *)
+(*%E *)
+    test cx, O_TEXT
+    je   near $ReadBinary
+$ReadText:                             (* test mode *)
+    test cx, _O_EOF
+    jne  near $ReadEOF                 (* error - EOF flag set *)
+    mov  ah, 3FH                       (* read into user buffer *)
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]              (* set ds:dx to buffer for DOS call *)
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    mov  si, dx                        (* set ds:si to buffer for later *)
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   near $ReadError
+$ReadOK:
+    mov  cx, ax
+    jcxz $ReadCtlz
+    mov  bh, CTLZ
+    cmp  cx, 1
+    jne  $ReadOneContinue
+    mov  bl, [si]
+    inc  si
+    cmp  bl, bh
+    je   $ReadCtlz
+    dec  si
+    cmp  word [bp][num], 1
+    je   $ReadExit
+$ReadOneContinue:
+    mov  ah, 0DH
+$ReadTransLoop:                        (* translation loop *)
+    lodsb
+    cmp  al, ah
+    je   $ReadMissCR                   (* skip LF *)
+    stosb
+    cmp  al, bh
+    je   $ReadCtlz                     (* hit ctl Z - terminate input *)
+$ReadMissCR:
+    loop $ReadTransLoop
+    jmp  $ReadDone
+$ReadCtlz:
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]
+(*%E *)
+    mov  bx, [bp][handle]
+    shl  bx, 1
+    test word [__openfd][bx], O_DEVICE (* if !device + ctl Z set EOF *)
+    jne  $ReadDontSet
+    or   word [__openfd][bx], _O_EOF
+    jcxz $ReadDontSet
+    dec  si
+$ReadDontSet:
+    jmp  $ReadDone
+$ReadBinary:                           (* binary read done here *)
+    mov  ah, 3FH
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    mov  si, dx
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  $ReadExit
+    jmp  $ReadError
+$ReadDone:
+    sub  si, [bp][buffer]
+$ReadEnd:
+    mov  ax, si
+$ReadExit:
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+$ReadError:                            (* return error *)
+    mov  si, -1
+    mov  bx, ax
+    jmp  $ReadSetErr
+$ReadEOF:                              (* return EOF *)
+    sub  si, si
+    jmp  $ReadEnd
+$ReadAccess:                           (* invbalid access mode *)
+    mov  si, -1
+    mov  bx, EACCESS
+    jmp  $ReadSetErr
+$ReadInvalid:                          (* file not open *)
+    mov  si, -1
+    mov  bx, EBADF
+$ReadSetErr:                           (* set errno *)
+    mov  ax, bx
+(*%F NearCall *)
+    call far __ioerr                   (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                       (* set errno *)
+(*%E *)
+    jmp  $ReadEnd
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+public __write :
+
+(* int _write(int handle, void *buffer, int num)
+     writes num bytes to file handle from buffer.
+     Returns number of bytes written or -1 for error.
+     Low level DOS function. *)
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+(*%F NearPtr *)
+num     = 6+frame
+(*%E *)
+(*%T NearPtr *)
+num     = 4+frame
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push bx
+    push cx
+    push dx
+    push ds
+    mov  ah, 40H
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  writeOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+writeOK:
+    pop  ds
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  bp                                 (* number already in ax *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    push ds
+(*%F NearPtr *)
+    push dx
+    mov  dx, bx
+    mov  ds, cx
+    mov  bx, ax
+    pop  cx
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, bx
+    mov  bx, ax
+(*%E *)
+    mov  ah, 40H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  writeOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+writeOK:
+    pop  ds
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public __eof :
+
+(* int  _eof(int handle)
+     returns file status - EOF 1, error -1, else 0. *)
+
+(*%F RegParam *)
+handle  = frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  bx, [bp][handle]
+    mov  ah, 44H
+    mov  al, 6
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  eofOK
+(*%F NearCall *)
+    call far __ioerr                           (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                           (* set errno *)
+(*%E *)
+    mov  ax, -1                            (* return -1 *)
+    jmp  eofDone
+eofOK:                                     (* return status, 1 if EOF *)
+    inc  ax
+    cbw
+eofDone:
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    mov  bx, ax
+    mov  ax, 4406H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  eofOK
+(*%F NearCall *)
+    call far __ioerr                           (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                           (* set errno *)
+(*%E *)
+    mov  ax, -1                            (* return -1 *)
+    jmp  eofDone
+eofOK:                                     (* return status, 1 if EOF *)
+    inc  ax
+    cbw
+eofDone:
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(******************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+public	_isatty :
+
+(* int	isatty (int handle)
+     The return value is true (1) if handle is attached to a character device
+     such as the console or printer,  or false (0) if handle is for an ordinary
+     file or is not valid. *)
+
+(*%F RegParam *)
+handle	= frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    push dx
+    mov  bx, [bp][frame]
+    mov  ax, 4400H		 (* IOCTL, get device information *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    sub  ax, ax			 (* simple error return 0 *)
+    jc	 isattyDone
+    test dx, 80H                 (* test for file flags *)
+    je   isattyDone
+    mov  ax, dx
+isattyDone:
+    pop  dx
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push dx
+    mov  bx, ax
+    mov  ax, 4400H		 (* IOCTL, get device information *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    sub  ax, ax			 (* simple error return 0 *)
+    jc	 isattyDone
+    test dx, 80H                 (* test for file flags *)
+    je   isattyDone
+    mov  ax, dx
+isattyDone:
+    pop  dx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*****************************************************************************)
+segment _BSS(BSS,28H)
+segment _TEXT(CODE,28H)
+
+extrn __openfd
+extrn __ioerr
+extrn @DosInterrupt
+
+(* long lseek(int handle, long offset, int where)
+     positions handles file pointer and returns new offset. *)
+
+public _lseek:
+
+(*%F RegParam *)
+handle   = frame
+ofset    = 2+frame
+where    = 6+frame
+
+    push bp
+    mov  bp, sp
+    mov  ah, 42H
+    mov  al, [bp][where]
+    mov  dx, [bp][ofset]
+    mov  cx, [bp][ofset][2]
+    mov  bx, [bp][handle]
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   seekErr
+(*%F SameDS *)
+    push ds
+    mov  cx, seg __openfd
+    mov  ds, cx
+(*%E *)
+    add  bx, bx
+    and  word [__openfd][bx], ~_O_EOF
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+seekOK:
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+seekErr:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                           (* error - return -1L *)
+    cwd
+    jmp  seekOK
+(*%E *)
+
+(*%T RegParam *)
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+    mov  dx, bx
+    mov  bx, ax
+    pop  ax
+    mov  ah, 42H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   seekErr
+(*%F SameDS *)
+    push ds
+    mov  cx, seg __openfd
+    mov  ds, cx
+(*%E *)
+    add  bx, bx
+    and  word [__openfd][bx], ~_O_EOF
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+seekOK:
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+seekErr:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                           (* error - return -1L *)
+    cwd
+    jmp  seekOK
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public _tell :
+
+(* long tell(int handle)
+     Returns offset of file pointer. *)
+
+(*%F RegParam *)
+handle   = frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    push cx
+    mov  ah, 42H
+    mov  al, 1
+    mov  bx, [bp][handle]
+    sub  dx, dx
+    sub  cx, cx
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   tellErr
+tellOK:
+    pop  cx
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+tellErr:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                                  (* error return -1L *)
+    cwd
+    jmp  tellOK
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    push cx
+    mov  bx, ax
+    sub  dx, dx
+    sub  cx, cx
+    mov  ax, 4201H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   tellErr
+tellOK:
+    pop  cx
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+tellErr:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                                  (* error return -1L *)
+    cwd
+    jmp tellOK
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public _unlink :
+
+(* int unlink(char *filename)
+     Deletes file. Returns 0 if successful or -1 and sets errno. *)
+
+(*%F RegParam *)
+file   = frame
+
+    push bp
+    mov  bp, sp
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    mov  ah, 41H
+(*%F NearPtr *)
+    lds  dx, [bp][file]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][file]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc   unlinkOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1
+    jmp  unlinkDone			     (* return -1 *)
+unlinkOK:
+    sub  ax, ax
+unlinkDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 41H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc   unlinkOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1
+    jmp  unlinkDone			     (* return -1 *)
+unlinkOK:
+    sub  ax, ax
+unlinkDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public _rename :
+
+(* int rename(char *oldfile, char *newfile)
+     Renames file. Returns 0 if successful or -1 and sets errno. *)
+
+(*%F RegParam *)
+oldfile  = frame
+(*%F NearPtr *)
+newfile  = 4+frame
+(*%E *)
+(*%T NearPtr *)
+newfile  = 2+frame
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push dx
+    push di
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    mov  ah, 56H
+(*%F NearPtr *)
+    les  di, [bp][newfile]
+    lds  dx, [bp][oldfile]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][newfile]
+    mov  dx, [bp][oldfile]
+    push ds
+    pop  es
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  renameOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1
+    jmp  renameDone			     (* return -1 *)
+renameOK:
+    sub  ax, ax
+renameDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  di
+    pop  dx
+    pop  bp                                (* new offset already in dx:ax *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    push di
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    mov  es, dx
+    mov  di, cx
+    mov  ds, bx
+    mov  dx, ax
+(*%E *)
+(*%T NearPtr *)
+    mov  di, bx
+    mov  dx, ax
+    push ds
+    pop  es
+(*%E *)
+    mov  ah, 56H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  renameOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1
+    jmp  renameDone			     (* return -1 *)
+renameOK:
+    sub  ax, ax
+renameDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  di
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn  __ioerr
+
+public _mkdir :
+
+(* int mkdir(const char *path)
+     makes new sub-directory.  Returns 0 if sucessful or -1 if not.
+     errno is set to ENOENT if the path was not found or EACCES if
+     access denied. *)
+
+(*%F RegParam *)
+path  = frame
+
+    push bp
+    mov  bp, sp
+    push dx
+(*%F NearPtr *)
+    push ds
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    mov  ah, 39H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   mkError
+    sub  ax, ax             (* success return 0 *)
+    jmp  mkDone
+mkError:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1             (* return -1 *)
+mkDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 39H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   mkError
+    sub  ax, ax             (* success return 0 *)
+    jmp  mkDone
+mkError:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1             (* return -1 *)
+mkDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public _rmdir :
+
+(* int rmdir(const char *path)
+     deletes directory.  returns 0 if sucessful or -1 if not.
+     errno is set to ENOENT if the path was not found or EACCES
+     if access denied. *)
+
+(*%F RegParam *)
+path  = frame
+
+    push bp
+    mov  bp, sp
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    mov  ah, 3AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   rmError
+    sub  ax, ax                  (* success - return 0 *)
+    jmp  rmDone
+rmError:
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                 (* set errno *)
+(*%E *)
+    mov  ax, -1                  (* error - return -1 *)
+rmDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 3AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   rmError
+    sub  ax, ax                  (* success - return 0 *)
+    jmp  rmDone
+rmError:
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                  (* error - return -1 *)
+rmDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(******************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public _chdir :
+
+(* int chdir(const char *path)
+     Changes current working directory.
+     returns 0 if sucessful or -1 if not (errno is set to ENOENT). *)
+
+(*%F RegParam *)
+path  = frame
+
+    push bp
+    mov  bp, sp
+    push dx
+(*%F NearPtr *)
+    push ds
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    mov  ah, 3BH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   chError
+    sub  ax, ax                        (* return 0 *)
+    jmp  chDone
+chError:
+(*%F NearCall *)
+    call far __ioerr                   (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                       (* set errno *)
+(*%E *)
+    mov  ax, -1                        (* return -1 *)
+chDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam*)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+    mov ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 3BH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   chError
+    sub  ax, ax
+    jmp  chDone
+chError:
+(*%F NearCall *)
+    call far __ioerr                   (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                       (* set errno *)
+(*%E *)
+    mov  ax, -1                        (* return -1 *)
+chDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%F _OS2 *)
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+public  _getcurdir :
+
+(* int getcurdir(int  drive, char *path)
+     gets current working directory.  returns 0 if sucessful or -1 if not. *)
+
+(*%F RegParam *)
+drive = frame
+path  = 2+frame
+
+    push bp
+    mov  bp, sp
+    push dx
+    push si
+(*%F NearPtr *)
+    push ds
+    lds  si, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][path]
+(*%E *)
+    mov  dl, [bp][drive]
+    mov  ah, 47H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   gcdError
+    sub  ax, ax          (* success - return 0 *)
+    jmp  gcdDone
+gcdError:
+    mov  ax, -1          (* invalid drive spec - return -1 *)
+gcdDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  dx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+    push si
+(*%F NearPtr *)
+    push ds
+    mov  ds, cx
+(*%E *)
+    mov  si, bx
+    mov  dl, al
+    mov  ah, 47H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   gcdError
+    sub  ax, ax          (* success - return 0 *)
+    jmp  gcdDone
+gcdError:
+    mov  ax, -1          (* invalid drive spec - return -1 *)
+gcdDone:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2*)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+scr_init : dw 0
+scr_rows : dw 0
+scr_cols : dw 0
+attr     : dw 720H
+
+extrn VIOWRTCHARSTR
+extrn VIOGETCURPOS
+extrn VIOSETCURPOS
+extrn VIOSCROLLDN
+extrn VIOSCROLLUP
+extrn VIOGETMODE
+extrn DOSBEEP
+
+(* int  putch(int c) *)
+
+cb     = 0
+fbType = 2
+color  = 3
+col    = 4
+row    = 6
+hres   = 8
+vres   = 10
+fmt_ID = 12
+attrib = 13
+
+VIOMODESIZE  = 14
+
+(*%F RegParam *)
+chk  = frame
+viobuf = -VIOMODESIZE
+locals = VIOMODESIZE
+(*%E *)
+(*%T RegParam *)
+viobuf = -VIOMODESIZE
+chk    = viobuf-2
+locals = VIOMODESIZE+2
+(*%E *)
+
+select _TEXT
+
+public  __d_putch :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+    push dx
+(*%T RegParam *)
+    mov  [bp][chk], ax
+(*%E *)
+    cmp  word [scr_init], 0
+    jnz  initDone
+    mov  word [bp][viobuf][cb], VIOMODESIZE
+    push ss
+    lea  ax, [bp][viobuf]
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOGETMODE
+    mov  ax,[bp][viobuf][row]
+    mov  [scr_rows], ax
+    mov  ax,[bp][viobuf][col]
+    mov  [scr_cols], ax
+    not  word [scr_init]
+initDone:
+    call getxy
+    mov  al, [bp][chk]
+    cmp  al, 8
+    je   backSpace
+    cmp  al, 0AH
+    je   newLine
+    cmp  al, 0DH
+    je   carriageReturn
+    cmp  al, 09H
+    je   tab
+    cmp  al, 07H
+    je   bell
+    mov  cx, 1
+notEsc:
+pLoop:
+    push cx
+    push dx
+    push ss
+    lea  ax, [bp][chk]
+    push ax
+    mov  ax, 1
+    push ax
+    mov  al, dh
+    push ax
+    mov  al, dl
+    push ax
+    sub  ax, ax
+    push ax
+    call far VIOWRTCHARSTR
+    pop  dx
+    pop  cx
+putDone:
+    push cx
+    call incxy
+    pop  cx
+    loop pLoop
+putExit:
+    mov  ax, [bp][chk]
+    pop  dx
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+backSpace:
+    call decxy
+    jmp  putExit
+
+newLine:
+    mov  dl, [scr_cols]
+    call incxy
+    jmp  putExit
+
+carriageReturn:
+    mov  dl, 0
+    call setxy
+    jmp  putExit
+
+tab:
+    mov  cx, 4
+    mov  word [bp][chk], 20H
+    jmp  pLoop
+
+bell:
+    mov  ax, 1500
+    push ax
+    mov  ax, 300
+    push ax
+    call far DOSBEEP
+    jmp  putExit
+
+row    = 2
+col    = 0
+locals = 4
+
+getxy :
+    sub  sp, locals
+    mov  bx, sp
+    push ss
+    lea  ax, [bx][row]
+    push ax
+    push ss
+    push bx
+    sub  ax, ax
+    push ax
+    call far VIOGETCURPOS
+    mov  dh, ss:[bx][row]
+    mov  dl, ss:[bx][col]
+    add  sp, locals
+    ret  0
+
+setxy :
+    sub  bh, bh
+    mov  bl, dh
+    push bx
+    mov  bl, dl
+    push bx
+    sub  ax, ax
+    push ax
+    call far VIOSETCURPOS
+    ret  0
+
+incxy :
+    inc  dl
+    cmp  dl, [scr_cols]
+    jb   xOK1
+    mov  dl, 0
+    inc  dh
+    cmp  dh, [scr_rows]
+    jae  scrollUp1
+xOK1:
+    call setxy
+    ret   0
+scrollUp1:
+    dec  dh
+    push dx
+    mov  ax, 601H
+    mov  ch, 0
+    mov  cl, 0
+    mov  dh, [scr_rows]
+    mov  dl, [scr_cols]
+    call scroll
+    pop  dx
+    sub  dl, dl
+    jmp  xOK1
+
+decxy :
+    dec  dl
+    cmp  dl, 0
+    jae  xOK
+    cmp  dh, 0
+    jbe  screenBegin
+    mov  dl, [scr_cols]
+    dec  dh
+xOK:
+    call setxy
+    ret   0
+screenBegin:
+    mov  dh, 0
+    mov  dl, 0
+    jmp  xOK
+
+scroll :
+    push si
+    mov  si, ax
+    sub  bh, bh
+    mov  bl, ch
+    push bx
+    mov  bl, cl
+    push bx
+    mov  bl, dh
+    push bx
+    mov  bl, dl
+    push bx
+    cbw
+    push ax
+    mov  bx, _DATA
+    push bx
+    mov  bx, attr
+    push bx
+    sub  bx, bx
+    push bx
+    mov  ax, si
+    test ah, 1
+    jz   scrollUp
+    call far VIOSCROLLDN
+    jmp  scrollDone
+scrollUp:
+    call far VIOSCROLLUP
+scrollDone:
+    pop  si
+    ret  0
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn KBDCHARIN
+extrn __scanwaiting
+extrn __kbdhandle
+extrn __ungotchar
+
+(* int  getch(void)
+     Checks for any character returned by ungetch then calls DOS. *)
+
+keybuf = -KbdInfoSize
+locals =  KbdInfoSize
+
+public  _getch :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [__ungotchar]
+    or   al, al
+    jne  charWaiting
+    mov  al, [__scanwaiting]
+    or   al, al
+    jnz  charWaiting
+    push ss
+    lea  ax, [bp][keybuf]
+    push ax
+    mov  ax, IO_WAIT
+    push ax
+    mov  ax, [__kbdhandle]
+    push ax
+    call far KBDCHARIN
+    mov  al, [bp][keybuf][chChar]
+    cmp  al, 0E0H
+    je   charE0
+    or   al, al
+    jnz  charWaiting
+charE0:
+    sub  al, al
+    mov  ah, [bp][keybuf][chScan]
+    mov  [__scanwaiting], ah
+    jmp  charDone
+charWaiting:
+    mov  byte [__scanwaiting], 0
+charDone:
+    mov  word [__ungotchar], 0
+    sub  ah, ah
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn KBDPEEK
+extrn __kbdhandle
+extrn __ungotchar
+extrn __scanwaiting
+
+keybuf = -KbdInfoSize
+locals =  KbdInfoSize
+
+public  _kbhit :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  ax, [__ungotchar]
+    or   ax, ax
+    jnz  keyWaiting
+    mov  ax, [__scanwaiting]
+    or   ax, ax
+    jnz  keyWaiting
+    push ss
+    lea  ax, [bp][keybuf]
+    push ax
+    sub  ax, ax
+    push ax
+    call far KBDPEEK
+    mov  ax, 40H
+    and  al, [bp][keybuf][fbStatus]
+keyWaiting:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn _putch
+extrn KBDCHARIN
+extrn __ungotchar
+extrn __attrib
+extrn __scanwaiting
+extrn __kbdhandle
+
+(* int  getche(void)
+     Checks for any charcater returned by ungetch then calls DOS. *)
+
+keybuf = -KbdInfoSize
+locals =  KbdInfoSize
+
+public  _getche :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  al, [__ungotchar]
+    or   al, al
+    jne  charWaiting
+    mov  al, [__scanwaiting]
+    or   al, al
+    jnz  charWaiting
+    push ss
+    lea  ax, [bp][keybuf]
+    push ax
+    mov  ax, IO_WAIT
+    push ax
+    mov  ax, [__kbdhandle]
+    push ax
+    call far KBDCHARIN
+    mov  al, [bp][keybuf][chChar]
+    cmp  al, 0E0H
+    je   charE0
+    or   al, al
+    jnz  charWaiting
+charE0:
+    sub  al, al
+    mov  ah, [bp][keybuf][chScan]
+    mov  [__scanwaiting], ah
+    jmp  charDone
+charWaiting:
+    mov  byte [__scanwaiting], 0
+charDone:
+    mov  word [__ungotchar], 0
+    cbw
+    push ax
+(*%F NearCall *)
+    call far _putch
+(*%E *)
+(*%T NearCall *)
+    extrn _putch
+    call _putch
+(*%E *)
+    pop  ax
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+IO_NOWAIT = 1
+
+extrn KBDSTRINGIN
+extrn __ungotchar
+extrn __kbdhandle
+
+(* char  *cgets(char *str)
+     String is read from console and stroed starting at str[2].
+     s[0] is the max length of the string.
+     The actual length is stored at str[1].
+     Returns a pointer to the beginning of the actual string. *)
+
+CR  = 0DH
+LF  = 0AH
+
+(*%F RegParam *)
+str  = frame
+kbuf = -4
+
+locals = 4
+(*%E *)
+(*%T RegParam *)
+kbuf = -4
+str  = -8
+
+locals = 8
+(*%E *)
+
+public  __d_cgets :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+(*%T NearPtr *)
+    push dx
+(*%E *)
+    mov  [bp][str], ax
+(*%F NearPtr *)
+    mov  [bp][str][2], bx
+(*%E *)
+(*%E *)
+    push di
+    push si
+    push ds
+    sub  cx, cx
+(*%F NearPtr *)
+    lds  si, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][str]
+(*%E *)
+    mov  ax, _DATA
+    mov  es, ax
+    cmp  word es:[__ungotchar], 0
+    je   cgetsNoWaiting
+    not  cx
+    dec  byte [si]
+cgetsNoWaiting:
+    mov  al, [si]
+    sub  ah, ah
+    mov  [bp][kbuf], ax
+    add  si, 2
+    push cx
+    push ds
+    push si
+    push ss
+    lea  ax, [bp][kbuf]
+    push ax
+    mov  ax, IO_NOWAIT               (* get string from console *)
+    push ax
+    push es:[__kbdhandle]
+    call far KBDSTRINGIN
+    pop  cx
+    jcxz cgetsNoUnget
+    mov  dx, es:[__ungotchar] (* insert put back character *)
+    mov  cx, [bp][kbuf][2]
+    push si
+    std
+(*%F NearPtr *)
+    les  di, [bp][str]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][str]
+(*%E *)
+    add  si, cx
+    add  di, cx
+    add  di, 2
+    dec  si
+rep ; movsb
+    pop  si
+    mov  [si], dl
+    cld
+    inc  word [bp][kbuf][2]
+cgetsNoUnget:
+    mov  bx, [bp][kbuf][2]
+    mov  [si][-1], bl
+    mov  byte [si][bx], 0
+    mov  dx, ds            (* return address of string *)
+    mov  ax, si
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _TEXT(CODE,28H)
+
+extrn DOSSLEEP
+
+public _delay :
+
+(*%F RegParam *)
+msecs = frame
+
+  push bp
+  mov  bp, sp
+  sub  ax, ax
+  push ax
+  push [bp][msecs]
+  call far DOSSLEEP
+  pop  bp
+(*%E RegParam *)
+
+(*%T RegParam *)
+  push bx
+  sub  bx, bx
+  push bx
+  push ax
+  call far DOSSLEEP
+  pop  bx
+(*%E RegParam *)
+
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(******************************************************************************)
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+segment _BSS(BSS,28H)
+
+(* void _initio()
+     Initialises level 1 and level 2 I/O. *)
+
+Buf0 : org BUFSIZ
+Buf1 : org BUFSIZ
+
+extrn _isatty
+extrn __exit1
+extrn __exit1_vector
+extrn __iob
+extrn __openfd
+extrn __exit_io
+extrn __open_max
+
+select _DATA
+
+HandleData    : dw 4000H, 4002H, 4002H
+StreamData    : dw 0405H, 0C06H, 0402H
+StreamBuffers : dw  Buf0,  Buf1,     0
+
+public __iosetup : dw 0
+(*%F SameDS *)
+(*%F _DLL *)
+Exit1Adr: dd __exit1    (* In XLARGE and above, _exit1 is not in _TEXT *)
+(*%E *)
+(*%E *)
+
+select _TEXT
+
+do_initio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initio : dw MAGIC_NUM
+         db PR2
+         dd do_initio
+(*%E *)
+(*%T NearCall *)
+initio : dw MAGIC_NUM
+         db PR2
+         dw do_initio
+(*%E *)
+
+select _DATA
+public __doserrno :  dw  0, initio
+
+select  _TEXT
+
+public __initio :            (* check for character devices on default paths *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+(*%T SameDS *)
+    mov  word [__exit_io], __exit1
+ (*%F NearCall *)
+    mov  word [__exit_io][2], cs
+ (*%E *)
+(*%E *)
+(*%F SameDS *)
+ (*%F _DLL *)
+    mov  ax, [Exit1Adr]
+    mov  word [__exit_io], ax
+    mov  ax, [Exit1Adr][2]
+    mov  word [__exit_io][2], ax
+ (*%E *)
+ (*%T _DLL *)
+    mov  ax, [__exit1_vector]
+    mov  word [__exit_io], ax
+    mov  ax, [__exit1_vector][2]
+    mov  word [__exit_io][2], ax
+ (*%E *)
+(*%E *)
+    cmp  word [__iosetup], 0
+    jne  ioDone
+    not  word [__iosetup]
+    sub  cx, cx
+    sub  bx, bx
+    mov  si, 0
+    mov  di, __iob
+ioLoop:
+    push bx
+    push cx
+    mov  ax, cx
+(*%F NearCall *)
+    call far _isatty
+(*%E *)
+(*%T NearCall *)
+    call _isatty
+(*%E *)
+    pop  cx
+    pop  bx
+    jc   noSet
+    cmp  cx, 3
+    jb   standardPath
+    or   word [si][__openfd], O_RDWR
+    jmp  setDevice
+standardPath:
+    mov  dx, [si][StreamData]
+    mov  [di][bx][_flag], dx
+    mov  [di][bx][_file], cx
+    mov  dx, [si][StreamBuffers]
+    or   dx, dx
+    jz   noBuf
+    mov  word [di][bx][_size], BUFSIZ
+    mov  [di][bx][_base], dx
+    mov  [di][bx][_ptr], dx
+(*%F NearPtr *)
+    mov  word [di][bx][_base][2], _BSS
+    mov  word [di][bx][_ptr][2], _BSS
+(*%E *)
+noBuf:
+    mov  dx, [si][HandleData]
+    mov  [si][__openfd], dx
+setDevice:
+    or   ax, ax
+    jz   noSet
+    or   word [si][__openfd], O_DEVICE
+    cmp  cx, 2
+    ja   noSet
+    or   word [di][bx][_flag], _F_DEV     (* is device *)
+noSet:
+    add  bx, _iobSize
+    add  si, 2
+    inc  cx
+    cmp  cx, [__open_max]
+    jne  ioLoop
+ioDone:
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn DOSQHANDTYPE
+
+(* int	isatty (int handle)
+     The return value is true (1) if handle is attached to a character device
+     such as the console or printer,  or false (0) if handle is for an ordinary
+     file or is not valid. *)
+
+handle	= frame
+type    = -2
+attr    = -4
+locals  =  4
+
+public	_isatty :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push [bp][frame]
+(*%E *)
+(*%T RegParam *)
+    push ax
+(*%E *)
+    push ss
+    lea  ax, [bp][type]
+    push ax
+    push ss
+    lea  ax, [bp][attr]
+    push ax
+    call far DOSQHANDTYPE
+    or   ax, ax
+    jz   isOK
+    sub  ax, ax
+    stc
+    jmp  isExit
+isOK:
+    mov  ax, [bp][type]
+    and  ax, 1
+    clc
+isExit:
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(******************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn DOSQFILEINFO
+extrn __seterrno
+
+public	__getfileinfo :
+
+(*%F RegParam *)
+buf    = frame
+handle = 4+frame
+
+    push bp
+    mov  bp, sp
+    push [bp][handle]
+    mov  ax, 1
+    push ax
+    push [bp][buf][2]
+    push [bp][buf]
+(*%E *)
+(*%T RegParam *)
+    push ax
+    mov  ax, 1
+    push ax
+    push cx
+    push bx
+(*%E *)
+    mov  ax, FileInfoSize
+    push ax
+    call far DOSQFILEINFO
+    or   ax, ax
+    jz   gfiOK
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1                            (* return -1 *)
+gfiOK:
+(*%F RegParam *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(******************************************************************************)
+segment _TEXT(CODE,28H)
+
+handle = -2
+action = -4
+mode   = -6
+locals =  6
+
+extrn DOSOPEN
+extrn __ioerr
+
+public  __pascreate :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T NearPtr *)
+    push cx
+(*%E *)
+    push dx
+    mov  dx, 12H
+    mov  word [bp][mode], 2
+    jmp  poShared
+
+public  __pasopen :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%T NearPtr *)
+    push cx
+(*%E *)
+    push dx
+    mov  dx, 1
+(*%F NearPtr *)
+    mov  word [bp][mode], cx
+(*%E *)
+(*%T NearPtr *)
+    mov  word [bp][mode], bx
+(*%E *)
+poShared:
+(*%F NearPtr *)
+    push bx
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push ax
+    lea  ax, [bp][handle]
+    push ss
+    push ax
+    lea  ax, [bp][action]
+    push ss
+    push ax
+    sub  ax, ax
+    push ax
+    push ax
+
+    push ax  (* attribute = 0 *)
+    push dx  (* create or open *)
+    mov  bx, 40H
+    add  bx, [bp][mode]
+    push bx  (* access mode *)
+
+    push ax
+    push ax
+    call far DOSOPEN
+    or   ax, ax
+    jnz  openError
+    mov  ax, [bp][handle]
+openDone:
+    pop  dx
+(*%T NearPtr *)
+    pop  cx
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+openError:
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr
+(*%E *)
+    mov  ax, -1
+    jmp  openDone
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(******************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn DOSQFILEMODE
+
+mode   = -2
+locals = 2
+
+public  __exists :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F NearPtr *)
+    push ax
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push dx
+    push ss
+    lea  ax, [bp][mode]
+    push ax
+    sub  ax, ax
+    push ax
+    push ax
+    call far DOSQFILEMODE
+    or   ax, ax
+    jz   exist
+    sub  al, al
+    jmp  exit
+exist:
+    mov  al, 1
+exit:
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __getfileinfo
+extrn _tell
+extrn __ioerr
+
+(* int  _eof(int handle)
+     returns file status - EOF 1, error -1, else 0. *)
+
+(*%F RegParam *)
+handle  = frame
+infbuf  = -FileInfoSize
+
+locals  = FileInfoSize
+(*%E *)
+(*%T RegParam *)
+infbuf  = -FileInfoSize
+handle  = infbuf-2
+
+locals  = FileInfoSize+2
+(*%E *)
+
+public __eof :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+    push dx
+(*%T RegParam *)
+    mov  [bp][handle], ax
+    mov  cx, ss
+    lea  bx, [bp][infbuf]
+(*%E *)
+(*%F RegParam *)
+    push [bp][handle]
+    push ss
+    lea  ax, [bp][infbuf]
+    push ax
+(*%E *)
+(*%F NearCall *)
+    call far __getfileinfo
+(*%E *)
+(*%T NearCall *)
+    call __getfileinfo
+(*%E *)
+(*%F RegParam *)
+    add  sp, 6
+(*%E *)
+    or   ax, ax
+    jz   eofOK
+    jmp  eofDone
+eofOK:
+(*%F RegParam *)                        (* return status, 1 if EOF *)
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)                        (* return status, 1 if EOF *)
+    mov  ax, [bp][handle]
+(*%E *)
+(*%F NearCall *)
+    call far _tell
+(*%E *)
+(*%T NearCall *)
+    call _tell
+(*%E *)
+(*%F RegParam *)                        (* return status, 1 if EOF *)
+    add  sp, 2
+(*%E *)
+    cmp  ax, [bp][infbuf][cbFile]
+    jne  notEOF
+    cmp  dx, [bp][infbuf][cbFile][2]
+    jne  notEOF
+    mov  ax, 1
+    jmp  eofDone
+notEOF:
+    sub  ax, ax
+eofDone:
+    pop  dx
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(*************************************************************************)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn _lseek
+extrn __write
+extrn DOSWRITE
+extrn DOSREAD
+extrn __ioerr
+extrn __openfd
+
+__appbuf : db 0
+
+select  _TEXT
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+(*%F NearPtr *)
+num     = 6+frame
+(*%E *)
+(*%T NearPtr *)
+num     = 4+frame
+(*%E *)
+
+temp       = -4
+writesize  = -6
+flag       = -7
+reset      = -8
+dgroup     = -10
+num_writ   = -12
+num_read   = -14
+
+locals     =  14
+(*%E *)
+
+(*%T RegParam *)
+temp       = -4
+writesize  = -6
+flag       = -7
+reset      = -8
+dgroup     = -10
+num_writ   = -12
+num_read   = -14
+handle     = -16
+buffer     = -20
+num        = -22
+
+locals     =  22
+(*%E *)
+
+WRITE_BUF_SIZE = 401H
+
+public _write :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%E *)
+    push di
+    push si
+(*%T RegParam *)
+    mov  [bp][handle], ax
+    mov  [bp][buffer], bx
+(*%F NearPtr *)
+    mov  [bp][buffer][2], cx
+    mov  [bp][num], dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][num], cx
+(*%E *)
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+    mov  [bp][dgroup], ds
+    mov  byte [bp][reset], 0
+    mov  bx, [bp][handle]
+    shl  bx, 1
+    mov  cx, [__openfd][bx]
+    jcxz near writeInvalid
+    test cx, O_RDWR+O_WRONLY            (* test for correct access mode *)
+    je   near writeAccess
+    cmp  word [bp][num], 0
+    je   near writeEOF                  (* don't write zero bytes *)
+    test cx, O_APPEND
+    je   dontAppend
+    mov  di, cx                         (* append to EOF if flag set *)
+    mov  dx, SEEK_END
+(*%F RegParam *)
+    push dx
+(*%E *)
+    sub  ax, ax
+    test cx, O_TEXT
+    jz   appNotText
+    dec  ax
+(*%F RegParam *)
+    push ax
+    push ax
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)
+    mov  cx, ax
+    mov  bx, ax
+    mov  ax, [bp][handle]
+(*%E *)
+(*%F NearCall *)
+    call far _lseek
+(*%E *)
+(*%T NearCall *)
+    call _lseek
+(*%E *)
+(*%F RegParam *)
+    add  sp, 8
+(*%E *)
+    cmp  dx, -1
+    jne   notSeekError
+    cmp  ax, -1
+    je   nextSeek
+notSeekError:
+    push [bp][handle]
+    push ds
+    mov  ax, __appbuf
+    push ax
+    mov  ax, 1
+    push ax
+    push ss
+    lea  ax, [bp][num_read]
+    push ax
+    call far DOSREAD
+    or   ax, ax
+    jnz  near writeError
+    mov  dx, SEEK_END
+(*%F RegParam *)
+    push dx
+(*%E *)
+    mov  ax, -1
+    cmp  byte [__appbuf], CTLZ
+    je   ctlzPresent
+    inc  ax
+ctlzPresent:
+    jmp  appNotText
+nextSeek:
+    mov  dx, SEEK_END
+(*%F RegParam *)
+    push dx
+(*%E *)
+    sub  ax, ax
+(*%F RegParam *)
+appNotText:
+    push ax
+    push ax
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)
+appNotText:
+    mov  cx, ax
+    mov  bx, ax
+    mov  ax, [bp][handle]
+(*%E *)
+(*%F NearCall *)
+    call far _lseek
+(*%E *)
+(*%T NearCall *)
+    call _lseek
+(*%E *)
+(*%F RegParam *)
+    add  sp, 8
+(*%E *)
+appendDone:
+    mov  cx, di
+dontAppend:
+    test cx, O_TEXT
+    je   near writeBinary
+writeText:                              (* test mode *)
+    test cx, _O_EOF                     (* error if EOF flag set *)
+    jne  near writeEOF
+(*%T StackChecks *)
+    push bp
+    mov  bp, WRITE_BUF_SIZE+6
+(*%F NearCall *)
+    extrn F$StkChk
+    call far F$StkChk
+(*%E *)
+(*%T NearCall *)
+    extrn N$StkChk
+    call N$StkChk
+(*%E *)
+    pop  bp
+(*%E *)
+    mov  di, WRITE_BUF_SIZE
+    sub  sp, di
+    mov  [bp][temp][2], ss
+    mov  [bp][temp], sp
+    inc  word [bp][temp]
+    not  byte [bp][reset]
+    mov  cx, [bp][num]
+    shr  di, 1                          (* write size is half that of buffer *)
+    mov  [bp][writesize], di
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+writeMainLoop:                          (* main loop - translate and *)
+    mov  cx, [bp][num]                  (* write a block *)
+    jcxz allWritten
+    cmp  cx, [bp][writesize]            (* exit when all written *)
+    jb   cxRight
+    mov  cx, [bp][writesize]
+cxRight:
+    sub  [bp][num], cx
+    les  di, [bp][temp]
+    mov  ah, 0AH
+    mov  es:[di][-1], ah                (* Dummy at buffer-1 *)
+    mov  bh, CTLZ
+    mov  bl, 0DH
+                                        (* this next loop is the time *)
+writeTransLoop:                         (* one where transaltion takes place *)
+    lodsb
+    cmp  al, ah
+    je   doTrans                        (* no jump for no translate *)
+doneTrans:
+    stosb
+    cmp  al, bh
+    je   writeCtlz                      (* ctl Z - terminate output *)
+    dec  cx
+    jcxz writeBlock                     (* repeat loop body *)
+    lodsb
+    cmp  al, ah
+    je   doTrans
+    stosb
+    cmp  al, bh
+    je   writeCtlz
+    loop writeTransLoop
+    jmp  writeBlock
+doTrans:                                (* CR inserted here *)
+    cmp  es:[di][-1], bl                (* CR inserted here *)
+    je   doneTrans
+    mov  es:[di], bl
+    inc  di
+    jmp  doneTrans
+
+writeCtlz:
+    mov  byte [bp][flag], 1
+    jmp  writeWrite
+writeBlock:
+    mov  byte [bp][flag], 0             (* write transalted block *)
+writeWrite:
+    push [bp][handle]
+    push [bp][temp][2]
+    mov  ax, [bp][temp]
+    push ax
+    sub  di, ax
+    push di
+    push ss
+    lea  ax, [bp][num_writ]
+    push ax
+    call far DOSWRITE
+    or   ax, ax
+    jnz  near writeError                (* write error *)
+    mov  ax, [bp][num_writ]
+    cmp  ax, di
+    jne  near writeFull                 (* media full *)
+writeOK:
+    cmp  byte [bp][flag], 0
+    je   writeMainLoop                  (* go back for another block *)
+allWritten:
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]               (* output done *)
+(*%E *)
+    mov  bx, [bp][handle]
+    shl  bx, 1
+    cmp  byte [bp][flag], 0
+    je   dontSet
+    test word [__openfd][bx], O_DEVICE  (* if !device and ctl Z set EOF flag *)
+    jne  dontSet
+    or   word [__openfd][bx], _O_EOF
+dontSet:
+    sub  si, [bp][buffer]
+    jmp  writeDone
+writeBinary:                            (* binary output done here *)
+    mov  ah, 40H
+    push [bp][handle]
+(*%F NearPtr *)
+    push [bp][buffer][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][buffer]
+    push [bp][num]
+    push ss
+    lea  ax, [bp][num_writ]
+    push ax
+    call far DOSWRITE
+    or   ax, ax
+    jnz  writeError
+    mov  si, [bp][num_writ]
+    cmp  si, [bp][num]
+    jne  writeFull
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]
+(*%E *)
+    mov  bx, [bp][handle]
+    shl  bx, 1
+writeDone:
+    or   word [__openfd][bx], O_CHANGED (* set file changed flag *)
+writeEnd:
+    cmp  byte [bp][reset], 0
+    je   writeNoStack
+    add  sp, WRITE_BUF_SIZE
+writeNoStack:
+    mov  ax, si                         (* return *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+writeError:                             (* error return *)
+    mov  si, -1
+    mov  bx, ax
+    jmp  writeSetErr
+writeEOF:                               (* EOF return *)
+    sub  si, si
+    jmp  writeEnd
+writeFull:                              (* media full *)
+    mov  bx, ENOSPC
+    mov  si, ax
+    jmp  writeSetErr
+writeAccess:                            (* invalid access mode *)
+    mov  si, -1
+    mov  bx, EACCESS
+    jmp  writeSetErr
+writeInvalid:                           (* bad file *)
+    mov  si, -1
+    mov  bx, EBADF
+    jmp  writeSetErr
+writeNomem:                             (* no memory for buffer *)
+    mov  bx, ENOMEM
+writeSetErr:                            (* set errno *)
+    mov  ax, bx
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr
+(*%E *)
+    jmp  writeEnd
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn DOSREAD
+extrn __ioerr
+extrn __openfd
+
+(*%F RegParam *)
+handle                  = frame
+buffer                  = 2+frame
+(*%F NearPtr *)
+num                     = 6+frame
+(*%E *)
+(*%T NearPtr *)
+num     = 4+frame
+(*%E *)
+
+dgroup                  = -2
+num_read                = -4
+seekpos                 = -8
+locals                  =  8
+(*%E *)
+
+(*%T RegParam *)
+dgroup                  = -2
+num_read                = -4
+handle                  = -6
+buffer                  = -10
+num                     = -12
+seekpos                 = -16
+locals                  =  16
+(*%E *)
+
+public _read :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push dx
+(*%E *)
+(*%E *)
+    push di
+    push si
+(*%F SameDS *)
+    push ds
+    mov  di, _DATA
+    mov  ds, di
+(*%E *)
+    mov  [bp][dgroup], ds
+(*%T RegParam *)
+    mov  [bp][handle], ax
+    mov  [bp][buffer], bx
+(*%F NearPtr *)
+    mov  [bp][buffer][2], cx
+    mov  [bp][num], dx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][num], cx
+(*%E *)
+    mov  bx, ax                        (* bx = file handle *)
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][handle]
+(*%E *)
+    shl  bx, 1
+    mov  cx, [__openfd][bx]
+    jcxz near $ReadInvalid             (* file not open *)
+    test cx, O_WRONLY
+    jne  near $ReadAccess              (* access mode invalid *)
+    cmp  word [bp][num], 0             (* read zero - do nothing *)
+    je   near $ReadEOF
+    test cx, O_TEXT
+    je   near $ReadBinary
+$ReadText:                             (* test mode *)
+    test cx, _O_EOF
+    jne  near $ReadEOF                 (* error - EOF flag set *)
+$ReadMain:
+    push [bp][handle]                  (* read into user buffer *)
+(*%F NearPtr *)
+    les  di, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  di, [bp][buffer]
+    mov  es, [bp][dgroup]
+(*%E *)
+    push es
+    push di
+    push [bp][num]
+    push ss
+    lea  ax, [bp][num_read]
+    push ax
+    call far DOSREAD
+    or   ax, ax
+    jnz  near $ReadError
+    mov  cx, [bp][num_read]
+    mov  ax, cx
+    jcxz $ReadCtlz
+    mov  bh, CTLZ
+    cmp  cx, 1
+    jne  $ReadOneContinue
+    mov  bl, es:[di]
+    inc  di
+    cmp  bl, bh
+    je   $ReadCtlz
+    cmp  word [bp][num], 1
+    je   $ReadExit
+$ReadOneContinue:
+    mov  ah, 0DH
+(*%F NearPtr *)
+    lds  si, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  si, [bp][buffer]
+(*%E *)
+$ReadTransLoop:                        (* translation loop *)
+    lodsb
+    cmp  al, ah
+    je   $ReadMissCR                   (* skip LF *)
+    stosb
+    cmp  al, bh
+    je   $ReadCtlz                     (* hit ctl Z - terminate input *)
+$ReadMissCR:
+    loop $ReadTransLoop
+    jmp  $ReadDone
+$ReadCtlz:
+(*%F NearPtr *)
+    mov  ds, [bp][dgroup]
+(*%E *)
+    mov  bx, [bp][handle]
+    shl  bx, 1
+    test word [__openfd][bx], O_DEVICE (* if !device + ctl Z set EOF *)
+    jne  $ReadDontSet
+    or   word [__openfd][bx], _O_EOF
+    jcxz $ReadDontSet
+    dec  di
+$ReadDontSet:
+    jmp  $ReadDone
+$ReadBinary:                           (* binary read starts here *)
+    push [bp][handle]
+(*%F NearPtr *)
+    push [bp][buffer][2]
+(*%E *)
+(*%T NearPtr *)
+    push ds
+(*%E *)
+    push [bp][buffer]
+    push [bp][num]
+    push ss
+    lea  ax, [bp][num_read]
+    push ax
+    call far DOSREAD
+    or   ax, ax
+    jnz  $ReadError
+    mov  ax, [bp][num_read]
+    jmp  $ReadExit
+$ReadDone:
+    sub  di, [bp][buffer]
+$ReadEnd:
+    mov  ax, di
+$ReadExit:
+(*%T SameDS *)
+    mov  ds, [bp][dgroup]
+(*%E *)
+(*%F SameDS *)                         (* return *)
+    pop  ds
+(*%E *)
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    pop  dx
+(*%E *)
+(*%E *)
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+$ReadError:                            (* return error *)
+    mov  di, -1
+    mov  bx, ax
+    jmp  $ReadSetErr
+$ReadEOF:                              (* return EOF *)
+    sub  di, di
+    jmp  $ReadEnd
+$ReadAccess:                           (* invbalid access mode *)
+    mov  di, -1
+    mov  bx, EACCESS
+    jmp  $ReadSetErr
+$ReadInvalid:                          (* file not open *)
+    mov  di, -1
+    mov  bx, EBADF
+$ReadSetErr:                           (* set errno *)
+    mov  ax, bx
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr
+(*%E *)
+    jmp  $ReadEnd
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+extrn DOSCHGFILEPTR
+
+  handle                = frame
+  newpos                = -4
+  locals                = 4
+
+public _tell :
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+(*%F RegParam *)
+    push [bp][handle]
+(*%E *)
+(*%T RegParam *)
+    push ax
+(*%E *)
+    db   6AH, 00H                      (*I push 0 *)
+    db   6AH, 00H                      (*I push 0 *)
+    db   6AH, SEEK_CUR                 (*I push SEEK_CUR *)
+    push ss
+    lea  ax, [bp][newpos]
+    push ax
+    call far DOSCHGFILEPTR
+    or   ax, ax
+    jnz  $TellError
+    mov  ax, [bp][newpos]
+    mov  dx, [bp][newpos][2]
+$TellDone:
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+$TellError:
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr
+(*%E *)
+    mov  ax, -1
+    cwd
+    jmp  $TellDone
+
+(*%E _OS2 *)
+
+section
+(*%T _OS2 *)
+(****************************************************************************)
+segment _BSS(BSS,28H)
+segment _TEXT(CODE,28H)
+
+extrn __openfd
+extrn __ioerr
+extrn DOSCHGFILEPTR
+
+handle                  = frame
+offset                  = 2+frame
+whence                  = 6+frame
+newpos                  = -4
+locals                  =  4
+
+public _lseek :
+(*%F RegParam *)
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    mov  bx, [bp][handle]
+    push bx
+    push [bp][offset][2]
+    push [bp][offset]
+    push [bp][whence]
+    lea  ax, [bp][newpos]
+    push ss
+    push ax
+    call far DOSCHGFILEPTR
+    or   ax, ax
+    jnz  seekError
+(*%F SameDS *)
+    push ds
+    mov  ax, seg __openfd
+    mov  ds, ax
+(*%E *)
+    add  bx, bx
+    and  word [__openfd][bx], ~_O_EOF
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  ax, [bp][newpos]
+    mov  dx, [bp][newpos][2]
+seekDone:
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam*)
+
+(*%T RegParam *)
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    push bx
+    push cx
+
+    push ax
+    push cx
+    push bx
+    push dx
+    xchg bx,ax
+    lea  ax, [bp][newpos]
+    push ss
+    push ax
+    call far DOSCHGFILEPTR
+    or   ax, ax
+    jnz  seekError
+(*%F SameDS *)
+    push ds
+    mov  ax, seg __openfd
+    mov  ds, ax
+(*%E *)
+    add  bx, bx
+    and  word [__openfd][bx], ~_O_EOF
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    mov  ax, [bp][newpos]
+    mov  dx, [bp][newpos][2]
+seekDone:
+    pop  cx
+    pop  bx
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E *)
+
+
+seekError:
+(*%F NearCall *)
+    call far __ioerr
+(*%E *)
+(*%T NearCall *)
+    call __ioerr
+(*%E *)
+    mov  ax, -1
+    cwd
+    jmp  seekDone
+
+
+
+(*%E _OS2 *)
+
+section
+(*%T _DLL *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __exit1_vector
+
+public __set_exit1_vector :
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    mov  [__exit1_vector][2], bx
+    mov  [__exit1_vector], ax
+    pop  ds
+    ret  far 0
+
+(*%E _DLL *)
+
+section
+(*%F _OS2 *)
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __seterrno
+
+RetSize = 0
+(*%F RegParam *)
+buffer  =  frame
+(*%E *)
+
+(*%T RegParam *)
+buffer = -4
+locals =  4
+(*%E *)
+
+public __dos_findnext :
+public _findnext :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][buffer], ax
+(*%F NearPtr *)
+    mov  [bp][buffer][2], bx
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    mov  ah, 1AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    mov  ah, 4FH
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   Error
+    sub  ax, ax
+Exit:
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+Error:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    jmp  Exit
+
+
+section
+(******************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __seterrno
+
+(*%F RegParam *)
+path    =  frame
+(*%F NearPtr *)
+attrib  =  4+frame
+buffer  =  6+frame
+(*%E *)
+(*%T NearPtr *)
+attrib  =  2+frame
+buffer  =  4+frame
+(*%E *)
+RetSize = 0
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+path   = -4
+attrib = -6
+buffer = frame
+RetSize = 4
+(*%E *)
+(*%T NearPtr *)
+path   = -2
+attrib = -4
+buffer = -6
+RetSize = 0
+(*%E *)
+locals =  6
+(*%E *)
+
+public __dos_findfirst :
+    push bp
+    mov  bp, sp
+(*%T RegParam *)
+    sub  sp, locals
+    mov  [bp][path], ax
+(*%F NearPtr *)
+    mov  [bp][path][2], bx
+    mov  [bp][attrib], cx
+(*%E *)
+(*%T NearPtr *)
+    mov  [bp][attrib], bx
+    mov  [bp][buffer], cx
+(*%E *)
+(*%E *)
+(*%F RegParam *)
+    push bx
+    push cx
+    push dx
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+    push bx
+(*%E *)
+    push cx
+    push dx
+(*%E *)
+    push di
+    push si
+    push ds
+(*%F NearPtr *)
+    lds  dx, [bp][buffer]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][buffer]
+(*%E *)
+    mov  ah, 1AH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+(*%F NearPtr *)
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    mov  ah, 4EH
+    mov  cx, [bp][attrib]
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jc   Error
+    sub  ax, ax
+Exit:
+    pop  ds
+    pop  si
+    pop  di
+(*%F RegParam *)
+    pop  dx
+    pop  cx
+    pop  bx
+(*%E *)
+(*%T RegParam *)
+    pop  dx
+    pop  cx
+(*%T NearPtr *)
+    pop  bx
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+    mov  sp, bp
+(*%E *)
+    pop  bp
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret  RetSize
+(*%E *)
+Error:
+(*%F NearCall *)
+    call far __seterrno
+(*%E *)
+(*%T NearCall *)
+    call __seterrno
+(*%E *)
+    mov  ax, -1
+    jmp  Exit
+
+(*%E _OS2 *)
+
+(*%T _XTDDOS*)
+section
+(***************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+(* int _creat_trunc(char *path, int permission)
+     Creates file or truncates existing one. *)
+
+public  __creat :
+public  __creat_trunc :
+
+(*%F RegParam *)
+path       = frame
+(*%F NearPtr *)
+permission = 4+frame
+(*%E *)
+(*%T NearPtr *)
+permission = 2+frame
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push cx
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    mov  ah, 3CH
+    mov  cx, [bp][permission]
+(*%F NearPtr *)
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  creattOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+creattOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  cx
+    pop  bp                                 (* handle already in ax *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T NearPtr *)
+    push cx
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%T NearPtr *)
+    mov  cx, bx
+(*%E *)
+(*%F NearPtr *)
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+    mov  ah, 3CH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  creattOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+creattOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T NearPtr *)
+    pop  cx
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+
+section
+(****************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+public __open :
+
+(* int _open(char *path, int access)
+     opens file and returns handle. *)
+
+(*%F RegParam *)
+path   = frame
+(*%F NearPtr *)
+access = 4+frame
+(*%E *)
+(*%T NearPtr *)
+access = 2+frame
+(*%E *)
+
+    push bp
+    mov  bp, sp
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+    mov  ah, 3DH
+    mov  al, [bp][access]
+(*%F NearPtr *)
+    lds  dx, [bp][path]
+(*%E *)
+(*%T NearPtr *)
+    mov  dx, [bp][path]
+(*%E *)
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  openOK
+(*%F NearCall *)
+    call far __ioerr                             (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                             (* set errno *)
+(*%E *)
+    mov  ax, -1                              (* return -1 *)
+openOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+    pop  bp                                  (* handle already in ax *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push dx
+(*%F NearPtr *)
+    push ds
+(*%E *)
+(*%F NearPtr *)
+    mov  ds, bx
+(*%E *)
+    mov  dx, ax
+(*%F NearPtr *)
+    mov  al, cl
+(*%E *)
+(*%T NearPtr *)
+    mov  al, bl
+(*%E *)
+    mov  ah, 3DH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  openOK
+(*%F NearCall *)
+    call far __ioerr                             (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                             (* set errno *)
+(*%E *)
+    mov  ax, -1                              (* return -1 *)
+openOK:
+(*%F NearPtr *)
+    pop  ds
+(*%E *)
+    pop  dx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+
+section
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+public __dos_read :
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+num     = 6+frame
+numread = 8+frame
+(*%E *)
+(*%T RegParam *)
+numread = frame
+(*%E *)
+    push bp
+    mov  bp, sp
+    push ds
+(*%T RegParam *)
+    mov  ds, cx
+    mov  cx, dx
+    mov  dx, bx
+    mov  bx, ax
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+    lds  dx, [bp][buffer]
+(*%E *)
+    mov  ah, 3FH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  readOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    jmp  Exit
+readOK:
+(*%F NearPtr *)
+    lds  bx, [bp][numread]
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [bp][numread]
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    mov  [bx], ax
+    sub  ax, ax
+Exit:
+    pop  ds
+    pop  bp                                 (* number already in ax *)
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret RetSize
+(*%E *)
+
+
+section
+(*************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+(* External data *)
+
+extrn __ioerr
+
+public __dos_write :
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 2
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+handle  = frame
+buffer  = 2+frame
+num     = 6+frame
+numwrit = 8+frame
+(*%E *)
+(*%T RegParam *)
+numwrit = frame
+(*%E *)
+    push bp
+    mov  bp, sp
+    push ds
+(*%T RegParam *)
+    mov  ds, cx
+    mov  cx, dx
+    mov  dx, bx
+    mov  bx, ax
+(*%E *)
+(*%F RegParam *)
+    mov  bx, [bp][handle]
+    mov  cx, [bp][num]
+    lds  dx, [bp][buffer]
+(*%E *)
+    mov  ah, 40H
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  writOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    jmp  Exit
+writOK:
+(*%F NearPtr *)
+    lds  bx, [bp][numwrit]
+(*%E *)
+(*%T NearPtr *)
+    mov  bx, [bp][numwrit]
+    mov  cx, _DATA
+    mov  ds, cx
+(*%E *)
+    mov  [bx], ax
+    sub  ax, ax
+Exit:
+    pop  ds
+    pop  bp                                 (* number already in ax *)
+(*%F NearCall *)
+    ret  far RetSize
+(*%E *)
+(*%T NearCall *)
+    ret RetSize
+(*%E *)
+
+section
+(***************************************************************************)
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __ioerr
+
+(*%F _XTD *)
+public __close :
+(*%E *)
+public __dos_close :
+
+(* int _close(int handle)
+     closes file and returns 0 if succeessful. Low level DOS function. *)
+
+(*%F RegParam *)
+handle   = frame
+
+    push bp
+    mov  bp, sp
+    push bx
+    mov  ah, 3EH
+    mov  bx, [bp][handle]
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  closeOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                               (* return -1 *)
+    jmp  closeDone
+closeOK:
+    mov  ax, 0                                (* return 0 *)
+closeDone:
+    pop  bx
+    pop  bp
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%T RegParam *)
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+    push bx
+    mov  bx, ax
+    mov  ah, 3EH
+    extrn @DosInterrupt
+(*%F NearCall *)
+    call far @DosInterrupt
+(*%E *)
+(*%T NearCall *)
+    call @DosInterrupt
+(*%E *)
+    jnc  closeOK
+(*%F NearCall *)
+    call far __ioerr                            (* set errno *)
+(*%E *)
+(*%T NearCall *)
+    call __ioerr                            (* set errno *)
+(*%E *)
+    mov  ax, -1                             (* return -1 *)
+    jmp  closeDone
+closeOK:
+    sub  ax, ax                             (* return 0 *)
+closeDone:
+    pop  bx
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%F NearCall *)
+    ret  far  0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+(*%E RegParam *)
+
+(*%E _XTDDOS *)
+
+end
+

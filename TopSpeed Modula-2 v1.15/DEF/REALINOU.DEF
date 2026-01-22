@@ -1,0 +1,13 @@
+DEFINITION MODULE RealInOut ;
+
+(* Core library interface *)
+
+VAR
+      Done   : BOOLEAN ;
+
+PROCEDURE ReadReal  ( VAR v : REAL ) ;
+
+PROCEDURE WriteReal ( v : REAL ; w : CARDINAL ) ;
+
+END RealInOut.
+

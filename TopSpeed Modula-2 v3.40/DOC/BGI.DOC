@@ -1,0 +1,10 @@
+*************** Programming Using BGI **********************
+
+The BGI supplied with Borland's Turbo C compiler can be called
+from TopSpeed languages. Header files are supplied (graphics.*)
+for each language. If you use #link in your project file, the
+relevent library will be included automatically if you include
+one of these header files in any compilation in a project.
+
+Note that the BGI can not be used in multi-thread model, as
+Borland's drivers are not re-entrant. Large model is recommended.

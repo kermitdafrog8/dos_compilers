@@ -1,0 +1,104 @@
+#noedit
+
+-- A frivolous example project file, which calculates the first 30 primes
+-- using the Sieve of Erasthingy algorithm.
+
+-- The calculation is performed using only the constructs built in to the
+-- TopSpeed Project language. Macro expansion is used to provide looping
+-- construct and simple (base 1) arithmetic.
+
+-- unary to decimal conversion macros
+
+#set writeit = '
+  #if "%%reset" #then
+    #set wrcount = ""
+    #set d1   = 0
+    #set d11  = ""
+    #set d111 = ""
+  #endif
+  %%wr2
+  #set number = %%d111%%%%d11%%%%d1
+'
+
+#set wr2 = '
+  #if #not ("%%wrcount%%" = "%%it%%") #then
+    #set digit = 1
+    %%increment
+    #set wrcount = %%wrcount%%1
+    %%wr2
+  #endif
+'
+#set increment = '
+  #set val = d%%digit %%getval
+  #if "%%result" = "" #then #set %%val = 1
+  #elsif %%result = 0 #then #set %%val = 1
+  #elsif %%result = 1 #then #set %%val = 2
+  #elsif %%result = 2 #then #set %%val = 3
+  #elsif %%result = 3 #then #set %%val = 4
+  #elsif %%result = 4 #then #set %%val = 5
+  #elsif %%result = 5 #then #set %%val = 6
+  #elsif %%result = 6 #then #set %%val = 7
+  #elsif %%result = 7 #then #set %%val = 8
+  #elsif %%result = 8 #then #set %%val = 9
+  #elsif %%result = 9 #then
+    #set %%val = 0
+    #set digit = %%digit%%1
+    %%increment
+  #endif
+'
+
+-- macro to perform a for-loop
+
+#set for_loop = '
+  #if #not ("%%i" = "%%end") #then
+    %%body
+    #set i = %%i%%1
+    %%for_loop
+  #endif
+'
+
+#set getval = "#set result = %%%%%%val"
+
+#set SIZE = "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+-- SIZE = 120
+
+#set i=1 #set end = %SIZE                  --  for(i = 0; i<=SIZE;i++)
+#set body="#set %%i%%=on"                   --    flags[i]=TRUE;
+%for_loop
+
+#set i=%SIZE%1 #set end = %SIZE%%SIZE%1     --  for(i = SIZE+1; i<=2*SIZE;i++)
+#set body="#set %%i%%=toobig"               --    flags[i]=TOOBIG;
+%for_loop
+
+--  count=0;
+#set count = ""
+
+#set i=11 #set end = %SIZE         --  for(i=2;i <= SIZE;i++){
+#set body = "
+  #set val = %%i%% %%getval
+  #if %%result #then               --    if(flags[i]){
+    #set it = %%i%%
+    %%writeit
+    #message '%%number%% is prime'
+    #set k=%%i%%%%i%%              --      k=i+i;
+    %%while_loop                   --      (see below)
+    #set count=%%count%%1          --      count = count+1;
+  #endif                           --    }
+"                                  --  }
+
+#set while_loop = '                --      while(k<=SIZE){
+ #set val = %%k%%
+ %%getval
+ #if #not ("%%result%%" == toobig) #then
+   #set %%k%%=off                  --        flags[k] = FALSE;
+   #set k = %%k%%%%i%%             --        k += i;
+   %%while_loop
+ #endif
+'
+
+%for_loop
+#set it = %count
+#set reset = on
+%writeit
+#message "%number primes found"
+

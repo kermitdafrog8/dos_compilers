@@ -1,0 +1,140 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  MAIN.A                                                                  *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+sameCS   = 1 - ( (model / 1) & 1 )    (* True in S and C models *)
+sameDS   = 1 - ( (model / 2) & 1 )    (* False in XL model *)
+NearPtr  = 1 - ( (model / 4) & 1 )    (* True in S and M models *)
+_OS2_MT  = (model /  8) & 1           (* True in MT model *)
+RegParam = (model / 16) & 1           (* True if register parameters *)
+
+(*%F sameCS *)
+frame  =    6                         (* Far call stack frame *)
+(*%E *)
+
+(*%T sameCS *)
+frame  =    4                         (* Near call stack frame *)
+(*%E *)
+
+(* One option must be True *)
+
+Main0Args  = 0                      (* no main parameters *)
+Main2Args  = 0                      (* Brings in command line only *)
+Main3Args  = 1                      (* Brings in command line and environment *)
+
+(* These Are Default values *)
+StackSize  = 04000H                 (* sets stack size *)
+HeapSize   = 0FFFFH                 (* sets maximum near heap size *)
+SSinDGROUP = 1                      (* selects near stack *)
+
+module main
+
+segment STACK(STACK,74H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+RetCode = 0
+
+select _TEXT                    (* main must use _TEXT if S or C models *)
+
+public _main :
+
+(*%F RegParam *)                (* Stack frame calling convention *)
+
+(*%F NearPtr *)                 (* Far data pointer models M, L, MT *)
+    ArgC   =  frame
+    ArgV   =  2+frame
+    EnvV   =  6+frame
+
+    RetSize = 0
+(*%E *)
+
+(*%T NearPtr *)                 (* Near data pointer models S, C *)
+    ArgC   =  frame
+    ArgV   =  2+frame
+    EnvV   =  4+frame
+
+    RetSize = 0
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)                (* Register parameter calling convention *)
+
+(*%F NearPtr *)                 (* Far data pointer models M, L, MT *)
+    EnvV   =  frame             (* ArgC = ax, ArgV = cx:bx *)
+    RetSize = 0
+(*%E *)
+
+(*%T NearPtr *)
+    RetSize = 0
+(*%E *)
+                                (* Far data pointer models M, L, MT *)
+(*%E *)                         (* ArgC = ax, ArgV = bx, EnvV = cx *)
+
+    push bp
+    mov  bp, sp
+
+    (* your stuff here *)
+    mov  ax, RetCode                (* Return Code in ax *)
+    pop  bp
+(*%F sameCS *)
+    ret  far RetSize                (* far return for M, L, MT models *)
+(*%E *)
+(*%T sameCS *)
+    ret  RetSize                    (* near return for S, C models *)
+(*%E *)
+
+(*****************************************************************************)
+section
+segment NEAR_STACK(BSS, 28H)
+
+public __near_stack_start :
+(*%T SSinDGROUP *)
+  org StackSize
+(*%E *)
+(*%F SSinDGROUP *)
+  org 1
+(*%E *)
+  db  0
+
+section
+segment NEAR_HEAP(BSS, 28H)
+
+public __near_heap_start :
+
+  org HeapSize
+  db  0
+
+section
+segment _TEXT(CODE,28H)
+segment _DATA(DATA, 28H)
+
+select _DATA
+
+(*%T Main3Args*)
+extrn __main_args3
+public __initx: dw __main_args3; dw _TEXT
+(*%E *)
+
+(*%T Main2Args*)
+extrn __main_args2
+public __initx: dw __main_args2; dw _TEXT
+(*%E *)
+
+
+(*%T Main0Args*)
+extrn __call_main
+public __initx: dw __call_main; dw _TEXT
+(*%E *)
+dw StackSize
+dw HeapSize
+db SSinDGROUP
+
+end
+

@@ -1,0 +1,47 @@
+LIBRARY LOADER
+EXPORTS
+  Loader$LoadModule             @?
+  Loader$UnLoadModule           @?
+  Loader$GetProcAddr            @?
+  Loader$ShrinkHeap             @?
+  Loader$GrowHeap               @?
+  Loader$UserFlush              @?
+  Loader$GetHeapState           @?   ; not supported
+  Loader$SetHeapState           @?   ; not supported
+  Loader$AllocMem               @?
+  Loader$ClearAllocMem          @?
+  Loader$HugeAllocMem           @?
+  Loader$FreeMem                @?
+  Loader$SetExitHandler         @?
+  Loader$SetMemHandler          @?
+  Loader$SetMode                @?
+  Loader$LoadSeg                @?
+  Loader$UnloadSeg              @?
+  Loader$Terminate              @?
+  Loader$Reset                  @? ; not supported
+  Loader$RetGate                @? ;as required by C library (setjmp)
+  Loader$Avail                  @? ;required for farcoreleft
+  Loader$TotalAvail             @?
+  Loader$SetEms                 @?
+  Loader$Getseg                 @?
+
+  Loader$ExpandMem              @?
+  Loader$HugeExpandMem          @?
+  Loader$HeapWalk               @?
+  Loader$HeapCheck              @?
+
+  Loader$GetOrdProcAddr         @?
+  Loader$VAlloc                 @?
+  Loader$VUnfix                 @?
+  Loader$VFix                   @?
+  Loader$VUnfixAll              @?
+  Loader$VFree                  @?
+
+
+
+
+
+
+
+
+

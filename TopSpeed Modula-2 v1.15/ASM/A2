@@ -1,0 +1,17 @@
+module c:\MII\TSOBJ\ASM2
+
+
+segment _BSS(DATA,00028H) (*segment length = 00008H*)
+                            $0:
+db 042H,04FH,04EH,04AH,04FH,055H,052H,024H
+
+segment _TEXT(CODE,00028H) (*segment length = 0000AH*)
+                            public asm2$main:
+(*0000 0E*)                   push  cs
+(*0001 1F*)                   pop   ds
+(*0002 BA 00 00*)             mov   dx,$0
+(*0005 B4 09*)                mov   ah,9
+(*0007 CD 21*)                int   21H
+(*0009 CB*)                   ret far 0
+
+end

@@ -1,0 +1,236 @@
+****************** Library Fatal Error Codes ******************
+
+File ERRORINF.$$$ has the format
+
+SSSS:OOOO CCCC
+
+***** IF SSSS:OOOO = ????:???? THEN ERROR IS FROM LOADER. *******
+
+where S = code segment, O = IP value and C = Hex error code.
+
+Run-time Checks:
+
+01H  Stack overflow
+02H  Null pointer de-reference
+03H  Termination caused by signal.  (User break or Floating point exception)
+04H  Overflow.
+05H  Range.
+06H  No Return.
+07H  No matching Case Label.
+08H  Long Integer Divide By Zero.
+09H  Index Error.
+0AH  Pure Virtual Function Called.
+
+Misc Errors :
+
+10H  Memory allocation initialisation (Out Of Memory)
+11H  I/O initialisation (Out Of Memory)
+12H  Invalid use of near heap in DLL.
+13H  Complex Number Error.
+
+21H  Dos Re-entered.
+22H  NullProc Called.
+
+Window module:
+
+30H  Invalid window
+31H  Use memory allocation
+32H  Settitle memory allocation
+33H  Initialisation error (Out Of Memory)
+
+Pascal ISO Library:
+
+34H  new, Out Of Memory.
+35H  dispose, Invalid Pointer.
+36H  _wrint, Illegal Parameter.
+37H  _wrint, Conversion Error.
+38H  _wrchar, Illegal Parameter.
+39H  _wrbool, Illegal Parameter.
+3AH  _wrastr, Illegal Parameter.
+3BH  _wrcstr, Illegal Parameter.
+3CH  _wrreal, Illegal Parameter.
+3DH  _wrreal, Conversion Error.
+3EH  _f_wrint, Illegal Parameter.
+3FH  _f_wrint, Conversion Error.
+
+DOS process module:
+
+40H  Too many processes
+41H  New process memory allocation
+42H  Signal memory allocation
+43H  Scheduler memory allocation
+44H  Initialisation error
+45H  Stop process error
+48H  StopProcess - Corrupt Process.
+49H  TRANSFER - Corrupt Process.
+4AH  ExecCmd, Memory Failure.
+4BH  ExecCmd, Command Line Too Long.
+4CH  ExecCmd, Command Processor Failed To Load.
+
+OS2 process module:
+
+50H  StartScheduler error.
+51H  StopScheduler error.
+52H  StartProcess error.
+53H  SEND error.
+54H  WAIT error.
+55H  Notify error.
+56H  Init error.
+57H  Delay error.
+
+CPP process module:
+
+58H Illegal Assignment.
+
+Library Initialisation:
+
+60H  Dos environment memory allocation
+
+Pascal ISO Library:
+
+61H  _f_wrchar, Illegal Parameter.
+62H  _f_wrbool, Illegal Parameter.
+63H  _f_wrastr, Illegal Parameter.
+64H  _f_wrcstr, Illegal Parameter.
+65H  _f_wrreal, Illegal Parameter.
+66H  _f_wrreal, Conversion Error.
+67H  _rdint , Invalid Integer.
+68H  _rdreal , Invalid Real Number.
+69H  _f_rdint , Invalid Integer.
+6AH  _f_rdreal , Invalid Real Number.
+6BH  assign, File Already Open.
+6CH  reset, No File Name.
+6DH  put, Invalid Mode.
+6EH  put, Write Error.
+6FH  put, Write Error.
+
+Modula2 Memory Managment:
+
+89H  NearMakeHeap, Invalid Argument.
+8AH  NearHeapAllocate, Invalid Argument.
+8BH  NearHeapDeallocate, Invalid Argument.
+8CH  NearHeapAvail, Invalid Argument.
+8DH  NearHeapTotalAvail, Invalid Argument.
+8EH  NearHeapChangeSize, Invalid Argument.
+8FH  NearHeapChangeAlloc, Invalid Argument.
+90H  FarHeapAllocate, Out Of Memory.
+91H  FarHeapDeallocate, Invalid Argument.
+92H  FarHeapDeallocate, Heap Corrupt.
+93H  FarHeapChangeAlloc, Invalid Argument.
+94H  FarAllocate, Out Of Memory.
+95H  NearMakeHeap, Size Too Small.
+96H  NearHeapAllocate, Out Of Memory.
+97H  NearHeapDellocate, Invalid Argument.
+98H  NearAllocate, Out Of Memory.
+99H  Far Heap Call, Not Supported Under OS2.
+9AH  ShtHeap.Initialize, Heap too small.
+9BH  ShtHeap.Increase, Not Enough Space.
+9CH  ShtHeap.Allocate, Size Error.
+9DH  ShtHeap.Allocate, Out Of Memory.
+9EH  ShtHeap.Free, Invalid Pointer.
+9FH  ShtHeap.Test, Heap Corruption.
+
+Modula2 File I/O:
+
+A0H  Close, Invalid Handle.
+A2H  Open, File Access Error.
+A3H  OpenRead, File Access Error.
+A4H  Append, File Access Error.
+A5H  Create, File Access Error.
+A6H  WrBin
+A7H  RdBin
+A8H  FIO Internal Error, Write Error Flushing File.
+A9H  GetPos, Write Seek Error.
+AAH  Seek, Write Seek Error.
+ACH  Truncate, File Write Error.
+AEH  Erase, File Name Error.
+AFH  Rename, File Name Error.
+B0H  ChDir, Directory Name Error.
+B1H  MkDir, Directory Name Error.
+B2H  RmDir, Directory Name Error.
+B3H  GetDir, Drive Number Error.
+B4H  ReadFirstEntry
+B5H  ReadNextEntry
+BBH  Assign Buffer, Stream Table Full.
+BCH  FIO Directory Call, Not Supported Under OS2.
+BEH  IO.RedirectInput.
+BFH  IO.RedirectOutput.
+
+Modula2 Process Managment:
+
+C0H  StartScheduler, System Error.
+C1H  StartProcess, System Error.
+C2H  StartProcess, SetPriority - System Error.
+C3H  StartProcess, SuspendThread - System Error.
+C4H  SEND, Semaphore System Error.
+C5H  WAIT, Semaphore System Error.
+C6H  Notify, Semaphore System Error.
+C7H  Init, Semaphore System Error.
+C8H  Delay, Sleep System Error.
+C9H  Launch, System Error.
+CAH  NewProcess, Too Many Threads.
+CBH  IOTRANSFER, Invalid Argument.
+
+Modula2 Misc Errors:
+
+D1H  Graphics Call, Not Supported Under OS2.
+D2H  OSFatalError, Operating System Error.
+
+Pascal ISO Library:
+
+E0H  Undefined method called.
+E1H  get, Invalid Mode.
+E2H  get, End Of File')
+E3H  get, Read Error.
+E4H  close, Invalid Operation.
+E5H  eoln, End Of File.
+E6H  eoln, Invalid File.
+E7H  eoln, End Of File.
+E8H  eof, Invalid Operation')
+E9H  ln, Illegal Parameter.
+EAH  sqrt, Illegal Parameter.
+EBH  put, File Undefined.
+ECH  get, File Undefined.
+EDH  FlsBuf, Stream Not Buffered.
+EEH  FilBuf, Stream Not Buffered.
+
+Pascal Turbo Library:
+
+F0H  BlockRead, I/O Error.
+F1H  GetMem, Out Of Memory.
+F2H  FilePos, Invalid File.
+F3H  FileSize, Invalid File.
+F4H  Seek, Invalid File.
+F5H  Rename, Invalid File.
+F6H  Append, File Not Assiged.
+F7H  MkDir, Invalid Path.
+F8H  RmDir, Invalid Path.
+F9H  ChDir, Invalid Path.
+FAH  OS2 Library, Function Not Supported.
+
+FFH  User Break.
+
+Overlay Loader Errors:
+
+
+101H Invalid Export Entry In Exe File/DLL.
+102H Too many modules.
+103H DLL is incorrect version.
+104H Module is corrupt.
+105H BP chain corrupt.
+106H Module not found.
+107H Incorrect fixup type.
+108H EMS error.
+109H Module not corrcet format.
+10AH Invalid function request to loader.
+10BH Module initialization failed.
+10CH File not found.
+10DH Out of memory
+10EH I/O error on read.
+10FH I/O error on seek.
+110H Stack overflow.
+111H Illegal reference to code segment.
+112H Segment list corrupt.
+113H Too many segments.
+114H Attempt to reload segment.
+

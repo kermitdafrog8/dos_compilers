@@ -1,0 +1,75 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  CORESIG.DEF - Modula-2 interface to CORESIG.A                           *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE CoreSig;
+
+(*# save *)
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+PROCEDURE _DisableBreakCheck;
+PROCEDURE _EnableBreakCheck;
+
+PROCEDURE _GetInProgramFlag;
+PROCEDURE _SetInProgramFlag;
+
+TYPE
+  SigProcType = PROCEDURE(INTEGER): INTEGER;
+
+PROCEDURE signal(sig: INTEGER; Handler: SigProcType): SigProcType;
+PROCEDURE raise(sig: INTEGER): INTEGER;
+
+TYPE
+  TenByteReal = ARRAY [0..9] OF SHORTCARD;
+
+  JmpBufType =  RECORD
+    j_sp, j_ss, j_flag, j_cs, j_ip, j_bp, j_di, j_es, j_si, j_ds: CARDINAL;
+    st1, st2: TenByteReal;
+  END;
+  jmp_buf = ARRAY [0..0] OF JmpBufType;
+
+(*# save *)
+(*# call(reg_saved=>(ax,bx,cx,dx,ds,es,si,di,st0,st1,st2,st3,st4,st5,st6)) *)
+PROCEDURE  longjmp(VAR _env: jmp_buf; _val: INTEGER);
+(*# call(reg_saved=>(ds,es,si,di,st1,st2), set_jmp=>on) *)
+PROCEDURE _setjmp(VAR env: jmp_buf): INTEGER;
+(*# restore *)
+
+PROCEDURE _chain_intr(Int: FarADDRESS);
+
+TYPE
+  ErrnoPtr = POINTER TO INTEGER;
+PROCEDURE _errno__(): ErrnoPtr;
+PROCEDURE _ioerr(Code: INTEGER): INTEGER;
+PROCEDURE _seterrno(Code: INTEGER): INTEGER;
+
+(*# save *)
+(*# call(near_call=>off, reg_param=>(), c_conv=>on, reg_saved => (ds, si, di,st1,st2,st2,st3,st4,st5,st6)) *)
+PROCEDURE _FatalError(ErrPos: LONGCARD; Code: CARDINAL);
+PROCEDURE _FatalErrorPos(): LONGCARD;
+(*# restore *)
+
+
+(*# save, call(near_call=>off, reg_param=>(), reg_saved=>(ax,bx,cx,dx,ds,si,di,st1,st2), c_conv=>off),
+    name(prefix=>modula) *)
+TYPE
+  CnsHandlerType = PROCEDURE(CARDINAL, CARDINAL, CARDINAL): BOOLEAN;
+VAR
+  CnsHandler:  CnsHandlerType;
+
+(*# restore *)
+
+
+VAR
+  errno: INTEGER;
+
+END CoreSig.
+

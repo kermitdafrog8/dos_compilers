@@ -1,0 +1,22 @@
+module asm3;
+
+segment C_A2 (FCODE,28H);segment K_A2 (FCODE,28H);group G_A2 (C_A2);
+
+
+select K_A2;
+
+public Chaine : db 'BONJOUR$';
+
+select C_A2;
+
+
+public asm3$main:
+
+        mov     ax,K_A2
+        mov     ds,ax
+        mov     dx,Chaine
+        mov     ah,09
+        int     21H
+
+        ret     far 0
+end

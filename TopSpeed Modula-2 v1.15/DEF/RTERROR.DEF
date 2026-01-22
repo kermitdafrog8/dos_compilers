@@ -1,0 +1,29 @@
+DEFINITION MODULE RTerror;
+
+  TYPE
+    (* Note - can't provide handling for stack overflow or failure of a
+       procedure to RETURN. *)
+    RTtype = (IndexOutOfRange,    (* past end of an array *)
+              ArithmeticOverflow, (* overflow on arithmetic operation *)
+              SubOutOfRange,      (* past end of subrange *)
+              EnumValue,          (* illegal value for enumerated type *)
+              NILusage);          (* dereference of NIL pointer *)
+    RTproc = PROCEDURE(CARDINAL,CARDINAL,CARDINAL,RTtype) : BOOLEAN;
+      (* First parameter is absolute segment, second parameter is relative
+         segment (0FFFFH if outside of main program), third parameter is
+         offset, fourth parameter is error which occurred.  Should return
+         TRUE if program should continue, or FALSE if program should
+         terminate via normal run-time error handler. (This procedure may,
+         instead of returning, call HALT or LONGJMP/TRANSFER control
+         elsewhere.)  If the procedure returns FALSE (signaling that the 
+         run-time system should handle the error), then all of the 
+         user-installed handlers are uninstalled. *)
+
+  PROCEDURE InstallRT(handler : RTproc);
+    (* Start trapping run-time errors... *)
+
+  PROCEDURE UnInstallRT;
+    (* Stop trapping run-time errors... [default] *)
+
+  END RTerror.
+

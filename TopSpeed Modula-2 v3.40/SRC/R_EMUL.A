@@ -1,0 +1,515 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  R_EMUL.A - real-mode emulator support                                   *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module r_emul
+
+auto_select = 1  (* use 8087 if one is present at run time *)
+emInt = 34H
+
+public  FIDRQQ   =  05C32H
+public  FIWRQQ   =  0A23DH
+
+public  FIERQQ   =  01632H
+public  FIARQQ   =  0FE32H
+public  FISRQQ   =  00632H
+public  FICRQQ   =  00E32H
+
+public  FJERQQ  =  00000H
+public  FJARQQ  =  04000H
+public  FJSRQQ  =  08000H
+public  FJCRQQ  =  0C000H
+
+public  FIXRQQ  =  0
+
+segment EMU_INITSTATE(FAR_DATA,68H)
+
+originalVectors : org 4*10
+temp87          : org 2
+entryChoice     : org 4
+currentInt      : org 1
+
+segment _BSS(BSS, 28H)
+
+ExecFloatState  : org 94
+
+segment EMU_TEXT  (EMU_CODE,28H)
+
+(*%T auto_select*)
+(*INCLUDE E087ENTR.ASM*)
+
+(*   We arrive here due to any one of nine emulation interrupts, 34H..3Ch.*)
+
+
+(* save registers*)
+
+(* { Obtain the instruction.*)
+
+(*     Int-op  - NPX instruction  one of 8 different interrupts*)
+(*     modrm  - mode register/memory  specifies what kind of operand*)
+(* { optional }*)
+(*     offset  - byte/word    if modrm requires an offset*)
+
+(*   The total can be from 3 to 5 bytes.  Upon arrival the old cs:IP points to*)
+(*   the third byte.*)
+
+
+emInt  =  34H
+
+(*callFrame  STRUC*)    (* caller's stack top at time of stack swap*)
+callBP    = 0
+callCSIP  = 2
+callFL    = 6
+
+WaitEscCode =  0D89BH    (* Wait, ESC ..*)
+emIntCode   =  034CDH    (* Int  34H ..*)
+waitCode    =  09BH
+segfixCode  =  026H    (* es:*)
+escCode     =  0D8H
+nopWait     =  09B90H    (* nop, Wait*)
+
+
+e087_Entry  :
+
+  push bp
+  mov  bp, sp
+  push ax
+  push si
+  push ds
+
+(*Not worth enabling interrupts*)
+(*test  [bp].callFL[by1], 02  ; interrupts enabled ?*)
+(*jz  sameInterrupts*)
+(*  sti      ; interrupt enable same as caller had*)
+(*sameInterrupts:*)
+
+  lds  si, [bp][callCSIP]
+
+  mov  ax, [si][-1]  (* "nn" byte of Int + next byte*)
+
+  sub  al, emInt
+  cmp  al, 8
+  jnb  ninthFormat
+
+  sub  si, 2
+  add  word [si], WaitEscCode - emIntCode
+
+retryExit:
+  mov  [bp][callCSIP], si    (* retry the instruction*)
+  jmp  e087_exit
+
+
+(* supplement byte will be*)
+(* - mod/r/m byte  if one of the 8 default (no-segfix) interrupts*)
+(* - segfix + opcode  if 9th interrupt AND supplement.bit5*)
+(* - function number  if 9th AND NOT supplement.bit5*)
+
+ninthFormat:
+  ja  maybeTenth
+
+  test  ah, 20H
+  jnz  unknownFunction1
+
+(* we need to patch to create <wait, segfix, ESCnn>*)
+
+  sub  si, 2
+  mov  [bp][callCSIP], si    (* retry begins at Wait*)
+
+  mov  byte [si], waitCode
+  inc  si
+
+  mov  al, ah
+  and  ax, 07C0H    (* ESC number in AH, seg number in AL*)
+  shr  al, 1
+  shr  al, 1      (* align the segment number*)
+  shr  al, 1
+  xor  al, 18H      (* fix the peculiar Microsoft order*)
+  add  ax, segfixCode + (escCode * 256)
+  mov  [si], ax
+
+e087_exit:
+  pop  ds
+  pop  si
+  pop  ax
+  pop  bp
+  iret
+
+maybeTenth:
+  cmp  al, 9
+  ja  unknownFunction1
+
+  sub  si, 2
+  mov  word [si], nopWait
+  jmp  retryExit
+
+
+unknownFunction1:
+
+(*  your choice of code to go here !*)
+
+  jmp  e087_exit
+(*%E*)
+
+
+extrn emulate8087
+
+oldFlags        = 22
+oldCS           = 20
+oldIP           = 18
+oldAX           = 16
+oldBX           = 14
+oldBX           = 12
+oldDX           = 10
+oldSI           = 8
+oldDI           = 6
+oldDS           = 4
+oldES           = 2
+oldBP           = 0
+
+e086_entry :
+  sti
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  push  si
+  push  di
+  push  ds
+  push  es
+  push  bp
+  mov   bp,sp
+  cld   (* forward string direction *)
+  lds  si, [bp][oldIP]
+  dec  si         (* move back to inspect Int nn instruction *)
+  mov  cx, si     (* remember original IP *)
+  sub  dl, dl     (* records whether there was a segment override *)
+  lodsw
+  sub al, emInt
+  cmp al, 8
+  jae unusual
+decoded:
+  jmp emulate8087
+resume:
+(* ggfb: check for another float instruction *)
+  lds  si, [bp][oldIP]
+  cmp byte ds:[si], 0CDH
+  jne notanother
+  inc si
+  sub  dl, dl     (* records whether there was a segment override *)
+  cld             (* !! it may not be clear! *)
+  lodsw
+  sub  al, emInt
+  cmp  al, 8
+  jb   decoded (* ax,dl,bp,si must all be valid *)
+  je   override
+notanother:
+  mov  sp, bp
+  pop  bp
+  pop  es
+  pop  ds
+  pop  di
+  pop  si
+  pop  dx
+  pop  cx
+  pop  bx
+  pop  ax
+  iret
+
+unusual:
+  ja  iswait
+override:
+  mov  al, ah
+  and  al, 0C0H
+  jz  DSfix
+  cmp  al, 0C0H
+  je  ESfix
+  cmp  al, 080H
+  je  CSfix
+  (*jmp SSfix*)
+SSfix: mov  di, ss; jmp segfix
+CSfix: mov  di, ds; jmp segfix
+ESfix: mov  di, [bp][oldES]; jmp segfix
+DSfix: mov  di, [bp][oldDS]; (*jmp segfix*)
+segfix:
+  mov es, di
+  lodsb      (* advance to pick up mod/r/m byte *)
+  xchg  ah, al
+  and  al, 7
+  inc dl
+  jmp decoded
+
+iswait:
+  mov  word [si][-3], 9090H    (* patch with no-ops *)
+  jmp  resume
+
+
+EmuInit: db 0
+public __FloatInit:
+
+(* Initialise EMU_INITSTATE *)
+
+ push bp
+ mov  bp, sp
+ sub  sp, 2
+ extrn __fp_1
+ call far __fp_1
+
+ push ds
+ mov ax,EMU_INITSTATE
+ mov ds,ax
+
+(* First check to see if a real 8087/287 is available.  That allows us to*)
+(* select which version of NDP support is to remain resident.*)
+
+ db 0DBH, 0E3H (*finit*)
+ mov word ds:[temp87], -1
+
+ mov cx,400H
+here2:
+ loop here2 (*FWAIT*)
+
+ db 0DDH,03EH; dw temp87; (*FSTSW   temp87*)
+ mov cx,400H
+here:
+ loop here (*FWAIT*)
+ cmp byte ds:[temp87], 0
+
+(*%T auto_select*)
+ mov ax, e087_Entry
+ jz installSupporter (* --- disable this for debugging ---*)
+(*%E*)
+
+ extrn @Save8087
+ mov ax, seg @Save8087
+ mov es, ax
+ mov byte es:[@Save8087], 0
+ mov ax, e086_entry
+
+installSupporter:
+ mov word ds:[entryChoice], ax
+ mov word ds:[entryChoice][2], EMU_TEXT
+
+(* Set the emulation interrupt vectors to point to their handlers.*)
+
+doCapture:
+ mov byte ds:[currentInt], emInt
+ mov cx, 10   (* there are 10 vectors*)
+ mov di, originalVectors
+
+rememberLoop:
+
+(* Remember earlier use of vector.  They must be replaced when the program*)
+(* terminates.*)
+
+ mov al, ds:[currentInt]
+ mov ah, 35H    (* read interrupt vector*)
+ int 21H        (* results in es:bx*)
+
+ mov ds:[di][0], bx
+ mov ds:[di][2], es
+ add di, 4
+
+ inc byte ds:[currentInt]
+
+ loop rememberLoop
+
+(* Now take over the vectors.*)
+
+ mov byte ds:[currentInt], emInt
+ mov cx, 10   (* there are 10 vectors*)
+ mov di, ds:[entryChoice][2]
+
+captureLoop:
+
+ push ds
+ mov dx, ds:[entryChoice]
+ mov al, ds:[currentInt]
+ mov ds, di
+ mov ah, 25H   (* set interrupt vector*)
+ int 21H   (* with value in ds:dx*)
+ pop ds
+
+ inc byte ds:[currentInt]
+ loop captureLoop
+ mov  byte cs:[EmuInit], 1
+
+ pop ds
+ mov bx, ss
+ jmp misProlog
+ (*call __FloatInitInstance*)
+ (*ret far 0*)
+
+public __FloatInitInstance:
+
+ push bp
+ mov  bp, sp
+ sub  sp, 2
+misProlog:
+ push ax
+ mov ax, resume
+ extrn __EmulInitInstance
+ call __EmulInitInstance
+ pop  ax
+ cmp  byte cs:[EmuInit], 1
+ jne  abort
+
+ finit
+ fstcw [bp][-2]
+ fwait
+ or  word [bp][-2], 0C00H
+ and word [bp][-2],~001DH (* enable invalid op/underflow/overflow/divide by zero exception *)
+ fldcw [bp][-2]
+ extrn __FloatInitStack
+ call far __FloatInitStack
+ mov sp,bp
+ pop bp
+abort:
+ ret far 0
+
+public __FloatFinish:
+
+ push bp
+ mov  bp, sp
+ mov ax,EMU_INITSTATE
+ mov ds,ax
+
+ mov byte ds:[currentInt], emInt
+ mov cx, 10   (* there are 10 vectors*)
+ mov bx, originalVectors
+
+restoreLoop:
+
+ push ds
+
+ mov dx, [bx]
+ mov al, ds:[currentInt]
+ mov ds, [bx][2]
+ mov ah, 25H   (* set interrupt vector*)
+ int 21H       (* with value in ds:dx*)
+
+ pop ds
+
+ add bx, 4
+ inc byte ds:[currentInt]
+
+ loop restoreLoop
+
+ pop  bp
+ ret far 0
+
+public __FloatEmulNMI:
+  extrn __sigFp
+  jmp far __sigFp
+
+public __FloatMathExcepDos :
+  (*
+     the stack contains a FAR return address to signal handler, then
+     the far address of the point of exception, then the iret flags
+  *)
+  push ax              (* make room for status word *)
+  push bp
+  mov bp,sp
+  push  ax
+  mov   ax,[bp][4]     (* return ip *)
+  mov   [bp][2],ax
+  mov   ax,[bp][6]     (* return cs *)
+  mov   [bp][4],ax
+  fstsw [bp][6]        (* will bring in emulator ! *)
+  pop   ax
+  pop   bp
+  fclex
+  extrn __math_excep
+  jmp far __math_excep
+
+
+public __FloatJmpSave :
+
+st1_reg = 20
+st2_reg = 30
+
+    push bp
+    mov  bp, sp
+    fld st(0), st(1)
+    fstp  tbyte es:[di][st1_reg], st(0)
+    fld st(0), st(2)
+    fstp  tbyte es:[di][st2_reg], st(0)
+    fwait
+    pop  bp
+    ret  far 0
+
+public __FloatJmpRestore :
+
+    push bp
+    mov  bp, sp
+    fld  tbyte st(0), ds:[si][st1_reg]
+    fstp st(2), st(0)
+    fld  tbyte st(0), ds:[si][st2_reg]
+    fstp st(3), st(0)
+    pop  bp
+    ret  far 0
+
+public __FloatExecSave :
+
+    push bp
+    mov  bp, sp
+    push ax
+    mov  ax, _BSS
+    mov  es, ax
+    fsave es:[ExecFloatState]
+    pop  ax
+    fwait
+    pop  bp
+    ret  far 0
+
+public __FloatExecRestore :
+
+    push bp
+    mov  bp, sp
+    push ax
+    mov  ax, _BSS
+    mov  es, ax
+    frstor es:[ExecFloatState]
+    pop  ax
+    fwait
+    pop  bp
+    ret  far 0
+
+ProcessFloat    = 14
+
+public __FloatSave :
+
+    push bp
+    mov  bp, sp
+    fsave es:[ProcessFloat]
+    fwait
+    pop  bp
+    ret  far 0
+
+public __FloatRestore :
+
+    push bp
+    mov  bp, sp
+    frstor ds:[ProcessFloat]
+    fwait
+    pop  bp
+    ret  far 0
+
+segment EMU_STATE(DATA,68H)
+
+emuRecSize = 490
+
+select EMU_STATE
+
+public emuBuffer:
+
+db  0
+org emuRecSize-1
+
+end (*R_EMUL.A*)
+

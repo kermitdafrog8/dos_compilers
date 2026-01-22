@@ -1,0 +1,130 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  INITPM.A - Presentation manager startup                                 *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+module initpm
+
+segment ENTERCODE(CODE,28H)
+segment INITCODE(CODE,28H)
+segment CODE(none,28H);
+segment SIG_TEXT(CODE,68H)
+segment EMU_TEXT(EMU_CODE,28H)
+segment PROC_TEXT(CODE,68H)
+segment MP_CODE(MP_CODE,68H)
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment FAR_BSS(FAR_BSS,28H)
+segment CONST(CONST,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+
+section
+
+segment ENTERCODE(CODE,28H)
+segment INITCODE(CODE,28H)
+segment CODE(none,28H);
+segment _TEXT(CODE,28H)
+segment _INIT(INIT_CODE,28H)
+segment _FAR_DATA(FAR_DATA,28H)
+segment EMU_STATE(DATA,28H)
+reserved:
+  dw 0,0,0,0,0,0,0,0
+segment EMU_TEXT(EMU_CODE,28H)
+segment CONST(CONST,28H)
+segment _CONST(DATA,28H)
+segment _DATA(DATA,28H)
+segment BSS_START(BSS,28H)
+segment _BSS(BSS,28H)
+segment BSS_END(BSS,28H)
+segment STACK(STACK,74H)
+segment NEAR_STACK(BSS, 28H)
+segment NEAR_HEAP(BSS, 28H)
+segment HEAP(DATA,28H)
+segment STACK(STACK,74H)
+
+group DGROUP(EMU_STATE,CONST,_CONST,_DATA,BSS_START,_BSS,BSS_END,NEAR_HEAP,HEAP,STACK)
+
+select _DATA
+
+SSisDS : dw 2       (* PM segmentation *)
+HeapSize = 1000H
+
+InitRec: dw 0, 0, 0, _INIT
+
+select BSS_START
+public __bss_start:
+
+select BSS_END
+public __bss_end:
+
+select HEAP
+  org HeapSize
+
+select _TEXT
+
+text_dummy: db 0
+
+select ENTERCODE
+extrn _main
+extrn __startup
+extrn _x_main
+extrn _x_initx
+extrn __initx
+extrn _x_bss_end
+extrn _x_bss_start
+
+  push ds
+  mov dx, seg __initx
+  mov ds, dx
+  mov cx, [__initx]
+  mov si, [__initx][2]
+  mov dx, seg _x_main
+  mov ds, dx
+  mov [_x_initx], cx
+  mov [_x_initx][2], si
+  mov word [_x_main][0], _main
+  mov word [_x_main][2], seg _main
+  mov word [_x_bss_end], __bss_end
+  mov word [_x_bss_start], __bss_start
+  push ax
+  push bx
+  mov bx, InitRec
+  mov ax, _DATA
+  extrn __InitLink
+  call far __InitLink
+  pop  bx
+  pop  ax
+  mov cx, [SSisDS]
+  mov si, sp
+  sub si, HeapSize
+  sub si, __bss_end
+  pop ds
+  jmp far __startup
+
+dw EMU_STATE
+dw CONST
+dw _CONST
+dw _DATA
+dw BSS_START
+dw _BSS
+dw BSS_END (* establishs order ! *)
+dw NEAR_HEAP
+dw HEAP
+dw STACK
+dw text_dummy
+dw reserved
+dw 0
+
+end *
+

@@ -1,0 +1,668 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREPMD.A - core post-mortem dumping                                    *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module CoreMain
+
+
+(*%T _DLL *)
+segment _BSS(BSS, 28H)
+
+public __PMDbody_vector : org FarCodePtrSize
+(*%E *)
+(*****************************************************************************)
+section
+
+  stats? = 0      (* count hash collisions and table resets *)
+  reset? = 0      (* possible values are 0,1 *)
+  ebit = 1        (* possible values are 0,1,3 *)
+
+  shift2 = ebit & 1
+  shift4 = ( ebit & 2 ) / 2
+  period = 8 / (ebit+1)
+
+  max_hash = power2 (ebit+10 ) - 1
+  max_code = power2 (ebit+9 ) - 1
+  re_hash  = 113
+
+segment PACK_DATA(FAR_DATA,28H)
+
+public EnvPack@prfx: org 2*(max_hash+1)   + 4   (* must be at 0 in actual segment !! *)
+prfx = 0
+
+
+public EnvPack@reset_count: org 2
+public EnvPack@collision_count : org 2
+
+lim: org 2 (* limit for si *)
+public __p :
+public EnvPack@p: org (1000H/8)*(9+ebit)
+char: org max_hash+1       + 2
+code: org 2*(max_hash+1)   + 4
+
+segment PACK_TEXT(CODE, 28H )
+
+ClearTable:
+  push ax; push cx; push di; push es
+  push ds; pop es
+  mov di, prfx
+  mov cx, max_hash+1
+  mov ax, -1
+  rep; stosw
+  pop es; pop di; pop cx; pop ax
+  ret 0
+
+public __Pack:
+public EnvPack$Pack: in = 6 ; n = 10
+(* Current register usage:
+   al : input char
+   ah : zero
+   bx : hash table index
+   cl : free bit count for ch
+   ch : holds extra bits
+   dx : current code or 256+number of codes output since reset
+   es:si : input pointer
+   ds:di : output pointer
+*)
+
+  push bp
+  mov bp, sp
+  push si; push di; push ds; push es
+  mov ax, PACK_DATA
+  mov ds, ax
+(*%T stats?*)
+  mov word [EnvPack@reset_count], 0
+  mov word [EnvPack@collision_count],0
+(*%E*)
+
+  call ClearTable
+  les si, [bp][in]
+  mov dx, si
+  add dx,[bp][n]
+  mov [lim],dx
+
+  db 26H; lodsb
+  sub ah,ah
+  mov dx,ax
+  mov word bp, 256
+  mov di, EnvPack@p+1
+  mov ch,0
+  mov cl,period
+  jmp loop1
+
+shift_zero:
+  mov [di][-(period+1)], ch
+  inc di
+  mov cx,period
+(*%F reset?*)
+  cmp bp, max_code
+  jne shift_zero_done
+  mov bp,[lim]
+  jmp near _output_done
+(*%E*)
+(*%T reset?*)
+  jmp shift_zero_done
+(*%E*)
+
+(*%T reset?*)
+clear:
+(*%T stats?*) inc word [EnvPack@reset_count] (*%E*)
+  call ClearTable
+  mov bp, 256
+  jmp output_done
+(*%E*)
+
+else1:
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  shl bx, 1
+  add bx, re_hash*2
+  jmp loop2
+
+
+exit1x:
+  jmp near exit1
+
+match:
+  shr bx,1
+  cmp[char][bx], al
+  jne else1
+  shl bx,1
+  mov dx, [code][bx]
+(*jmp loop1*) (*unrolled once*)
+  cmp si,[lim]
+  je exit1x
+  db 26H; lodsb
+  mov bx,dx
+  add bl,al
+  add bh,al
+(*loop2:*)
+  and bx, max_hash*2
+  cmp [prfx][bx], dx
+  je match
+  cmp word [prfx][bx],-1
+  jne collide
+output:
+  shl ch,1
+(*%T shift2*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+  add ch, dh
+  mov [di], dl
+  inc di
+  dec cl
+  jz  shift_zero
+shift_zero_done:
+  mov [prfx][bx],dx
+  mov [code][bx],bp
+  shr bx,1
+  mov [char][bx],al
+  inc bp
+(*%T reset?*)
+  cmp bp, max_code+1
+  je clear
+(*%E*)
+output_done:
+  mov dx,ax
+
+loop1:
+  cmp si,[lim]
+  je exit1
+  db 26H; lodsb
+  mov bx,dx
+  add bl,al
+  add bh,al
+loop2:
+  and bx, max_hash*2
+  cmp word [prfx][bx],-1
+  je output
+  cmp [prfx][bx], dx
+  je match
+collide:
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+(*jmp loop2*) (*unroll 1*)
+  and bh, max_hash / 128
+  cmp word [prfx][bx],-1
+  je output
+  cmp [prfx][bx], dx
+  je match
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+(*jmp loop2*) (*unroll 2*)
+  and bh, max_hash / 128
+  cmp word [prfx][bx],-1
+  je output
+  cmp [prfx][bx], dx
+  je match
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+  jmp loop2 (*end unroll*)
+
+exit1:
+  shl ch,1
+(*%T shift2*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+  add ch, dh
+  mov [di], dl
+  inc di
+  dec cl
+  mov ax, di
+  sub ax, EnvPack@p
+  mov dl, ch
+  sub ch,ch
+  add di,cx
+(*%T shift2*) shl cl,1 (*%E*)
+(*%T shift4*) shl cl,1 (*%E*)
+  shl dl,cl
+  mov [di][-(period+1)], dl
+
+  pop es; pop ds; pop di; pop si
+  pop bp;
+  ret far 6
+
+(*%F reset?*)
+
+_shift_zero:
+  mov [di][-(period+1)], ch
+  inc di
+  mov cx,period
+  jmp _shift_zero_done
+
+_else1:
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  shl bx, 1
+  add bx, re_hash*2
+  jmp _loop2
+
+_exit1:
+  jmp exit1
+
+_match:
+  shr bx,1
+  cmp[char][bx], al
+  jne _else1
+  shl bx,1
+  mov dx, [code][bx]
+(*jmp _loop1*) (* unrolled copy of loop1*)
+  cmp si,bp
+  je exit1
+  db 26H; lodsb
+  mov bx,dx
+  add bl,al
+  add bh,al
+(*_loop2:*)
+  and bx, max_hash*2
+  cmp [prfx][bx], dx
+  je _match
+  cmp word [prfx][bx],-1
+  jne _collide
+_output:
+  shl ch,1
+(*%T shift2*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+(*%T shift4*) shl ch,1 (*%E*)
+  add ch, dh
+  mov [di], dl
+  inc di
+  dec cl
+  jz  _shift_zero
+_shift_zero_done:
+_output_done:
+  mov dx,ax
+
+_loop1:
+  cmp si,bp
+  je _exit1
+  db 26H; lodsb
+  mov bx,dx
+  add bl,al
+  add bh,al
+_loop2:
+  and bx, max_hash*2
+  cmp word [prfx][bx],-1
+  je _output
+  cmp [prfx][bx], dx
+  je _match
+_collide:
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+(*jmp loop2*) (*unroll 1*)
+  and bh, max_hash / 128
+  cmp word [prfx][bx],-1
+  je _output
+  cmp [prfx][bx], dx
+  je _match
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+(*jmp loop2*) (*unroll 2*)
+  and bh, max_hash / 128
+  cmp word [prfx][bx],-1
+  je _output
+  cmp [prfx][bx], dx
+  je _match
+(*%T stats?*) inc word [EnvPack@collision_count] (*%E*)
+  add bx, re_hash*2
+  jmp _loop2 (*end unroll*)
+
+(*%E*) (*reset?*)
+
+
+(*%F _OS2 *) (* NOT OS2 *)
+(****************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+
+extrn __pmd_stub
+extrn __pmd_entry
+
+(*%T _DLLOVL *)
+
+select _DATA
+
+PmdAdr: dd __pmd_entry
+(*%E *)
+
+select _TEXT
+
+do_initpmd : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initpmd : dw MAGIC_NUM
+          db PR4
+          dd do_initpmd
+(*%E *)
+(*%T NearCall *)
+initpmd : dw MAGIC_NUM
+          db PR4
+          dw do_initpmd
+(*%E *)
+
+select _DATA
+public _includePMD :  dw  0, initpmd
+
+select  _TEXT
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%T _WINDOWS *)
+(*%F NearCall *)
+    inc  bp
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%E *)
+(*%F SameDS *)
+    push ds
+    mov  ax, _DATA
+    mov  ds, ax
+(*%E *)
+(*%F _DLLOVL *)
+    mov  word [__pmd_stub], __pmd_entry      (* initialise far proc var *)
+    mov  word [__pmd_stub][2], cs
+(*%E *)
+(*%T _DLLOVL *)
+    mov  ax, [PmdAdr]
+    mov  word [__pmd_stub], ax               (* initialise far proc var *)
+    mov  ax, [PmdAdr][2]
+    mov  word [__pmd_stub][2], ax
+(*%E *)
+(*%F NearCall *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+(*%T _WINDOWS *)
+    pop  bp
+    dec  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __psp
+extrn __PMDbody
+extrn __PMDbody_vector
+extrn _includePMD
+
+select _DATA
+
+PSP      = 0
+TopLim   = 2
+BPreg    = 4
+DSreg    = 6
+DIreg    = 8
+SIreg    = 10
+CSreg    = 12
+IPreg    = 14
+SSreg    = 16
+SPreg    = 18
+Code     = 20
+Msg      = 22
+PName    = 26
+CPstate  = 106
+
+pmdBufferSize = CPstate+94
+
+pmdBuffer : org pmdBufferSize
+
+select _TEXT
+
+public __pmd_entry:
+
+tempDS  = 0
+tempSI  = 2
+tempDI  = 4
+tempBP  = 6
+                               (* bp = pointer to ds, si, di, bp *)
+    cmp  word [_includePMD], 1 (* bx:ax = cs:ip, di = code *)
+    jne  noDump
+(*%F SameDS *)
+    push ds                    (* dx:cx = pointer to user message *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  si, pmdBuffer
+    mov  [si][Msg], cx         (* store message string *)
+    mov  [si][Msg][2], dx
+    mov  [si][Code], di        (* store exit code *)
+    mov  [si][CSreg], bx       (* store cs:ip *)
+    mov  [si][IPreg], ax
+    mov  [si][SSreg], ss       (* store ss:sp *)
+    mov  ax, bp
+    add  ax, 22
+    mov  [si][SPreg], ax
+    mov  bx, bp
+    mov  ax, ss:[bx][tempBP]   (* store ds, bp, di, si *)
+    mov  [si][BPreg], ax
+    mov  ax, ss:[bx][tempDS]
+    mov  [si][DSreg], ax
+    mov  ax, ss:[bx][tempDI]
+    mov  [si][DIreg], ax
+    mov  ax, ss:[bx][tempSI]
+    mov  [si][SIreg], ax
+    push ds
+    pop  es
+    mov  ax, es:[__psp]        (* PSP segment *)
+    mov  [si][PSP], ax
+    mov  es, ax
+    mov  ax, es:[2]
+    mov  [si][TopLim], ax      (* top of allocated memory *)
+    lea  bx, [si][CPstate]
+    fsave [bx]
+
+    mov  ax, si
+    mov  bx, ds
+(*%F _DLL *)
+(*%T NearCall *)
+    call __PMDbody
+(*%E *)
+(*%F NearCall *)
+    call far __PMDbody
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+    call far [__PMDbody_vector]
+(*%E *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noDump:
+    ret  far 0
+(*%E *)
+
+(****************************************************************************)
+(*%T _DLL *)
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __PMDbody_vector
+
+public __set_PMDbody_vector :
+
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    mov  [__PMDbody_vector][2], bx
+    mov  [__PMDbody_vector], ax
+    pop  ds
+    ret  far 0
+(*%E *)
+
+(*%T _OS2 *)
+(****************************************************************************)
+section
+
+segment _INIT(INIT_CODE,28H)
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __pmd_stub
+extrn __pmd_entry
+
+select _TEXT
+
+do_initpmd : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initpmd : dw MAGIC_NUM
+          db PR4
+          dd do_initpmd
+(*%E *)
+(*%T NearCall *)
+initpmd : dw MAGIC_NUM
+          db PR4
+          dw do_initpmd
+(*%E *)
+
+select _DATA
+public _includePMD :  dw  0, initpmd
+
+select  _TEXT
+
+(*%F SameDS *)
+    push  ds
+    mov   ax, _DATA
+    mov   ds, ax
+(*%E *)
+    mov  word [__pmd_stub], __pmd_entry      (* initialise far proc var *)
+    mov  word [__pmd_stub][2], cs
+(*%F NearCall *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+(*%T _DLL *)
+public __lsl@:          (* Required for link, but no longer used *)
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+    ret  0
+(*%E *)
+
+(****************************************************************************)
+section
+
+segment _TEXT(CODE,28H)
+segment _DATA(DATA,28H)
+
+extrn __PMDbody
+extrn __PMDbody_vector
+extrn _includePMD
+
+select _DATA
+
+PSP      = 0             (* unused under OS2 *)
+TopLim   = 2             (* unused under OS2 *)
+BPreg    = 4
+DSreg    = 6
+DIreg    = 8
+SIreg    = 10
+CSreg    = 12
+IPreg    = 14
+SSreg    = 16
+SPreg    = 18
+Code     = 20
+Msg      = 22
+PName    = 26
+CPstate  = 106
+
+pmdBufferSize = CPstate+94
+
+pmdBuffer : org pmdBufferSize
+
+select _TEXT
+
+public __pmd_entry:
+
+tempDS  = 0
+tempSI  = 2
+tempDI  = 4
+tempBP  = 6
+
+    cmp  word [_includePMD], 1
+    jne  noDump                (* bp = pointer to ds, si, di, bp *)
+                               (* bx:ax = cs:ip, di = code *)
+(*%F SameDS *)
+    push ds                    (* dx:cx = pointer to user message *)
+    mov  si, _DATA
+    mov  ds, si
+(*%E *)
+    mov  si, pmdBuffer
+    mov  [si][Msg], cx         (* store message string *)
+    mov  [si][Msg][2], dx
+    mov  [si][Code], di        (* store exit code *)
+    mov  [si][CSreg], bx       (* store cs:ip *)
+    mov  [si][IPreg], ax
+    mov  [si][SSreg], ss       (* store ss:sp *)
+    mov  ax, bp
+    add  ax, 22
+    mov  [si][SPreg], ax
+    mov  bx, bp
+    mov  ax, ss:[bx][tempBP]   (* store ds, bp, di, si *)
+    mov  [si][BPreg], ax
+    mov  ax, ss:[bx][tempDS]
+    mov  [si][DSreg], ax
+    mov  ax, ss:[bx][tempDI]
+    mov  [si][DIreg], ax
+    mov  ax, ss:[bx][tempSI]
+    mov  [si][SIreg], ax
+    lea  bx, [si][CPstate]
+    fsave [bx]
+    mov  ax, si
+    mov  bx, _DATA
+(*%F _DLL *)
+(*%T NearCall *)
+    call __PMDbody
+(*%E *)
+(*%F NearCall *)
+    call far __PMDbody
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+    call far [__PMDbody_vector]
+(*%E *)
+
+(*%F SameDS *)
+    pop  ds
+(*%E *)
+noDump:
+    ret  far 0
+
+(*%E *)
+end
+
+

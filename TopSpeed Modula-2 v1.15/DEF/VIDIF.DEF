@@ -1,0 +1,77 @@
+(* Copyright (C) 1988 Jensen & Partners International *)
+DEFINITION MODULE VidIf ;
+
+(* Program Interface into VID *)
+
+PROCEDURE InitDebugWindow ( Title       : ARRAY OF CHAR ;
+                            Width,Depth : CARDINAL ) ;
+
+PROCEDURE OpenDebugWindow ;
+
+PROCEDURE Trace( OutputPat         : ARRAY OF CHAR ;
+                 P1,P2,P3,P4       : ARRAY OF BYTE ) ;
+
+(*
+  FormatString   = { Alpha | FieldSpecifier | SwitchChar }
+  Alpha          = any ascii char except '%' and '\'
+  FieldSpecifier = '%' '%'
+                 | '% ['-'] [WidthSpecifier] TypeSpecifier
+  WidthSpecifier = DecimalNumber [ '.' DecimalNumber ]
+  TypeSpecifier  = 'u'        (* Unsigned *)
+                 | 'i'        (* Signed *)
+                 | 'r'        (* Real *)
+                 | 'c'        (* Character *)
+                 | 's'        (* String *)
+                 | 'h'        (* Hex (unsigned) *)
+                 | 'b'        (* Boolean *)
+                 | 'p'        (* Pointer / Address *)
+  SwitchChar     = '\' SwitchOptions
+  SwitchOptions  = '\'        (* \ *)
+                 | '%'        (* % *)
+                 | 'b'        (* BS  = CHR(8)          *)
+                 | 'f'        (* FF  = CHR(12)         *)
+                 | 'n'        (* NL  = CHR(13),CHR(10) *)
+                 | 't'        (* Tab = CHR(9)          *)
+                 | 'e'        (* Esc = CHR(27)         *)
+                 | CharCode
+  CharCode       = DecimalNumber
+  DecimalNumber  = Digit [ Digit [ Digit ] ]
+*)
+
+PROCEDURE GotoXY   ( X,Y : CARDINAL ) ;
+PROCEDURE WhereXY  ( VAR X,Y : CARDINAL ) ;
+
+TYPE
+  Color    = ( Black,     Blue,         Green,      Cyan,
+               Red,       Magenta,      Brown,      LightGray,
+               DarkGray,  LightBlue,    LightGreen, LightCyan,
+               LightRed,  LightMagenta, Yellow,     White );
+
+PROCEDURE SetColor ( Fore,Back : Color ) ;
+                   
+PROCEDURE CloseDebugWindow ;
+
+PROCEDURE Pause() ; (* NB Should NOT be called fron a UserTrap procedure
+                       RETURN TRUE instead
+                    *)
+
+(*----- User Trap Procedure ----------------*)
+
+TYPE
+  UserTrapProc = PROCEDURE ( (* modname : *) ARRAY OF CHAR,
+                             (* lineno  : *) CARDINAL 
+                                ) : BOOLEAN ; (* TRUE = pause VID *)
+
+
+PROCEDURE SetUserTrapProc ( P : UserTrapProc ) ;
+
+PROCEDURE ResetUserTrapProc ;
+
+
+
+PROCEDURE ClearUserTrap ; (* Removes the current user trap
+                             Should ONLY be called from user trap procedure 
+                          *)
+
+END VidIf.
+

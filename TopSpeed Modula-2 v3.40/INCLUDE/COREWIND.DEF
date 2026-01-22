@@ -1,0 +1,57 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREWIND.DEF - Modula-2 interface to COREWIND.A                         *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size =>off,
+         o_a_copy=>off,
+         c_conv=>on,
+         result_optional=>on)*)
+(*# module(implementation=>off, init_code => off) *)
+
+(*# name(prefix => c) *)
+
+DEFINITION MODULE CoreWind;
+
+VAR
+  _multip: BOOLEAN;
+  _uselist: ADDRESS;
+  _windowstack: ADDRESS;
+  _cursorstack: ADDRESS;
+  _winsetup: BOOLEAN;
+  _fullscreen: ADDRESS;
+  _cursorlines: CARDINAL;
+
+(*# save *)
+(*# call(reg_saved => (ds, si, di,st1,st2)) *)
+PROCEDURE _buffertoscreen ( X,Y : CARDINAL;    (* Destination co-ordinates *)
+                           Source : ADDRESS;   (* Address of source buffer *)
+                           Len : CARDINAL);    (* Length to write *)
+
+PROCEDURE _screentobuffer ( X,Y : CARDINAL;    (* Source co-ordinates *)
+                           Dest : ADDRESS;     (* Address of source buffer *)
+                           Len : CARDINAL);    (* Length to read  *)
+
+PROCEDURE _bufferwrite    ( Buff : ADDRESS;    (* Destination *)
+                           Str : ADDRESS;      (* Source *)
+                           Len : CARDINAL;
+                           Attr : CARDINAL);   (* Attribute *)
+
+PROCEDURE _palxlat ( To      : ADDRESS ;       (* Destination *)
+                    From    : ADDRESS ;        (* Source *)
+                    Len     : CARDINAL ;
+                    Pallete : ADDRESS ) ;      (* Attribute *)
+
+PROCEDURE _initscreentype( IsSnow : BOOLEAN ) ;(* String procedures *)
+
+PROCEDURE _getscreendepth(): SHORTCARD;
+(*# restore *)
+
+PROCEDURE _activepage(): INTEGER;
+
+END CoreWind.

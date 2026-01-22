@@ -1,0 +1,94 @@
+(* ========================================== *)
+(* (c) 1990-1992 Clarion Software Corporation *)
+(* ========================================== *)
+
+DEFINITION MODULE Table;
+
+(*
+
+   This module implements classes that allow the creation and maintenance
+   of homogeneous tables of ordered objects. The internal structure of the
+   table is an AVL Balanced Tree. The algorithms are based on an example
+   given in Niklaus Wirth's "Algorithms + Data Structures = Programs". That
+   book also gives a detailed description of AVL Balanced Trees.
+
+*)
+
+TYPE
+
+    BalanceFlag = SHORTINT [-1..1];
+
+    ElementPtr  = POINTER TO Element;
+
+    CLASS Element;
+
+        Right   : ElementPtr;   (* Pointer to right sub-tree *)
+        Left    : ElementPtr;   (* Pointer to left sub-tree  *)
+        Bal     : BalanceFlag;  (* Tree balance flag         *)
+
+        VIRTUAL PROCEDURE Compare( p : ElementPtr ) : INTEGER;
+                            (*
+                               Must be implemented by the client. This
+                               procedure should return one of the
+                               following integer values:
+
+                                <0   if 'THIS' is less than 'p'
+                                 0   if 'THIS' is equal to 'p'
+                                >0   if 'THIS' is greater than 'p'
+                            *)
+
+    END Element ;
+
+TYPE
+
+    Action      = PROCEDURE ( ElementPtr );
+                            (* This procedure type is used by 'Apply' *)
+
+    CLASS TABLE;
+
+        Root    : ElementPtr;       (* The root of this tree *)
+
+        PROCEDURE Insert( VAR x : Element );
+                            (* Insert the element 'x' into this table       *)
+        PROCEDURE Find( VAR p : Element ) : BOOLEAN;
+                            (* Search table for a element matching 'p'.
+                               Returns 'TRUE' and sets all fields of 'p' if
+                               found; otherwise returns 'FALSE'
+                            *)
+        PROCEDURE Delete( VAR x : Element );
+                            (* Delete the element matching 'p' from table   *)
+        PROCEDURE Apply( p : Action );
+                            (* Apply procedure 'p' to all elements in order *)
+        PROCEDURE Init;
+                            (* Initialize the table                         *)
+        PROCEDURE Eq( t2 : TABLE ) : INTEGER;
+                            (* Compare 'THIS' with 't2'. The return values
+                               are:
+
+                                <0  'THIS' is less than 't2'
+                                 0  'THIS' is equal to 't2'
+                                >0  'THIS' is greater than 't2'
+
+                                ** RESTRICTION : Table must not generate a
+                                   tree greater than 32 levels deep (around
+                                   2^32 elements
+                            *)
+        PROCEDURE SubSet( t2 : TABLE ) : BOOLEAN;
+                            (* Are the elements in this table a subset of
+                               the elememts in table 't2'?                  *)
+        PROCEDURE Copy() : TABLE;
+                            (* Make a copy this table                       *)
+        PROCEDURE Incl( t2 : TABLE );
+                            (* Include elements from table 't2' in this
+                               table                                        *)
+        PROCEDURE Excl( t2 : TABLE );
+                            (* Exclude elements from table 't2' from this
+                               table                                        *)
+        PROCEDURE Empty() : BOOLEAN;
+                            (* Is this table empty? *)
+        PROCEDURE Dispose;
+                            (* Dispose of all elements of this table        *)
+
+    END TABLE ;
+
+END Table.

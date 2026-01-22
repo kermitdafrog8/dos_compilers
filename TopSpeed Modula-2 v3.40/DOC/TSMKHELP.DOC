@@ -1,0 +1,112 @@
+.HTX File Format
+================
+
+The help file format consists of 'pages' of ascii help text separated
+by help directives.
+
+Help text contains the text as it is to be displayed in the help window
+together with embedded 'meta-characters' to indicate highlighted titles
+and (user selectable) links to other help pages. Help page text must
+be less than or equal to 65 characters wide and 18 lines deep.
+
+Help directives are placed on seperate lines between each help page and
+are identified by a '!' character in the first column in the line.
+Types of directive include the following
+
+! Label:
+
+  This defines a label for the following help page that can act as the
+  destination for the help link 'Label'.
+
+! Label1=Label2
+
+  This defines an 'alias' for a help label causing links to 'Label1'
+  to be directed to 'Label2'. These aliases can be redefined within
+  the help file. This allows text links with the same name to
+  reference different pages.
+
+! $case=off
+
+  This defines that the help text is to be accessed in a case
+  insensitive manner (e.g. for the language Pascal). This directive
+  must appear at the top of the file and is global to that help
+  file.
+
+! $chain=filename
+
+  This directive defines which helpfile to search if the key word is
+  not found in the current helpfile. There can only be one chain file
+  for each help file and it is global to the entire file.
+
+  example:
+
+    ! $chain=tsc.hlp
+
+! Label>ExtFile|ExtLabel
+
+  This defines that the destination label 'Label' is not within the
+  current file but is located in the help file 'ExtFile'.
+  Following the help link 'Label' will automatically load
+  the help file 'ExtFile' and display the page with the label
+  'ExtLabel'
+
+!
+
+  Null directive; This seperates pages of multi-page help text
+  that can be displayed by Page Down and cannot be accessed directly
+  from a page link.
+
+Multiple labels can be placed on a single help page allowing more
+than one text link to point to that page.
+Multiple directives can be put on a single line by seperating the
+commands by commas. eg
+
+    !va_arg:, va_start:, va_end:
+
+There are 3 sets of meta-character brackets that can be placed (in
+pairs) in the help text. These can be inserted in text by pressing
+Ctrl-P followed by the character. Note the TopSpeed editor has built
+in highlighted display of text within these characters to make
+editing help text easier (to turn this off you can use Ctrl O C).
+
+The meta-characters are:
+
+Highlight:  CHAR(3) text CHAR(3)   (  text  )
+
+    This caues the text within the brackets to be highlighted and
+    is used for help page titles. The meta-characters are
+    deleted from the displayed text.
+
+Link:       CHAR(2) label CHAR(2)  ( label )
+
+    This sets up a 'text-link' which allows the user to move
+    to the page specified by the label (spaces are not significant
+    but case is significant) by selecting this link. The label is
+    displayed in inverse (or high-inverse when the help cursor
+    is on this link). The meta-characters are deleted.
+
+Ú   a line containing only CHAR(218) starts defining a box the
+    width of the page that can be used to surround a title.
+
+À   a line containing only CHAR(192) finishes defining the box
+
+
+A short example help page
+--------------------------
+
+! free:, alloc:,  _heapset=heapinternal
+Ú
+                void free(void *buffer);
+À
+
+header file : alloc.h                  source file : alloc.a
+
+The function free deallocates the block of memory buffer
+previously allocated by malloc, calloc or realloc. The number
+of bytes freed is that specified by the preceding call to malloc,
+calloc or realloc.
+
+Related Functions : calloc,_heapchk,_heapset,malloc,realloc
+
+
+

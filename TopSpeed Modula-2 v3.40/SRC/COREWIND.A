@@ -1,0 +1,1573 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREWIND.A - core window routines                                       *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+include "corelib.inc"
+
+module win1
+
+(*****************************************************************************)
+
+(*%T _DLL *)
+segment _DATA(DATA,28H)
+public __initwin_vector : org FarCodePtrSize
+(*%E *)
+
+segment _BSS(BSS, 28H)
+
+public __fullscreen :   org DataPtrSize
+public __uselist :      org DataPtrSize
+public __windowstack :  org DataPtrSize
+public __cursorstack :  org DataPtrSize
+public __multip :       org 1
+public __winsetup :     org 1
+public __cursorlines:   org 2
+
+
+(*%T SameDS *)
+segment _TEXT(CODE, 28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE, 28H)
+(*%E *)
+
+extrn __wfu
+
+public __ScrnAddr : dw 0,ColorSeg
+public __ActPag :   db 0
+public __IsColor :  db TRUE
+public __IsSnow :   db 0
+
+segment _DATA(DATA, 28H)
+
+extrn  __IsDirect
+public __ScreenSel : dw 0
+public __Config :    dw 10,0,0,0,0
+public __BufInf :    dw 0,0,8000,0,0
+public __Status :    db 0
+
+
+(*%F _OS2 *)
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __wfu
+
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+BuffL = frame
+(*%F NearPtr *)
+StrL  = 4+frame
+Len   = 8+frame
+Attr  = 10+frame
+(*%E *)
+(*%T NearPtr *)
+StrL  = 2+frame
+Len   = 4+frame
+Attr  = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Len   = 2+frame
+Attr  = frame
+(*%E *)
+(*%E *)
+
+public __bufferwrite :
+
+  push bp
+  mov  bp, sp
+  push ds
+  push si
+  push di
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov ds, dx
+  mov si, cx
+  mov es, bx
+  mov di, ax
+(*%E *)
+(*%T NearPtr *)
+  mov si, bx
+  mov di, ax
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+  mov cx, [bp][Len]
+(*%F NearPtr *)
+  lds si, [bp][StrL]
+  les di, [bp][BuffL]
+(*%E *)
+(*%T NearPtr *)
+  mov si, [bp][StrL]
+  mov di, [bp][BuffL]
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+  mov ah, [bp][Attr]
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov cx, [bp][Len]
+  mov ah, [bp][Attr]
+(*%E *)
+(*%T NearPtr *)
+  mov ah, dl
+(*%E *)
+(*%E *)
+
+  jcxz $Exit
+LDoWrite:
+LWriteLoop:
+  lodsb
+  stosw
+  loop LWriteLoop
+$Exit:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+dw __wfu
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+public __getscreendepth :
+
+    push bp
+    mov  bp, sp
+    mov  ax, 1130H
+    sub  bx, bx
+    sub  cx, cx
+    sub  dx, dx
+    int  10H
+    or   cx, cx
+    jnz  not25
+    mov  dl, 24
+not25:
+    mov  al, dl
+    inc  al
+    pop  bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 6
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+ToL   = frame
+(*%F NearPtr *)
+FromL = 4+frame
+Len   = 8+frame
+PalL  = 10+frame
+(*%E *)
+(*%T NearPtr *)
+FromL = 2+frame
+Len   = 4+frame
+PalL  = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+ToL   = -4
+FromL = -8
+Len   = 4+frame
+PalL  = frame
+(*%E *)
+(*%T NearPtr *)
+ToL   = -2
+FromL = -4
+Len   = -6
+PalL  = -8
+(*%E *)
+locals = 8
+(*%E *)
+
+public __palxlat :
+
+   push bp
+   mov bp,sp
+(*%T RegParam *)
+   sub  sp, locals
+(*%F NearPtr *)
+   mov  [bp][ToL], ax
+   mov  [bp][ToL][2], bx
+   mov  [bp][FromL], cx
+   mov  [bp][FromL][2], dx
+(*%E *)
+(*%T NearPtr *)
+   mov  [bp][ToL], ax
+   mov  [bp][FromL], bx
+   mov  [bp][Len], cx
+   mov  [bp][PalL], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+  mov cx,[bp][Len]
+  jcxz PXExit
+  sub sp,10
+  mov di,sp
+(* copy pallette onto stack *)
+(*%F NearPtr *)
+  lds si,[bp][PalL]
+  push ss
+  pop es
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][PalL]
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+  mov cx,5
+  rep
+  movsw
+  mov bx,sp
+(*%F NearPtr *)
+  lds si, [bp][FromL]
+  les di, [bp][ToL]
+(*%E *)
+(*%T NearPtr *)
+  mov si, [bp][FromL]
+  mov di, [bp][ToL]
+(*%E *)
+  mov cx,[bp][Len]
+PXloop:
+  lodsw
+  xchg al,ah
+  db 36H        (* ss override for xlat *)
+  xlat
+  xchg al,ah
+  stosw
+  loop PXloop
+  add sp,10
+
+PXExit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __wfu
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+X       = frame
+Y       = 2+frame
+SourceL = 4+frame
+(*%F NearPtr *)
+Len     = 8+frame
+(*%E *)
+(*%T NearPtr *)
+Len     = 6+frame
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+Len     = frame
+(*%E *)
+
+public __buffertoscreen :
+
+  push bp
+  mov  bp,sp
+  push ds
+  push si
+  push di
+(*%F RegParam  *)
+(*%F NearPtr *)
+  lds si,[bp][SourceL]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][SourceL]
+(*%E *)
+  mov ax,[bp][Y]
+  mov di,[bp][X]
+  mov dx, [bp][Len]
+(*%E *)
+
+(*%T RegParam  *)
+(*%F NearPtr *)
+  mov ds, dx
+  mov si,cx
+  mov dx, [bp][Len]
+(*%E *)
+(*%T NearPtr *)
+  mov si, cx
+(*%E *)
+  mov di, ax
+  mov ax, bx
+(*%E *)
+  mov cl,4
+  shl ax,cl  (* 16Y *)
+  add di,ax
+  shl ax,1
+  shl ax,1
+  add di,ax  (* +64Y=80Y *)
+  shl di,1
+  mov cx, dx
+  les dx, cs:[__ScrnAddr]
+  add di,dx
+  cmp byte cs:[__IsSnow],FALSE
+  je BtsNoSnowMove
+  pushf
+  mov dx, ColorStatusReg
+  mov bl, 1
+  cld
+  sti
+  push bp
+BtsLoop:
+  lodsw
+  mov bp, ax
+BtsWaitNotHoriz:
+  in al, dx
+  rcr al, 1
+  jc BtsWaitNotHoriz
+  cli
+BtsWait:
+  in al,dx
+  rcr al,1
+  jnc BtsWait
+  xchg ax,bp
+  stosw
+  sti
+  loop BtsLoop
+  pop bp
+  popf
+  jmp BtsRet
+BtsNoSnowMove:
+BtsIsBW:
+  rep
+  movsw
+BtsRet:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+dw __wfu
+
+(*****************************************************************************)
+section
+
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+X       = frame
+Y       = 2+frame
+DestL = 4+frame
+(*%F NearPtr *)
+Len     = 8+frame
+(*%E *)
+(*%T NearPtr *)
+Len     = 6+frame
+(*%E *)
+(*%E *)
+(*%T RegParam *)
+Len     = frame
+(*%E *)
+
+public __screentobuffer :
+
+  push bp
+  mov  bp,sp
+  push ds
+  push si
+  push di
+(*%F RegParam  *)
+(*%F NearPtr *)
+  les di,[bp][DestL]
+(*%E *)
+(*%T NearPtr *)
+  mov di,[bp][DestL]
+  mov  ax, _DATA
+  mov  es, ax
+(*%E *)
+  mov ax,[bp][Y]
+  mov si,[bp][X]
+  mov dx, [bp][Len]
+(*%E *)
+
+(*%T RegParam  *)
+(*%F NearPtr *)
+  mov es, dx
+  mov di,cx
+  mov dx, [bp][Len]
+(*%E *)
+(*%T NearPtr *)
+  mov  di, _DATA
+  mov  es, di
+  mov di, cx
+(*%E *)
+  mov si, ax
+  mov ax, bx
+(*%E *)
+
+  mov cl,4
+  shl ax,cl  (* 16Y *)
+  add si,ax
+  shl ax,1
+  shl ax,1
+  add si,ax  (* +64Y=80Y *)
+  shl si,1
+  mov cx, dx
+  lds dx, cs:[__ScrnAddr]
+  add si,dx
+  cmp byte cs:[__IsSnow],FALSE
+  je StbNoSnowMove
+  pushf
+  mov dx, ColorStatusReg
+  add cx, cx              (* bytes *)
+  mov bl, 1
+  cld
+StbLoop:
+StbWaitNotHoriz:
+  in al, dx
+  rcr al, 1
+  jc StbWaitNotHoriz
+  cli
+StbWait:
+  in al, dx
+  rcr al, 1
+  jnc StbWait
+  movsb
+  sti
+  loop StbLoop
+  popf
+  jmp StbRet
+StbNoSnowMove:
+  cld
+  rep
+  movsw
+StbRet:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+(*%F RegParam *)
+NewPage  = frame
+(*%E *)
+(*%T RegParam *)
+NewPage  = -2
+locals   =  2
+(*%E *)
+
+public __setvideopage :
+
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+  sub  sp, locals
+  mov [bp][NewPage], ax
+(*%E *)
+(*%F RegParam *)
+  mov ax, [bp][NewPage]
+(*%E *)
+  mov cs:[__ActPag], al
+  mov ah, 5
+  push bp
+  int 10H
+  pop bp
+  mov ax,[bp][NewPage]
+  mov bx, 100H
+  mul bx
+  add ax, ColorSeg
+  mov cs:[__ScrnAddr][2],ax
+  mov word cs:[__ScrnAddr],0
+(*%T RegParam *)
+  mov  sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __ActPag
+
+public __activepage :
+  mov al, cs:[__ActPag]
+  cbw
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn __ScrnAddr
+extrn __ActPag
+extrn __IsColor
+extrn __IsSnow
+
+IsSnow = frame
+
+(* initialize screen type *)
+public __initscreentype :
+
+  push bp
+  mov bp,sp
+  push ds
+  push si
+  push di
+  mov  si, ax
+  mov byte cs:[__IsColor], TRUE
+  mov word cs:[__ScrnAddr],0
+  mov word cs:[__ScrnAddr][2],ColorSeg
+  mov ah,15
+  push bp
+  int 10H
+  pop bp
+  cmp al,7
+(*%F RegParam *)
+  mov al,[bp][IsSnow]
+(*%E *)
+(*%T RegParam *)
+  mov ax, si
+(*%E *)
+  jne LIsColor
+  mov byte cs:[__IsColor],FALSE
+  mov word cs:[__ScrnAddr][2],BWseg
+  mov al,FALSE
+LIsColor:
+  mov cs:[__IsSnow],al
+(* Check for Desqview window *)
+  sub di,di
+  les di,cs:[__ScrnAddr]
+  mov ax,0FE00H
+  int 10H
+  mov ax,es
+  cmp ax,cs:[__ScrnAddr][2]
+  jz NoDV
+  mov cs:[__ScrnAddr],di
+  mov cs:[__ScrnAddr][2],es
+  mov byte cs:[__IsSnow],0
+NoDV:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(****************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __initwin
+extrn __initwin_vector
+
+select _DATA
+
+
+select _TEXT
+
+do_initconio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dd do_initconio
+(*%E *)
+(*%T NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dw do_initconio
+(*%E *)
+
+select _DATA
+public __wfu :  dw  0, initconio
+
+select  _TEXT
+
+(*%T _DLLOVL *)
+    push bp
+    mov  bp, sp
+(*%E *)
+(*%F _DLL *)
+(*%F NearCall *)
+   call far __initwin
+(*%E *)
+(*%T NearCall *)
+   call __initwin
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+   push ds
+   mov  ax, _DATA
+   mov  ds, ax
+   cmp  word [__initwin_vector], 0
+   jz   noCall
+   call far [__initwin_vector]
+noCall:
+   pop  ds
+(*%E *)
+(*%F NearCall *)
+(*%T _DLLOVL *)
+    pop  bp
+(*%E *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+(*%E *)
+
+(*%T _OS2 *)
+(****************************************************************************)
+section
+segment _INIT(INIT_CODE,28H)
+segment _DATA(DATA, 28H)
+segment _TEXT(CODE,28H)
+
+extrn __initwin
+extrn __initwin_vector
+
+select _DATA
+
+
+select _TEXT
+
+do_initconio : (* defined later on ! *)
+
+select _INIT
+(*%F NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dd do_initconio
+(*%E *)
+(*%T NearCall *)
+initconio : dw MAGIC_NUM
+            db PR4
+            dw do_initconio
+(*%E *)
+
+select _DATA
+public __IsDirect :  dw  0, initconio
+
+select  _TEXT
+(*%F _DLL *)
+(*%F NearCall *)
+   call far __initwin
+(*%E *)
+(*%T NearCall *)
+   call __initwin
+(*%E *)
+(*%E *)
+(*%T _DLL *)
+   push ds
+   mov  ax, _DATA
+   mov  ds, ax
+   cmp  word [__initwin_vector], 0
+   jz   noCall
+   call far [__initwin_vector]
+noCall:
+   pop  ds
+(*%E *)
+(*%F NearCall *)
+    ret  far 0
+(*%E *)
+(*%T NearCall *)
+    ret  0
+(*%E *)
+
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn  __IsDirect
+extrn  __ScreenSel
+extrn  __Config
+extrn  __BufInf
+extrn  __Status
+
+extrn VIOREADCELLSTR
+extrn VIOWRTCELLSTR
+
+extrn VIOSCRUNLOCK
+extrn VIOSCRLOCK
+extrn VIOGETCONFIG
+extrn VIOGETPHYSBUF
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 4
+(*%E *)
+(*%E *)
+
+
+(*%F RegParam *)
+BuffL = frame
+(*%F NearPtr *)
+StrL  = 4+frame
+Len   = 8+frame
+Attr  = 10+frame
+(*%E *)
+(*%T NearPtr *)
+StrL  = 2+frame
+Len   = 4+frame
+Attr  = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Len   = 2+frame
+Attr  = frame
+(*%E *)
+(*%E *)
+
+public __bufferwrite :
+
+  push bp
+  mov  bp, sp
+  push ds
+  push si
+  push di
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov ds, dx
+  mov si, cx
+  mov es, bx
+  mov di, ax
+(*%E *)
+(*%T NearPtr *)
+  mov si, bx
+  mov di, ax
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+(*%E *)
+
+(*%F RegParam *)
+  mov cx, [bp][Len]
+(*%F NearPtr *)
+  lds si, [bp][StrL]
+  les di, [bp][BuffL]
+(*%E *)
+(*%T NearPtr *)
+  mov si, [bp][StrL]
+  mov di, [bp][BuffL]
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+  mov ah, [bp][Attr]
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+  mov cx, [bp][Len]
+  mov ah, [bp][Attr]
+(*%E *)
+(*%T NearPtr *)
+  mov ah, dl
+(*%E *)
+(*%E *)
+
+  jcxz $Exit
+LDoWrite:
+LWriteLoop:
+  lodsb
+  stosw
+  loop LWriteLoop
+$Exit:
+  pop di
+  pop si
+  pop ds
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(*****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn VIOGETMODE
+
+buf    = -34
+locals =  34
+rows   =   6
+
+public __getscreendepth :
+
+    push bp
+    mov  bp, sp
+    sub  sp, locals
+    lea  bx, [bp][buf]
+    mov  word ss:[bx][0], locals
+    push ss
+    push bx
+    sub  ax, ax
+    push ax
+    call far VIOGETMODE
+    mov  al, [bp][buf][rows]
+    mov  sp, bp
+    pop  bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(****************************************************************************)
+
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn  __IsDirect
+extrn  __ScreenSel
+extrn  __Config
+extrn  __BufInf
+extrn  __Status
+
+extrn VIOREADCELLSTR
+extrn VIOWRTCELLSTR
+
+extrn VIOSCRUNLOCK
+extrn VIOSCRLOCK
+extrn VIOGETCONFIG
+extrn VIOGETPHYSBUF
+
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%F NearPtr *)
+RetSize = 6
+(*%E *)
+(*%E *)
+
+
+(*%F RegParam *)
+ToL   = frame
+(*%F NearPtr *)
+FromL = 4+frame
+Len   = 8+frame
+PalL  = 10+frame
+(*%E *)
+(*%T NearPtr *)
+FromL = 2+frame
+Len   = 4+frame
+PalL  = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+ToL   = -4
+FromL = -8
+Len   = 4+frame
+PalL  = frame
+(*%E *)
+(*%T NearPtr *)
+ToL   = -2
+FromL = -4
+Len   = -6
+PalL  = -8
+(*%E *)
+locals = 8
+(*%E *)
+
+public __palxlat :
+
+  push bp
+  mov bp,sp
+(*%T RegParam *)
+   sub  sp, locals
+(*%F NearPtr *)
+   mov  [bp][ToL], ax
+   mov  [bp][ToL][2], bx
+   mov  [bp][FromL], cx
+   mov  [bp][FromL][2], dx
+(*%E *)
+(*%T NearPtr *)
+   mov  [bp][ToL], ax
+   mov  [bp][FromL], bx
+   mov  [bp][Len], cx
+   mov  [bp][PalL], dx
+(*%E *)
+(*%E *)
+  push ds
+  push si
+  push di
+  mov cx,[bp][Len]
+  jcxz PXExit
+  sub sp,10
+  mov di,sp
+(* copy pallette onto stack *)
+(*%F NearPtr *)
+  lds si,[bp][PalL]
+  push ss
+  pop es
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][PalL]
+  mov ax, _DATA
+  mov es, ax
+(*%E *)
+  mov cx,5
+  rep
+  movsw
+  mov bx,sp
+(*%F NearPtr *)
+  lds si, [bp][FromL]
+  les di, [bp][ToL]
+(*%E *)
+(*%T NearPtr *)
+  mov si, [bp][FromL]
+  mov di, [bp][ToL]
+(*%E *)
+  mov cx,[bp][Len]
+PXloop:
+  lodsw
+  xchg al,ah
+  db 36H        (* ss override for xlat *)
+  xlat
+  xchg al,ah
+  stosw
+  loop PXloop
+  add sp,10
+
+PXExit:
+  pop di
+  pop si
+  pop ds
+(*%T RegParam *)
+  mov sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn  __IsDirect
+extrn  __ScreenSel
+extrn  __Config
+extrn  __BufInf
+extrn  __Status
+
+extrn VIOREADCELLSTR
+extrn VIOWRTCELLSTR
+
+extrn VIOSCRUNLOCK
+extrn VIOSCRLOCK
+extrn VIOGETCONFIG
+extrn VIOGETPHYSBUF
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+
+
+(*%F RegParam *)
+X       = frame
+Y       = 2+frame
+SourceL = 4+frame
+(*%F NearPtr *)
+Len     = 8+frame
+(*%E *)
+(*%T NearPtr *)
+Len     = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Len     = frame
+X  =     -2
+Y  =     -4
+SourceL =-8
+locals  = 8
+(*%E *)
+(*%T NearPtr *)
+X  =     -2
+Y  =     -4
+SourceL =-8
+Len     = -10
+locals  =  10
+(*%E *)
+(*%E *)
+
+public __buffertoscreen :
+
+  push bp
+  mov  bp, sp
+
+(*%T RegParam *)
+  sub  sp, locals
+  mov  [bp][X], ax
+  mov  [bp][Y], bx
+  mov  [bp][SourceL], cx
+(*%F NearPtr *)
+  mov  [bp][SourceL][2], dx
+(*%E *)
+(*%T NearPtr *)
+  mov  [bp][Len], dx
+(*%E *)
+(*%E *)
+
+(*%F SameDS *)
+  push ds
+  mov  ax, _DATA
+  mov  ds, ax
+(*%E *)
+  cmp  byte [__IsDirect],0
+  jne  FBufferToScreen
+NBTS:
+(*%F NearPtr *)
+  push [bp][SourceL][2]
+(*%E *)
+(*%T NearPtr *)
+  push ds
+(*%E *)
+  push [bp][SourceL]
+  mov ax, [bp][Len]
+  shl ax,1
+  push ax
+  push [bp][Y]
+  push [bp][X]
+  xor  ax, ax
+  push ax
+  call far VIOWRTCELLSTR
+RetBufferToScreen:
+(*%F SameDS *)
+  pop ds
+(*%E *)
+(*%T RegParam *)
+  mov sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+
+FBufferToScreen:
+  xor ax,ax
+  push ax
+  push ds
+  mov ax, __Status
+  push ax
+  xor ax,ax;
+  push ax
+  call far VIOSCRLOCK;
+  cmp byte [__Status], 0
+  jne NBTS
+erTest:
+  or  ax, ax
+  jne NBTS
+
+  push si
+  push di
+  push ds
+  mov es, [__ScreenSel]
+(*%F NearPtr *)
+  lds si,[bp][SourceL]
+(*%E *)
+(*%T NearPtr *)
+  mov si,[bp][SourceL]
+(*%E *)
+  mov ax, [bp][Y]
+  mov di, [bp][X]
+
+  mov cl, 4
+  shl ax, cl  (* 16Y *)
+  add di, ax
+  shl ax, 1
+  shl ax, 1
+  add di, ax  (* +64Y=80Y *)
+  shl di, 1
+  mov cx, [bp][Len]
+  rep
+  movsw
+  pop ds
+  pop di
+  pop si
+  xor ax,ax
+  push ax
+  call far VIOSCRUNLOCK
+  jmp RetBufferToScreen
+
+(****************************************************************************)
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn  __IsDirect
+extrn  __ScreenSel
+extrn  __Config
+extrn  __BufInf
+extrn  __Status
+
+extrn VIOREADCELLSTR
+extrn VIOWRTCELLSTR
+
+extrn VIOSCRUNLOCK
+extrn VIOSCRLOCK
+extrn VIOGETCONFIG
+extrn VIOGETPHYSBUF
+
+
+(*%F RegParam *)
+RetSize = 0
+(*%E *)
+(*%T RegParam *)
+(*%F NearPtr *)
+RetSize = 2
+(*%E *)
+(*%T NearPtr *)
+RetSize = 0
+(*%E *)
+(*%E *)
+
+
+(*%F RegParam *)
+X       = frame
+Y       = 2+frame
+DestL = 4+frame
+(*%F NearPtr *)
+Len     = 8+frame
+(*%E *)
+(*%T NearPtr *)
+Len     = 6+frame
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+(*%F NearPtr *)
+Len     = frame
+(*%E *)
+(*%T NearPtr *)
+Len     = -2
+locals  =  2
+(*%E *)
+(*%E *)
+
+public __screentobuffer :
+
+(*%F RegParam *)
+  push bp
+  mov bp,sp
+(*%F NearPtr *)
+  push [bp][DestL][2]
+(*%E *)
+(*%T NearPtr *)
+  push ds
+(*%E *)
+  push [bp][DestL]
+  push ss
+  shl word [bp][Len],1
+  lea ax, [bp][Len]
+  push ax
+  push [bp][Y]
+  push [bp][X]
+  xor ax,ax
+  push ax
+  call far VIOREADCELLSTR
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+(*%T RegParam *)
+  push bp
+  mov  bp,sp
+(*%T NearPtr *)
+  sub  sp, locals
+  mov  [bp][Len], dx
+(*%E *)
+(*%F NearPtr *)
+  push dx
+  push cx
+(*%E *)
+(*%T NearPtr *)
+  push ds
+  push cx
+(*%E *)
+  push ss
+  shl word [bp][Len],1
+  lea dx, [bp][Len]
+  push dx
+  push bx
+  push ax
+  xor ax,ax
+  push ax
+  call far VIOREADCELLSTR
+(*%T NearPtr *)
+  mov sp, bp
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far RetSize
+(*%E *)
+(*%T NearCall *)
+  ret RetSize
+(*%E *)
+(*%E *)
+
+section
+segment _DATA(DATA, 28H)
+(*%T SameDS *)
+segment _TEXT(CODE,28H)
+(*%E *)
+(*%F SameDS *)
+segment COREWIND_TEXT(CODE,28H)
+(*%E *)
+
+extrn  __IsDirect
+extrn  __ScreenSel
+extrn  __Config
+extrn  __BufInf
+extrn  __Status
+
+extrn VIOREADCELLSTR
+extrn VIOWRTCELLSTR
+
+extrn VIOSCRUNLOCK
+extrn VIOSCRLOCK
+extrn VIOGETCONFIG
+extrn VIOGETPHYSBUF
+
+IsSnow = frame
+
+
+(* initialize screen type *)
+public __initscreentype :
+
+  push bp
+  mov bp, sp
+(*%F SameDS *)
+  push ds
+  mov  ax, _DATA
+  mov  ds, ax
+(*%E *)
+  mov byte [__IsDirect],0
+  cmp byte [bp][IsSnow],0
+  jne SkipInit
+  mov byte [__IsDirect],1
+  xor ax,ax
+  push ax
+  push ds
+  mov bx, __Config
+  push bx
+  push ax
+  call far VIOGETCONFIG
+  mov word [__BufInf],0
+  mov word [__BufInf][2], 0BH
+  cmp word [__Config][2], 0
+  je  itsmono
+  mov word [__BufInf],8000H
+  mov word [__BufInf][2],0BH
+itsmono:
+  push ds
+  mov ax, __BufInf
+  push ax
+  xor ax,ax
+  push ax
+  call far VIOGETPHYSBUF
+  or  ax, ax
+  jz  initOK
+  mov  byte [__IsDirect], 0
+  jmp  SkipInit
+initOK:
+  mov  ax,[__BufInf][8]
+  mov [__ScreenSel],ax
+SkipInit:
+(*%F SameDS *)
+  pop ds
+(*%E *)
+  pop bp
+(*%F NearCall *)
+  ret far 0
+(*%E *)
+(*%T NearCall *)
+  ret 0
+(*%E *)
+
+(*%E *)
+
+(****************************************************************************)
+(*%T _DLL *)
+section
+
+segment _DATA(DATA,28H)
+segment _TEXT(CODE,28H)
+
+extrn __initwin_vector
+
+public __set_initwin_vector :
+
+    push ds
+    mov  cx, _DATA
+    mov  ds, cx
+    mov  [__initwin_vector][2], bx
+    mov  [__initwin_vector], ax
+    pop  ds
+    ret  far 0
+(*%E *)
+
+end

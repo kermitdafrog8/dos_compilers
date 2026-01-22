@@ -1,0 +1,22 @@
+DEFINITION MODULE TSR ;
+               (* === *)
+
+TYPE
+   KBFlagSet = SET OF ( RShift, LShift, Ctrl, Alt, (* Available shifts *)
+                        Scroll, Num, Cap, Ins ) ;  (* Unavailable *)
+
+
+PROCEDURE Install ( P        : PROC ;      (* Procedure to be invoked     *)
+                    KBF      : KBFlagSet;  (* Shift state to invoke       *)
+                    Scan     : SHORTCARD ; (* Scan code to invoke (0=All) *)
+                    heapsize : CARDINAL    (* Minimum heap required       *)
+                  ) ;
+
+PROCEDURE DeInstall ;
+(* Remove TSR installation
+   This causes Install to RETURN
+*)
+
+END TSR.
+
+

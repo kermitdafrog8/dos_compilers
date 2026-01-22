@@ -1,0 +1,207 @@
+1996 Compiling @
+1997 (%F %L) @
+1998 (%F %L,%C) @
+1999
+2000 Warning: |Error: @
+
+2001 "%V" is undefined
+2002 Modules not allowed here
+
+2004 Type expected
+2005 Illegal set type
+2006 "%V" used as type
+2007 "%V" can not be used as an index type
+2008 Reals not allowed as subtype
+2009 Type mismatch in subtype
+2010 Invalid type
+2011 Invalid range
+2012 Expression must be Boolean
+2013 Expression must be Constant
+2014 Type conflict
+
+2016 Constant out of range
+2017 Incompatible (or illegal) types in expression
+2018 Expression must be of type cardinal
+
+
+2021 Label expected
+2022 Label must be local
+2023 Label redefined
+2024 Function procedure expected
+2025 Wrong type of function return
+2026 Types not allowed here
+2027 Illegal assignment (incompatible types)
+2028 Invalid type of loop variable
+2029 Expression not correct type
+2030 Not a set
+2031 Parameters expected
+2032 Procedure expected
+2033 This is not a function
+2034 Record expected
+2035 Pointer expected
+2036 Must be compatible with CARDINAL
+2037 Pointer type expected
+2038 Index not correct type
+2039 Array expected
+2040 Index out of range
+2041 Record field not found
+2042 Parameter not correct type
+2043 (DE)ALLOCATE NOT IMPORTED
+2044 Not an open array parameter
+2045 Parameter must be a lvalue
+2046 Too many parameters
+2047 Variable expected
+2048 Case expression not correct type
+2049 Invalid type of case label
+2050 Overlapping cases
+
+2052 Procedure does not match previous definition
+2053 Exit without loop
+2054 Module name mismatch
+2055 Procedure redefined
+2056 Undefined label %V
+2057 No return in function-procedure
+2058 Procedure name mismatch
+
+2060 %V redefined
+2061 %V circular definition
+2062 %V is not a module or %V is undefined
+2063 Imported module definition name wrong : %V
+2064 Definition module expected
+2065 Aggregates only allowed for records and arrays
+2066 %V is an unresolved forward procedure
+
+2068 %V is an unresolved opaque type
+2069 %V is an unresolved forward pointer
+2070 Constant has no address
+2071 Class %V not implemented
+
+2073 Object too big
+2074 Record size too big, sum of recordfields > 64K
+
+
+2077 Size of %V not defined yet
+2080 (Lexical) Token too big
+
+2082 (Lexical) Bad character in hex constant
+
+
+2085 (Lexical) String not terminated
+2086 (Lexical) Comment not terminated
+2087 (Lexical) Bad character
+2088 (Lexical) Token too long
+2089 Missing '(*%%E*)'
+2090 Symbol not a boolean constant
+2091 Symbol not defined
+2092 No initialization code has been specified
+2093 inline directive not active
+2094 Range error
+2095 Inline procedures can not be declared forward
+2096 Object expected
+2097 Unbalanced '(*%%E*)'
+2098 Unexpected end of input
+2099 Syntax Error, expected:%V
+
+2100 (Internal) Walk in InsRecordnames
+2101 (Internal) RecordFieldsAdjust
+2102 Flag
+
+2111 (Limit) Scope table full
+2112 (Limit) Name table full
+2113 (Internal) MakeWith
+2114 (Limit) Scope overflow
+
+
+2120 File "%V" not found
+
+2131 Compilation aborted due to error(s) in definition module
+2132 Virtual procedure expected
+2133 Object type expected
+2134 Object does not match previous definition
+2135 Recursive object definition
+2136 Invalid pragma "%V"
+2137 Compiler directive not compatible with ver 2.xx
+2138 %V not fully defined yet
+2147 isl warning : %V
+2148 isl error : %V
+2149 (Internal) param size error
+2150 (Limit) Stack overflow
+2151 Constant expression overflow
+2152 Record field expected
+2153 %V not implemented
+2154 Far pointer type expected
+2155 Object are no alloved in variant part of variant records
+2156 File name does not conform with module name
+2157 Packed record fields not alloved in constant aggregates
+2158 Packed record fields not alloved as var parameter
+2159 External procedure has to be defined before any normal procedure
+2160 Invalid type
+2161 Invalid opaque type
+2162 (internal) atribute size wrong
+2163 flag
+2200 # expected
+2201 LONGCARD const expected
+2202 Calling convention error: o_a_copy and o_a_size inconsistent
+2203 Not currently available
+2204 Class identifier expected
+2205 Virtual expected
+2206 Virtual not expected
+2207 Class already implemented
+2208 Invalid (re)implementation
+2209 Invalid class (no class hierarchy)
+2210 Parameter list does not conform with previous definition
+2211 Procedure result type does not conform with previous definition
+2212 "%V" expected
+2213 Method can not have same name a class
+2214 Internal "make" pragma string too long
+2215 class initialization has already been implemented
+2216 class initialization missing
+2217 expression expected
+2218 Invalid mapping procedure
+2219 Invalid operand
+2220 No matching save pragma
+2221 Unbalanced save restore pragma in definition file (missing restore)
+2222 Global alias on methods are not allowed
+
+2300 Calling convention error: seg_name
+2301 Calling convention error: ds_entry
+2302 Calling convention error: ds_saved,
+2303 Calling convention error: near/far call
+2304 Calling convention error: same_ds on/off
+2305 Calling convention error: c_conv on/off
+2306 Calling convention error: reg_param
+2307 Calling convention error: reg_save
+2308 Calling convention error: interrupt
+2309 Calling convention error: lalr
+2310 Calling convention error: reg_return
+
+2320 Object initialiazation calling convention error: seg_name
+2321 Object initialiazation calling convention error: ds_entry
+2322 Object initialiazation calling convention error: ds_saved,
+2323 Object initialiazation calling convention error: near/far call
+2324 Object initialiazation calling convention error: same_ds on/off
+2325 Object initialiazation calling convention error: c_conv on/off
+2326 Object initialiazation calling convention error: reg_param
+2327 Object initialiazation calling convention error: reg_save
+2328 Object initialiazation calling convention error: interrupt
+2329 Object initialiazation calling convention error: lalr
+2330 Object initialiazation calling convention error: reg_return
+
+
+2400 Importing %V
+
+2500 INP @
+2501 SC  @
+2502 IDL @
+2503 IDX @
+2504 FN  @
+2505 LS  @
+2506 FWD @
+2507 OPT @
+2508 ST  @
+2509 STR @
+2510 PT  @
+
+2600 Not implemented fully yet
+2700 Flag %V
+

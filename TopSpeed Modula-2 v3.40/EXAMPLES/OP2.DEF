@@ -1,0 +1,4 @@
+(*# module(init_code=>off) *) (* overlayed modules are not alloved to have initcode *)
+DEFINITION MODULE op2;
+PROCEDURE p2;
+END  op2.

@@ -1,0 +1,28 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREPMD.DEF - Modula-2 interface to COREPMD.A                           *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+DEFINITION MODULE CorePMD;
+
+VAR
+  includePMD: CARDINAL;
+
+(*# call(near_call=>off, c_conv=>off, reg_param=>(),reg_saved=>(ds,di,si,st1,st2)) *)
+(*# call(seg_name=>PACK) *)
+(*# data(seg_name=>PACK) *)
+PROCEDURE _Pack(size: CARDINAL; buffer: FarADDRESS): CARDINAL;
+VAR _p: ARRAY [0..0] OF CHAR;
+
+END CorePMD.
+
+

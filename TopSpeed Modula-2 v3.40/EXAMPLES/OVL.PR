@@ -1,0 +1,6 @@
+#system dos exe
+#model xlarge
+
+#compile ovl.mod
+#link %prjname
+

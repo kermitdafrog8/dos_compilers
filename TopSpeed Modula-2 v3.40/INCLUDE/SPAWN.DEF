@@ -1,0 +1,23 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  SPAWN.DEF - Modula-2 child-process                                      *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+(*# call(o_a_size => off,
+         o_a_copy=>off,
+         c_conv=>on,
+         result_optional=>on,
+         reg_saved => (ds, si, di,st1,st2),
+         seg_name=>null) *)
+(*# module(implementation=>off) *)
+(*# data(seg_name => null) *)
+(*# name(prefix => c) *)
+DEFINITION MODULE SPAWN;
+PROCEDURE _beget(Path: ARRAY OF CHAR; ParamArray: ADDRESS; Dummy: ADDRESS; Flag: INTEGER): CARDINAL;
+END SPAWN.
+
+

@@ -1,0 +1,18 @@
+;DESCRIPTION  'Default EXP file for overlayed program'
+
+DATA         PRELOAD
+
+SEGMENTS     STACK          PRELOAD
+             _INIT          PRELOAD
+             CPROC_TEXT     PRELOAD
+             PROCESS_TEXT   PRELOAD
+             PROC_TEXT      PRELOAD
+             PASPROC_TEXT   PRELOAD
+             SIG_TEXT       PRELOAD
+             EMU_TEXT       PRELOAD
+             MP_CODE        PRELOAD
+             _DATA          PRELOAD
+             _TEXT          PRELOAD
+             COREWIND_TEXT  PRELOAD
+
+

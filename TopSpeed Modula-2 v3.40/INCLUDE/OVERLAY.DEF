@@ -1,0 +1,148 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  OVERLAY.DEF - Modula-2 interface to TopSpeed Overlay System             *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE Overlay;
+
+(*# call(o_a_copy=>off,o_a_size=>off,near_call=>off,same_ds=>off) *)
+(*# call(ds_entry=>null) *)
+(*# module(init_code=>off,implementation=>off)*)
+(*# name(prefix=>none) *)
+
+(*******************)
+(* program loading *)
+(*******************)
+PROCEDURE Loader$LoadModule (name:ARRAY OF CHAR):CARDINAL;
+PROCEDURE Loader$UnLoadModule (modnum:CARDINAL);
+PROCEDURE Loader$GetProcAddr (modnum:CARDINAL;entry: ARRAY OF CHAR):ADDRESS;
+PROCEDURE Loader$GetOrdProcAddr(modnum:CARDINAL;entry:CARDINAL):ADDRESS;
+(******************)
+(* error handling *)
+(******************)
+  TYPE
+    ExitHandler         = PROCEDURE(ARRAY OF CHAR,CARDINAL);
+    MemHandler          = PROCEDURE(CARDINAL):BOOLEAN;
+    str65               = ARRAY[0..64] OF CHAR;
+(*********************)
+(* memory management *)
+(*********************)
+PROCEDURE Loader$TotalAvail():CARDINAL;
+PROCEDURE Loader$Avail():CARDINAL;
+(*****************************)
+(* Virtual memory segments   *)
+(*****************************)
+PROCEDURE Loader$VAlloc(VAR addr : ADDRESS; size : CARDINAL);
+(* Allocates Virtual memory block of specified size.
+   returns result in addr.
+   Block is initially fixed so VUnfix must be called before
+   it can be swapped out.
+   Address of addr is used as handle so only one variable must be used
+   to hold pointer.
+*)
+PROCEDURE Loader$VUnfix(VAR addr : ADDRESS);
+(*
+   Unfixes memory allowing it to be moved or swapped to EMS or disk if
+   memory runs low. The address should not be used to reference memory
+   when unfixed.
+*)
+PROCEDURE Loader$VFix(VAR addr : ADDRESS);
+(*
+   Swaps block back into memory if necessary and
+   fixes the address so it can be used.
+   Calls to VFix and VUnfix may be nested.
+*)
+PROCEDURE Loader$VFree(VAR addr : FarADDRESS);
+(* frees virtual memory block
+   can be called only when segment fixed
+   addr is reset to NIL on exit
+*)
+PROCEDURE Loader$VUnfixAll();
+(*
+   Unfixes all virtual memory blocks. Use with care!
+*)
+(*****************************)
+(* ems control               *)
+(*****************************)
+PROCEDURE Loader$SetEms(on:BOOLEAN):BOOLEAN;
+(*******************)
+(* setjmp handling *)
+(*******************)
+(*# save, call(reg_return=>(ax,bx)) *)
+(*# call(reg_saved=>(cx,dx,si,di,ds,es,st1,st2)) *) (*N.B. es must be saved*)
+PROCEDURE Loader$RetGate(off,seg:CARDINAL):ADDRESS;
+(*# restore *)
+(***********************)
+(* C memory management *)
+(***********************)
+  TYPE
+    HeapInfo            = RECORD
+                            pentry     : FarADDRESS;
+                            size       : CARDINAL;
+                            useflag    : BOOLEAN;
+                          END; (*HeapInfo*)
+
+  PROCEDURE Loader$AllocMem(size:CARDINAL):FarADDRESS;
+  PROCEDURE Loader$FreeMem(ofs,seg:CARDINAL);
+  PROCEDURE Loader$ClearAllocMem(num,size:CARDINAL):FarADDRESS;
+  PROCEDURE Loader$HugeAllocMem(size:LONGCARD):FarADDRESS;
+  PROCEDURE Loader$ExpandMem(Buffer:FarADDRESS;Size:CARDINAL):FarADDRESS;
+  PROCEDURE Loader$HugeExpandMem(Buffer:FarADDRESS;Size:LONGCARD):FarADDRESS;
+  PROCEDURE Loader$HeapWalk(VAR Entry:HeapInfo):INTEGER;
+  PROCEDURE Loader$HeapCheck(Val:CARDINAL;DoFill:BOOLEAN):INTEGER;
+(*******************)
+(* User Procedures *)
+(*******************)
+  TYPE
+    SegReturn           = (SUCCESS,FAIL,RESIDENT,UNLOADED,INVALID_SEG,INVALID_MOD);
+(*#save,call(result_optional=>on)*)
+  PROCEDURE Loader$ShrinkHeap():CARDINAL;
+(*# restore *)
+  PROCEDURE Loader$GrowHeap;
+  PROCEDURE Loader$UserFlush;
+  PROCEDURE Loader$SetExitHandler(p:ExitHandler);
+  PROCEDURE Loader$SetMemHandler(p:MemHandler);
+  PROCEDURE Loader$LoadSeg(segno:CARDINAL;ModName:ARRAY OF CHAR):SegReturn;
+  PROCEDURE Loader$UnloadSeg(segno:CARDINAL;ModName:ARRAY OF CHAR):SegReturn;
+  PROCEDURE Loader$Getseg(seg:CARDINAL):CARDINAL;
+
+CONST
+  LoadModule ::=        Loader$LoadModule ;
+  UnLoadModule ::=      Loader$UnLoadModule ;
+  GetProcAddr ::=       Loader$GetProcAddr ;
+  GetOrdProcAddr ::=    Loader$GetOrdProcAddr ;
+  FlushAll ::=          Loader$UserFlush ;
+  TotalAvail ::=        Loader$TotalAvail ;
+  Avail ::=             Loader$Avail ;
+  VAlloc ::=            Loader$VAlloc ;
+  VUnfix ::=            Loader$VUnfix ;
+  VFix ::=              Loader$VFix ;
+  VFree ::=             Loader$VFree ;
+  VUnfixAll ::=         Loader$VUnfixAll ;
+  SetEms ::=            Loader$SetEms ;
+  RetGate ::=           Loader$RetGate ;
+  AllocMem ::=          Loader$AllocMem ;
+  FreeMem ::=           Loader$FreeMem ;
+  ClearAllocMem ::=     Loader$ClearAllocMem ;
+  HugeAllocMem ::=      Loader$HugeAllocMem ;
+  ExpandMem ::=         Loader$ExpandMem ;
+  HugeExpandMem ::=     Loader$HugeExpandMem ;
+  HeapWalk ::=          Loader$HeapWalk ;
+  HeapCheck ::=         Loader$HeapCheck ;
+  ShrinkHeap ::=        Loader$ShrinkHeap ;
+  GrowHeap ::=          Loader$GrowHeap ;
+  UserFlush ::=         Loader$UserFlush ;
+  SetExitHandler ::=    Loader$SetExitHandler ;
+  SetMemHandler ::=     Loader$SetMemHandler ;
+  LoadSeg       ::=     Loader$LoadSeg ;
+  UnloadSeg     ::=     Loader$UnloadSeg ;
+  Getseg ::=            Loader$Getseg ;
+
+END Overlay.
+
+

@@ -1,0 +1,26 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  LOADERA.DEF- Modula-2 Overlay Loader Source - assembler                 *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE LoaderA;
+CONST
+  MainName = 'TSC';
+
+VAR
+  GateHandler:SHORTCARD;
+
+(*# save, call( reg_param=>(si,ax,di,es,cx), reg_saved=>(bx,dx,ds,st1,st2) ) *)
+PROCEDURE MoveUp(fr,to : ADDRESS; count : CARDINAL);
+(*# restore *)
+
+
+
+
+END LoaderA.
+

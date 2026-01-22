@@ -1,0 +1,6 @@
+IMPLEMENTATION MODULE asm2;
+
+
+ PROCEDURE bon ; IN asm22;
+
+END asm2.

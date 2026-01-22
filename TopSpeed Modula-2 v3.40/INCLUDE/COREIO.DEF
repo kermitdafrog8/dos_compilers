@@ -1,0 +1,133 @@
+(* Release 3.10 *)
+(*-------------------------------------------------------------------------*
+*                                                                          *
+*  COREIO.DEF - Modula-2 interface to COREIO.A                             *
+*                                                                          *
+*  COPYRIGHT (C) 1989..1992 Clarion Software Corporation.                  *
+*  All Rights Reserved                                                     *
+*                                                                          *
+*--------------------------------------------------------------------------*)
+
+DEFINITION MODULE CoreIO;
+
+(*# save *)
+(*# call(o_a_size=>off, o_a_copy=>off, c_conv=>on, result_optional=>on) *)
+(*# module(implementation=>off, init_code=>off) *)
+(*# name(prefix=>c) *)
+
+CONST
+  SEEK_SET = 0;
+  SEEK_END = 2;
+
+  O_RDONLY = {};
+  O_WRONLY = {0};
+  O_RDWR   = {1};
+
+  O_CREAT  = {8};	(* create and open file *)
+  O_TRUNC  = {9};	(* open with truncation *)
+  O_EXCL   = {10};	(* exclusive open *)
+  _O_EOF   = {9};       (* set when text file hits ^Z   *)
+  O_APPEND = {11};	(* to end of file *)
+
+(* File mode special bits. User may only read these bits *)
+
+  O_CHANGED= {12};	(* File has been written *)
+  O_DEVICE = {13};	(* user read only flag	 *)
+  O_TEXT   = {14};	(* CR-LF translation	*)
+  O_BINARY = {15};	(* no translation	*)
+
+  _F_READ = {0};			(* Read only file *)
+  _F_WRIT = {1};			(* Write only file *)
+  _F_UBUF = {2};			(* User allocated buffer *)
+  _F_APP  = {3};			(* Append data *)
+  _F_ERR  = {4};			(* Error *)
+  _F_EOF  = {5};			(* EOF *)
+  _F_BIN  = {6};			(* Binary file *)
+  _F_IN	  = {7};			(* Data is incoming *)
+  _F_OUT  = {8};			(* Data is outgoing *)
+  _F_DEV  = {9};			(* File is terminal *)
+  _F_RST  = {10};			(* Newly opened stream *)
+  _F_LBUF = {11};			(* line buffered stream *)
+  _F_CTZ  = {12};
+  _F_RDWR = {0..1};			(* Read/write  *)
+
+  EZERO	   = 0;		(* No Error			*)
+  EINVF    = 1;		(* Invalid function code	*)
+  ENOENT   = 2;		(* File not found		*)
+  ENOPATH  = 3;		(* Path not found		*)
+  EMFILE   = 4;		(* Too many open files		*)
+  EACCES   = 5;		(* Access denied		*)
+  EBADF	   = 6;		(* Invalid handle		*)
+  E2BIG	   = 7;		(* Memory blocks destroyed	*)
+  ENOMEM   = 8;		(* Insufficient Memory		*)
+  EINVMEM  = 9; 	(* Invalid memory block address *)
+  EINVENV  = 10;	(* Invalid environment		*)
+  EINVFMT  = 11;	(* Invalid format		*)
+  EINVACC  = 12;	(* Invalid access code		*)
+  EINVDAT  = 13;	(* Invalid data 		*)
+  ENODEV   = 15;	(* Invalid drive		*)
+  ECURDIR  = 16;	(* Attempt to remove CurDir	*)
+  ENOTSAM  = 17;	(* Not same device		*)
+  ENMFILE  = 18;	(* No more files		*)
+
+(* RTL error codes *)
+
+  EINVAL   = 19;	(* Invalid argument		*)
+  ENOTDIR  = 20;	(* Not directory		*)
+  EISDIR   = 21;	(* Is directory 		*)
+  ENOEXEC  = 22;	(* Corrupted exec file		*)
+  EMLINK   = 32;	(* Cross-device link		*)
+
+  EDOM	   = 33;	(* Math argument		*)
+  ERANGE   = 34;	(* Result too large		*)
+  EDEADLOCK= 36;	(* file locking deadlock	*)
+  EEXIST   = 80;        (* File exists MSDOS 3.0 +      *)
+  EDISKFUL = 0F0H;      (* Write error - disk full?     *)
+
+  EFAULT   = -1;	(* Unknown error		*)
+
+PROCEDURE getcurdir(Drive: INTEGER; Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE isatty(Handle: INTEGER): INTEGER;
+PROCEDURE _creat(Path: ARRAY OF CHAR; Permission: INTEGER): INTEGER;
+PROCEDURE _creat_trunc(Path: ARRAY OF CHAR; Permission: INTEGER): INTEGER;
+PROCEDURE chdir(Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE delay(MS: INTEGER);
+PROCEDURE findnext(Buffer: ARRAY OF BYTE): INTEGER;
+PROCEDURE lseek(Handle: INTEGER; Pos: LONGINT; Whence: CARDINAL): LONGINT;
+PROCEDURE mkdir(Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE read(Handle: INTEGER; Buf: ADDRESS; Count: INTEGER): INTEGER;
+PROCEDURE rename(Old, New: ARRAY OF CHAR): INTEGER;
+PROCEDURE rmdir(Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE tell(Handle: INTEGER): LONGINT;
+PROCEDURE unlink(Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE write(Handle: INTEGER; Buf: ADDRESS; Count: INTEGER): INTEGER;
+PROCEDURE _close(Handle: INTEGER): INTEGER;
+PROCEDURE _dos_close(Handle: INTEGER): CARDINAL;
+PROCEDURE _dos_findfirst(Path: ARRAY OF BYTE; Attr: CARDINAL; Buffer: ARRAY OF BYTE): INTEGER;
+PROCEDURE _dos_findnext(Buffer: ARRAY OF BYTE): INTEGER;
+PROCEDURE _dos_read(Handle: INTEGER; Buffer: FarADDRESS; Count: CARDINAL; VAR NumRead: CARDINAL): CARDINAL;
+PROCEDURE _dos_write(Handle: INTEGER; Buffer: FarADDRESS; Count: CARDINAL; VAR NumWrit: CARDINAL): CARDINAL;
+PROCEDURE _eof(Handle: INTEGER): INTEGER;
+PROCEDURE _open(Path: ARRAY OF CHAR; Mode: INTEGER): INTEGER;
+PROCEDURE _read(Handle: INTEGER; Buf: ADDRESS; Count: INTEGER): INTEGER;
+PROCEDURE _write(Handle: INTEGER; Buf: ADDRESS; Count: INTEGER): INTEGER;
+PROCEDURE _os2_open(Path: ARRAY OF CHAR; Access: CARDINAL; mode: CARDINAL; flag: CARDINAL): INTEGER;
+
+(*# save *)
+(*# call(reg_param=>(dx,ax), reg_saved=>(ds, di, si,st1,st2)) *)
+PROCEDURE _exists(Path: ARRAY OF CHAR): INTEGER;
+(*# restore *)
+
+(*# save *)
+(*# call(reg_param=>(ax,bx,cx,dx)) *)
+PROCEDURE _pascreate(Path: ARRAY OF CHAR): INTEGER;
+PROCEDURE _pasopen(Path: ARRAY OF CHAR; Mode: INTEGER): INTEGER;
+(*# restore *)
+
+VAR
+  _doserrno: INTEGER;
+  _fmode: CARDINAL;
+  _fmask: CARDINAL;
+
+END CoreIO.
+
