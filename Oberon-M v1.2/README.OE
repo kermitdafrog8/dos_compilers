@@ -1,0 +1,145 @@
+
+Oberon-M Example  
+
+(c) Copyright E. R. Videki 1991
+			
+
+There have been many people asking for a rich, comprehensive
+example of how the Oberon programming language's new features
+can be used.  In particular, "type extension" and "object
+oriented features" are the most requested topics.
+
+The files which accompany this text is such an example.  It
+is not intended to be the only way to use such features, but
+it was written to clearly show how Oberon's type extension
+features and the key "object oriented language" features
+can be used.
+
+The source was written to run under my MSDOS based
+Oberon-M(tm) compiler, using one of the library modules supplied
+there (Term.Mod).  However, if you look at the comments
+in the application's I/O module and the "main" module (named,
+respectively, OEIO.Mod and OE.Mod) you will see that with
+a text editor and about five minutes of time you can convert
+the application to run under ETH Zurich's closed-environment
+Oberon System.
+
+In other words, this application was written with the purpose
+of showing Oberon features by example, and although it shows
+off Oberon-M well, those persons who don't have an MSDOS 
+machine can still execute it under the ETH Oberon System
+to further delve into programming in this language.
+
+
+APPLICATION OVERVIEW
+
+The application framed by these Oberon modules is a simple
+name- and phone number-database handler.  The names are
+maintained on a binary tree structure in memory.  The 
+phone numbers are handled similarly, but on their own tree.
+Thus, searches performed either looking for a known name
+or a known phone number can be made easily.  Elements of
+one tree can point to elements on another tree, so that 
+names and phone numbers are cross-linked to each other.
+
+The implementation of the handling of names and phone
+numbers is simplistic, but turned out to work pleasingly.
+If you wish to expand the capabilities of this application
+some suggestions would be to have the name (and name searches)
+be more clever than just having a simple string of characters.
+Similarly, the phone number is just a string of characters.
+Both could be made to permit humans to specify names
+and numbers with spaces within the strings, and still match on
+search patterns, or perhaps to permit wildcard characters
+within search patterns.
+
+The functions provided by the application include adding 
+a name (and optional phone number) to the databases, 
+searching by a known name, searching by a known phone number,
+and displaying all nodes on both the name and phone trees.
+
+
+MODULE ORGANIZATION
+
+All modules of the application are prefixed with the letters
+"OE", standing for "Oberon Example."  As mentioned above,
+by changing a very few lines (about 6) in two modules you can
+convert the application to run within the Oberon System's
+self-contained environment instead of Oberon-M's MSDOS
+environment (modules OE.Mod and OEIO.Mod).
+
+The modules are described below, with notes about the 
+important things they illustrate as part of this example.
+
+
+OE.Mod	- The so-called "main" module of the application,
+this module has the user-visible commands that can be 
+executed.  This module shows several things.  First,
+the name and phone trees are separate trees, and each node
+of these trees have differing record types. This module
+shows how multiple extended types are simultaneously 
+handled.  This module is also the highest level client of
+all exported types and procedures, so illustrates the way
+they must be referenced by common routines.  Finally, this
+module shows how each tree node is assumed to have an
+object specific (oriented) "method" handler that is responsible
+for doing things directed at any given node.  Thus, this
+main module doesn't need to know exactly how to display
+a name or a phone number, nor really even know how the data
+is organized on a tree node, but simply invokes the object
+handler to take care of such details.  This makes it very
+flexible to change the internal organization or structure
+of either the name or the phone tree nodes without changing
+anything in this top level module.  In the past, such a
+thing typically would be impossible -- the method handler
+thus ties the way to do things with a node, to that node,
+instead of to the client source.  
+
+OETree.Mod - This module handles binary trees -- of any kind.
+It is independent of the application, and shows the way that
+an Oberon module can handle tree node insertion and searches
+without having any idea what the actual application is.  The
+data type defined here, a record called an "Apple" (hanging
+from the tree), is the base type that the application builds
+its name and phone structures upon.  The Apple node contains
+tree links that are invisible to clients (the tree structure
+is handled exclusively by this module), plus a reference
+field (pointer to another node) which can be used any way 
+the application wants.  Additionally, the node's "method" or
+"command" handler is defined as a procedural type in the
+Apple record, but again the application can define what
+actions are appropriate to the tree types it defines.
+
+OENames.Mod - This module takes the Apple defined in 
+the OETree.Mod module, and extends it to contain the record
+fields it needs to handle names entered into the database.  
+Additionally, this module contains the method handler which
+knows the structure of the name data, and when the correct
+command is directed to it, it will display the name.  Also,
+this module contains the special search procedure, passed
+to the tree-traversing routines in OETree.Mod, which 
+tells OETree.Mod how the names are organized (in this way
+it is up to the application to define what the tree ordering 
+is, instead of being fixed in place by the tree handler, 
+OETree.Mod).
+
+For this simple example, the names are alphabetized using the 
+underlying machine's character code sequence (eg: ASCII).
+
+OEPhone.Mod - This module handles the telephone number tree.
+It is very similar to OENames.Mod, except that it handles
+a different kind of type extension based upon OETree's 
+basic Apple node.  
+
+OEIO.Mod - This performs string reads and writes to the 
+human being.   This module makes the application independent
+of what kind of system it is running on.  
+
+
+
+			-- E. R. Videki
+			erv @ k2.everest.tandem.com
+			
+			19 April 1991
+
+
