@@ -1,0 +1,543 @@
+
+Oberon-M(tm) version 1.2 for MSDOS
+  (c) Copyright E. R. Videki 1989-1991
+  All Rights Reserved (see Legal Notice below)
+
+This is the information file for version 1.2 of Oberon-M,
+an implementation of the Oberon programming language
+suitable for MSDOS environments running on Intel-compatible
+processors of 80186 or later vintage.
+
+********* CHANGE NOTICE FOR VERSION 1.2 ***********
+The only changes in this package from version 1.2 are:
+
+  - The compiler supports 8086/8088 processors.  Simply
+    compile your modules specifying "8086" on the
+    command line, and the "Enter" and "Leave" instructions
+    in procedure calls are replaced by their
+    equivalent code streams.  More information is below.
+
+  - Along with the familiar PostScript(tm) formatted
+    version of the Oberon language report is a plain
+    ASCII version of the text.  This is named OBREPT.ASC
+    and doesn't look as nice as the PostScript form,
+    but is complete and printable on every printer
+    in the world.
+                                     --ERV, 8/91
+***************************************************
+
+LEGAL NOTICE
+  Oberon-M is a trademarked and copyrighted product.  Use
+  of the compiler and sample library modules is granted
+  by license, with no charge for this release.
+  However, the compiler and the source texts associated
+  with it may not be sold, modified, or distributed for
+  gain in any way.  There are two exceptions:
+      1) The library modules may be modified by the end
+         user for his or her own programming needs
+      2) Networks and electronic bulletin boards may be
+         used to freely redistribute this Oberon-M
+         package as a COMPLETE UNIT.
+
+  All programs produced using this package are under the
+  ownership, control and responsibility of the end user.
+
+  The compiler may never be modified and its copyright notice
+  must remain intact.  If any of the library modules or
+  examples are used in printed matter, their copyright
+  notices must also remain intact, and credit by
+  reference given to the Oberon-M author.
+
+  No warranties or claims of fitness for use are made for
+  any item within this package.  All responsibilites for
+  use and outcome rest with the end-user.
+
+
+
+
+BACKGROUND
+
+  The Oberon-M compiler is an MSDOS based program which
+  translates Oberon source code files into MSDOS object
+  files.  These files are linked together to form
+  executable programs (files of ".EXE" type).
+
+  Oberon was invented by Niklaus Wirth at the Swiss
+  Federal Institute of Technology (ETH) in Zurich.  Like
+  his earlier languages Pascal and Modula-2, Oberon is
+  intended for general purpose programming, often on
+  individual workstations.  Most, if not all, of the
+  clumsiness that many people found in Pascal and Modula-2
+  is not present in Oberon.  The general philosophy of
+  its construction is to keep important principles of the
+  computing environment present for the programmer to
+  take advantage of, while providing a structural- and
+  checking-mechanism that prevents inadvertent (even
+  disasterous) mistakes.  Software development is some
+  of the most complex, detail-filled work performed by
+  the human race to date. Oberon is a tool by which the
+  power of the computer can be handled without the
+  bounds of human capability being taxed.  Thus, Oberon
+  provides well-defined boundaries for modules, into
+  which complex computing tasks may be divided.
+
+  Additionally, Oberon provides a new facility, called
+  "type extension", which permits an existing application
+  to have new features and power added to it-- without
+  the old source code even having to be recompiled.  Data
+  types ("records") may be extended by new data, with
+  additional handling routines implemented in new code.
+  The old source can still work with these new, extended,
+  data types, handling the older fields and operations
+  applicable to them, without knowing (or caring) that
+  new extended fields and operations are also present.
+
+  Object oriented facilities are also present in Oberon.
+  Data records may contain "methods" associated with them
+  so that the actual handling of information can be
+  linked directly with the object (record) itself.
+  Operations can be directed at the records themselves. When
+  new facilities are needed, new methods can be invoked
+  ahead of the existing operations performed by (or,
+  some say, on behalf of) the object.  An application
+  may be written in Oberon to either look at data as it
+  relates to executable algorithms, or to look at the
+  algorithms as adjuncts to the data items themselves.
+
+  Additionally, references to items outside of a source
+  module are clearly made so that a human being can, just
+  by examining the source file, know exactly what imported
+  module's facility is being used for what.  In general,
+  most Oberon programs can afford to be relatively short,
+  and few people ever need the aid of source-cross-reference
+  tools to figure out what's going on.
+
+  When a module is written, an indicator following an object's
+  name (an asterisk) tells the compiler that that object
+  is visible to other modules.  Objects that are not
+  exported in this fashion remain hidden to clients of the
+  module.  A very effective hierarchy of abstraction can
+  be thus established for very complicated computing tasks.
+  Many programmers will agree that the ability to look at
+  or modify items in another module, when those items were
+  not intended to be "proper" and "defined" for external use,
+  usually ends up causing debugging problems that are
+  difficult or impossible to trace when the application is
+  in use.  A compiler's job, in the Oberon philosophy, is to
+  put the power of the machine in the programmer's hands, not
+  hiding when things can be more efficiently done by source
+  changes (versus compiler built-in decisions for a particular
+  code sequence), while still stopping accidental changes to
+  another module.
+
+  Many of the items which, over the years, have been
+  added to programming languages have been removed from Oberon.
+  Although we all have our favorite language construct, and
+  may complain when we don't find it in Oberon (even if it was
+  present in Pascal or Modula), most people quickly decide
+  they still prefer the clean, simpler approach to programming offered
+  by Oberon.  Several years of very careful examination and
+  thought passed before items were removed from Pascal-Modula
+  to make Oberon.  Very little needed to be added to that result
+  to gain type extension and Object Oriented facilities.
+
+
+
+
+COMPILER
+
+
+The compiler itself is called "oc.exe".  It is run with the
+following command line under MSDOS:
+
+        oc  filename[.mod]  [def] [8086]
+
+If the optional ".mod" is omitted, the compiler will append
+it to the file name.
+
+
+**About the def option**
+The "def" option, specified just as shown, will cause a
+module which exports items to have a special symbol file
+written to disk.  Unless this symbol file exists, other
+modules cannot import this module.  Do not include quotation
+marks around the letters def.
+
+"def" is also a safety feature: modules are checked at compile
+and run time for consistency of level of object form
+with the form used for compilation.  Only when you specify
+the "def" option after the file name will the symbol file
+used when compiling other modules which import this one
+be (re-)written on the disk.
+
+If you are writing a module that is imported by others,
+when you want its symbol file to be (re-)written (and
+used by other compiliations), you MUST specify
+"def" on the command line of the module that is to be
+imported.  You do not use "def" when a module exports
+nothing (such as your "main" module).
+
+
+**About the 8086 Option**
+The option "8086", when specified on the command line,
+causes the compiler to generate object files that are
+backward compatible with the older Intel processors
+8086 and 8088.  These two processors did not support
+the efficient "Enter" and "Leave" machine instructions.
+By default, the Oberon-M compiler will generate all
+procedures with Enter and Leave to setup the stack,
+and these instructions are far more compact and at
+least as quick as their equivalent separate machine
+instruction streams.
+
+Except for size and possible execution speed, modules
+compiled with the 8086 option on the command line
+function identically with those not compiled in this
+fashion.  In fact, modules with and without the 8086
+option may be intermixed.  HOWEVER: only if all
+modules (including imported library modules) are
+compiled with the 8086 option can the completed
+(and linked) application run on an 8086/8088 machine.
+
+Special Note: The library modules supplied with
+this package are compiled *without* the 8086 option.
+If you are going to target your programs to such
+processors, you must recompile the library modules
+yourself with this option.  This is easy.  A batch
+file named "comp86.bat" is included which will
+do this for all the modules which are supplied to
+you.  Simply run it and all of them will be
+converted.
+
+8088 is a synonym for 8086 on the command line.
+
+
+
+OBJECT FILES
+
+The compiler generates standard MSDOS object files which
+ultimately must be linked with the other object files
+representing imported Oberon modules, plus
+linked with the special run-time support file SYS.OBJ .
+
+
+
+LINKING OBJECT FILES
+
+An MSDOS linker or its equivalent will bind together
+the object files.  There are two rules that must be followed.
+
+        1) Your "main" module (the one that is to receive
+           control from DOS after all other modules are
+           initialized, and which is not imported by any
+           other module) must be named FIRST in the list
+           of modules to link together.
+
+        2) The small run-time support object file, named
+           SYS.OBJ must be named LAST in the list of modules
+           to link together.
+
+An example of use:
+
+        link  mymain+import1+import2+sys ;
+
+...will generate a file named "mymain.exe" which is
+executable (assuming your programming is correct!).
+
+
+
+OTHER FILES SUPPLIED IN THIS PACKAGE
+
+
+The compiler is supplied with a number of additional files
+in this package.
+
+
+
+Oberon Language Documentation:
+
+obrept.ps       - Niklaus Wirth's definition of the Oberon
+                        language, which is supported by
+                        this Oberon-M(tm) compiler.
+obebnf.ps       - The EBNF summary of the language
+
+    Note: these files must be downloaded to a
+    PostScript(tm) processing printer for
+    correct formatting.
+
+
+obrept.asc      - The language report in plain ASCII,
+                  printable anywhere by everyone.
+
+
+
+Oberon Modules for use under MSDOS
+
+These are modules which work under most (if not all) versions
+of MSDOS, and which you may import into your own
+programs.  They are provided in source form, as well
+as "ready to link" form, plus pre-compiled symbol forms
+so that you do not have to compile them before importing
+them.
+
+However, if you are going to run applications on
+one of the older 8088/8086 type processors, you must
+recompile these modules by running the batch file comp86.bat.
+Your own application modules must also be compiled
+using this option if you are targeting 8088/8086 machines.
+See the related information under the heading "About the
+8086 Option" above.
+
+These so-called library modules that come with this
+package include:
+
+        Disk    Disk file direct-handling
+        IO      General I/O operations
+        LineIO  Specific line-oriented file I/O
+        LIO     A version of LineIO with indentation
+        Screen  Direct-writing to many display screen types
+        Parms   Reading parameters from the MSDOS command line
+        Term    I/O specifically for keyboard and display
+
+
+
+Example Modules
+
+Two examples are provided, both of which are examples of
+working Oberon programs.  The first, called Abu, is a
+fast full-screen file browser.  The second, called OE,
+is a very robust set of modules that creates a name and
+telephone number reference table, and shows Oberon's
+type extension and Object Oriented Programming features.
+
+
+*Abu*
+
+The module Abu.mod is a full-featured example of using
+the Oberon-M compiler with many of the supplied modules
+to make a simple fast-executing, very small, full-screen
+file browser.  (Note: Since this module uses the Screen.Mod
+module which may be incompatible with some types of display
+screens, you may have to modify Screen for your machine
+before Abu.mod works.)
+
+If you want to execute this example before fiddling with
+the source, simply type:
+
+        abu  <filename>
+
+and the Abu.exe file will let you browse the file you named.
+NOTE: you MUST put a filename on the command line, else
+Abu ends immediately.
+
+
+
+*OE*
+
+The OE modules (OE.mod, OETree.mod, OENames.mod, OEPhone.mod,
+and OEIO.mod) are documented in a separate file called
+README.OE, supplied in this package.
+
+
+
+
+
+Utility Module
+
+The executable file "xdef.exe" is a utility program that
+will scan your source modules and generate a file named
+with a ".dfn" file extension appended to the file name.
+
+This resultant file contains a summary of the exported
+objects from the file.  In other words, the xdef utility
+condenses an entire source module into only those items
+which are visible to clients (importers) of that module,
+and does not show the inner details.
+
+To execute under MSDOS, type:
+
+        xdef <filename>
+
+and the result file will be generated silently.  Two
+important notes: 1) the source should be error-free
+before using xdef: xdef expects reasonably correct syntax;
+2) if you forget to specify a file name, xdef halts
+with an error code.
+
+
+Batch File for Conversion of Library Modules
+
+The batch file named comp86.bat will recompile all of
+the supplied library modules to use the 8086 option.
+Such modules can be used in applications that run
+on older 8088/8086 processors provided that all of
+your application code is also compiled with the
+8086 option.
+
+Modules compiled with the 8086 option can be used
+on any processor, not just 8088/8086s.  They will
+be slightly larger and procedure entry may be
+slightly slower.
+
+
+
+OBERON-M(tm) SPECIFICS FOR MSDOS
+
+Under MSDOS, some semantics for use that cannot
+be avoided are:
+
+* User HALT codes must be greater than 100.
+
+* The SYSTEM module built-into the compiler is
+  for MSDOS, but has the same exported objects
+  as defined in the language report (obrept.ps).
+
+* Running under DOS requires a "main" module
+  that does not export anything, and which must
+  be the first one named in the list of files
+  linked together.
+
+
+
+
+OTHER READING
+
+You may find more information about Oberon in the
+following articles:
+
+N. Wirth        "Type Extensions"
+        ACM Trans. on Prog. Languages and Systems
+        10,2 (April 1988) 204-214
+
+N. Wirth        "From Modula to Oberon"
+        Software- Practice and Experience 18,7
+        (July 1988) 661-670
+
+N. Wirth        "The Programming Language Oberon"
+        Software- Practice and Experience 18,7
+        (July 1988) 671-690
+    ***Note: the updated report of the language
+    is included with this package and supercedes
+    this report*****
+
+N. Wirth and J. Gutknecht
+        "The Oberon System"
+        Software- Practice and Experience 19
+        (September 1989) 857-893
+
+
+
+
+TECHNICAL NOTES
+
+  At ETH Zurich, Niklaus Wirth and his associates have written
+  a closed-environment operating system based entirely upon
+  Oberon, called the Oberon System. This was written for
+  a specially built workstation, and has been ported to a
+  few other platforms, but not MSDOS or Intel processors
+  at the time of this writing.
+
+  Oberon-M is not intended to be a complete operating system,
+  but is to provide a means to use the Oberon language to write
+  programs under the hugely popular MSDOS environment.
+
+  Oberon-M is source compatible with ETH's Oberon System.
+  Excepting for system dependent modules, all applications
+  written on this Oberon-M compiler are expected to run
+  without source changes under the ETH Oberon System.
+
+  There are a few technical items which the Oberon-M programmer
+  needs to keep in mind, however.  These are listed below.
+
+        1) No floating point support in this release (ie,
+           the REAL and LONGREAL data types are not allowed).
+        2) 8088 and 8086 (ie: the oldest Intel processors) do
+           not have Enter and Leave instructions which are
+           generated by the compiler.  Thus, only PCs
+           with 80x86 (where x >= 1) processors can
+           use the produced code.  The compiler itself will
+           run on an older machine, though.  People with
+           older machines have had good success (and a faster
+           machine) by adding 80x86 accellerator boards or
+           replacing 8086 chips with non-Intel 80x86 chips
+           with the same pin configurations.
+        3) The produced code has not been tested under all
+           versions of MSDOS that exist in the world, but
+           I anticipate no problems.  Some of the library
+           modules may have differences in internal
+           calls for very-odd MSDOS flavors; source for
+           these are supplied so you may make modifications
+           if you are running one of these rare DOS systems.
+        4) The ETH Zurich Oberon System permits "code
+           procedures" identified by a minus sign in the
+           procedure header.  This is non-standard, very
+           machine dependent, and not allowed on my compiler.
+           However, module SYSTEM exports a predefined
+           CODE procedure which takes bytes to insert
+           in the instruction stream.
+        5) You MUST use the compiler hint "*" on a procedure
+           definition if that procedure is going to be
+           assigned to a procedural-typed variable (so
+           that 80x86 long-calls will be generated).
+           This looks like this, and is part of the
+           Oberon language:
+                PROCEDURE * MyHandler(....
+           Trying to assign a procedure without the "*"
+           indicator results in a type incompatibility
+           error at compile time. Note that this is
+           different than the export mark "*" which
+           follows the procedure name.
+           This is not required for procedures that are
+           exported from a module.
+        6) Due to the irregularities of the 80x86
+           architecture, code generation for it is
+           ponderous. In my experience
+           most professional programmers don't need,
+           or want, the overhead of range or stack
+           checking, so that is not provided.  Of course,
+           this is a debatable issue.
+        7) The machine-dependent module known to the
+           compiler is called SYSTEM, and has the same
+           objects as shown in the language report. For
+           compatibility with release 1.0 of Oberon-M,
+           you may also use the name SYS, but SYSTEM is
+           preferred for all new applications.
+        8) The Oberon System in Zurich has an effective garbage
+           collection system. Oberon-M, running under MSDOS,
+           cannot have such a garbage collector unless it
+           wishes to take over the memory-management roles
+           that MSDOS tightly holds onto.
+        9) The predefined procedure LEN only works on
+           open arrays.  Built-ins such as LEN and SIZE return
+           integer values (instead of the ETH preferred
+           LONGINTs).  This is more consistent with the
+           limitations of the 80x86's architecture. Note
+           that integers are compatible (included in)
+           long integers and will convert automatically.
+        10) Because of the 80x86's addressing scheme of
+           wrapping addresses at 64KB boundaries without
+           any error indication being given, Oberon-M does
+           not allow arrays larger than 32KB.  However,
+           applications that can be mindful of the 64KB
+           segmentation limits of the machine can address
+           larger objects with address arithmetic or
+           pointers.
+
+
+
+HOW TO CONTACT THE AUTHOR
+   Please send e-mail to Internet address
+
+          erv@k2.everest.tandem.com
+          IP address 130.252.59.153
+
+   Written notes can be mailed to this address:
+        P. O. Box 58
+        Morgan Hill, California 95038
+        U.S.A.
+
+
+                        -- E. R. Videki  24 August 1991
+
+
+
