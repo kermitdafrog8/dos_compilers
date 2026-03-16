@@ -5,11 +5,9 @@ MODULE E;
     Digits = 200;
 
   VAR
-    high, n: INTEGER;
-    x: LONGINT;
+    res, x, high, n: INTEGER;
     a: ARRAY Digits + 1 OF INTEGER;
     r: LIO.Rider;
-    res: INTEGER;
 
   PROCEDURE Run;
   BEGIN
@@ -30,8 +28,8 @@ MODULE E;
         DEC(high);
         n := high;
         WHILE n # 0 DO
-          a[n] := SHORT(x MOD LONG(n));
-          x := 10 * LONG(a[n - 1]) + x DIV LONG(n);
+          a[n] := x MOD n;
+          x := 10 * a[n - 1] + x DIV n;
           DEC(n)
         END;
         LIO.WriteInt(r, x)

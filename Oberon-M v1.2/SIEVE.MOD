@@ -5,13 +5,13 @@ MODULE Sieve;
     Size = 8190;
     Iterations = 10;
 
+  (* declare all variables as globals to improve performance by 16% *)
   VAR
     flags: ARRAY 8191 OF BOOLEAN; (* Explicit size *)
+    res, i, prime, k, count, iter: INTEGER;
     r: LIO.Rider;
-    res: INTEGER;
 
   PROCEDURE Run;
-    VAR i, prime, k, count, iter: INTEGER;
   BEGIN
     LIO.OpenWrite("CON", r, res);
     IF res = 0 THEN
@@ -20,9 +20,9 @@ MODULE Sieve;
       WHILE iter <= Iterations DO
         count := 0;
         i := 0;
-        WHILE i <= Size DO 
-          flags[i] := TRUE;
-          INC(i)
+        WHILE i <= Size DO
+            flags[i] := TRUE;
+            INC(i);
         END;
         i := 0;
         WHILE i <= Size DO

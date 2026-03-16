@@ -10,7 +10,7 @@ MODULE TTT;
     BoardType = ARRAY 9 OF INTEGER;
 
   VAR
-    evaluated: LONGINT;
+    evaluated: INTEGER;
     board: BoardType;
     r: LIO.Rider;
     res: INTEGER;
@@ -19,11 +19,9 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[0];
-    IF x # PieceBlank THEN
-      IF (x = board[1]) & (x = board[2]) THEN RETURN x END;
-      IF (x = board[3]) & (x = board[6]) THEN RETURN x END;
-      IF (x = board[4]) & (x = board[8]) THEN RETURN x END
-    END;
+    IF (x = board[1]) & (x = board[2]) THEN RETURN x END;
+    IF (x = board[3]) & (x = board[6]) THEN RETURN x END;
+    IF (x = board[4]) & (x = board[8]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc0;
 
@@ -31,10 +29,8 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[1];
-    IF x # PieceBlank THEN
-      IF (x = board[0]) & (x = board[2]) THEN RETURN x END;
-      IF (x = board[4]) & (x = board[7]) THEN RETURN x END
-    END;
+    IF (x = board[0]) & (x = board[2]) THEN RETURN x END;
+    IF (x = board[4]) & (x = board[7]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc1;
 
@@ -42,11 +38,9 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[2];
-    IF x # PieceBlank THEN
-      IF (x = board[0]) & (x = board[1]) THEN RETURN x END;
-      IF (x = board[5]) & (x = board[8]) THEN RETURN x END;
-      IF (x = board[4]) & (x = board[6]) THEN RETURN x END
-    END;
+    IF (x = board[0]) & (x = board[1]) THEN RETURN x END;
+    IF (x = board[5]) & (x = board[8]) THEN RETURN x END;
+    IF (x = board[4]) & (x = board[6]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc2;
 
@@ -54,10 +48,8 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[3];
-    IF x # PieceBlank THEN
-      IF (x = board[4]) & (x = board[5]) THEN RETURN x END;
-      IF (x = board[0]) & (x = board[6]) THEN RETURN x END
-    END;
+    IF (x = board[4]) & (x = board[5]) THEN RETURN x END;
+    IF (x = board[0]) & (x = board[6]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc3;
 
@@ -65,12 +57,10 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[4];
-    IF x # PieceBlank THEN
-      IF (x = board[0]) & (x = board[8]) THEN RETURN x END;
-      IF (x = board[2]) & (x = board[6]) THEN RETURN x END;
-      IF (x = board[1]) & (x = board[7]) THEN RETURN x END;
-      IF (x = board[3]) & (x = board[5]) THEN RETURN x END
-    END;
+    IF (x = board[0]) & (x = board[8]) THEN RETURN x END;
+    IF (x = board[2]) & (x = board[6]) THEN RETURN x END;
+    IF (x = board[1]) & (x = board[7]) THEN RETURN x END;
+    IF (x = board[3]) & (x = board[5]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc4;
 
@@ -78,10 +68,8 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[5];
-    IF x # PieceBlank THEN
-      IF (x = board[3]) & (x = board[4]) THEN RETURN x END;
-      IF (x = board[2]) & (x = board[8]) THEN RETURN x END
-    END;
+    IF (x = board[3]) & (x = board[4]) THEN RETURN x END;
+    IF (x = board[2]) & (x = board[8]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc5;
 
@@ -89,11 +77,9 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[6];
-    IF x # PieceBlank THEN
-      IF (x = board[7]) & (x = board[8]) THEN RETURN x END;
-      IF (x = board[0]) & (x = board[3]) THEN RETURN x END;
-      IF (x = board[4]) & (x = board[2]) THEN RETURN x END
-    END;
+    IF (x = board[7]) & (x = board[8]) THEN RETURN x END;
+    IF (x = board[0]) & (x = board[3]) THEN RETURN x END;
+    IF (x = board[4]) & (x = board[2]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc6;
 
@@ -101,10 +87,8 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[7];
-    IF x # PieceBlank THEN
-      IF (x = board[6]) & (x = board[8]) THEN RETURN x END;
-      IF (x = board[1]) & (x = board[4]) THEN RETURN x END
-    END;
+    IF (x = board[6]) & (x = board[8]) THEN RETURN x END;
+    IF (x = board[1]) & (x = board[4]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc7;
 
@@ -112,37 +96,28 @@ MODULE TTT;
     VAR x: INTEGER;
   BEGIN
     x := board[8];
-    IF x # PieceBlank THEN
-      IF (x = board[6]) & (x = board[7]) THEN RETURN x END;
-      IF (x = board[2]) & (x = board[5]) THEN RETURN x END;
-      IF (x = board[0]) & (x = board[4]) THEN RETURN x END
-    END;
+    IF (x = board[6]) & (x = board[7]) THEN RETURN x END;
+    IF (x = board[2]) & (x = board[5]) THEN RETURN x END;
+    IF (x = board[0]) & (x = board[4]) THEN RETURN x END;
     RETURN PieceBlank
   END Proc8;
-
-  PROCEDURE Winner(move: INTEGER): INTEGER;
-  BEGIN
-    CASE move OF
-    | 0: RETURN Proc0()
-    | 1: RETURN Proc1()
-    | 2: RETURN Proc2()
-    | 3: RETURN Proc3()
-    | 4: RETURN Proc4()
-    | 5: RETURN Proc5()
-    | 6: RETURN Proc6()
-    | 7: RETURN Proc7()
-    | 8: RETURN Proc8()
-    ELSE
-      RETURN PieceBlank
-    END
-  END Winner;
 
   PROCEDURE MinMax(alpha, beta, move, depth: INTEGER): INTEGER;
     VAR p, value, pieceMove, score: INTEGER;
   BEGIN
     evaluated := evaluated + 1;
     IF depth >= 4 THEN
-      p := Winner(move);
+        CASE move OF
+            | 0: p := Proc0()
+            | 1: p := Proc1()
+            | 2: p := Proc2()
+            | 3: p := Proc3()
+            | 4: p := Proc4()
+            | 5: p := Proc5()
+            | 6: p := Proc6()
+            | 7: p := Proc7()
+            | 8: p := Proc8()
+        END;
       IF p # PieceBlank THEN
         IF p = PieceX THEN RETURN ScoreWin ELSE RETURN ScoreLose END
       ELSIF depth = 8 THEN
@@ -162,7 +137,7 @@ MODULE TTT;
         board[p] := pieceMove;
         score := MinMax(alpha, beta, p, depth + 1);
         board[p] := PieceBlank;
-        IF ODD(depth) THEN
+        IF pieceMove = PieceX THEN
           IF score = ScoreWin THEN RETURN ScoreWin END;
           IF score > value THEN
             value := score;
@@ -199,7 +174,6 @@ END RunIt;
 BEGIN
   LIO.OpenWrite("CON", r, res);
   IF res = 0 THEN
-
     evaluated := 0;
 
     RunIt(0);
